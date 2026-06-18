@@ -319,6 +319,17 @@ async function inicializarAgendamento() {
       const dataAgendamentoISO = localStorage.getItem("dataAgendamentoISO");
       const dataHoraObj = new Date(`${dataAgendamentoISO}T${horarioSalvo}`);
 
+      if (isNaN(dataHoraObj.getTime())) {
+        console.error(
+          "Data inválida no agendamento:",
+          `${dataAgendamentoISO}T${horarioSalvo}`,
+        );
+        botaoAgendar.disabled = false;
+        botaoAgendar.textContent = "Confirmar Agendamento";
+        botaoAgendar.classList.remove("agendamento-button--disabled");
+        return;
+      }
+
       // Lembrete 24h antes
       const reminder24h = new Date(dataHoraObj.getTime() - 24 * 60 * 60 * 1000);
       // Lembrete 2h antes
