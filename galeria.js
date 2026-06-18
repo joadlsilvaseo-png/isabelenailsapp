@@ -1,3 +1,6 @@
+import { auth } from "./firebase-config.js";
+import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
+
 /**
  * Função para carregar a galeria de imagens localmente.
  * Busca arquivos na pasta assets/ seguindo o padrão: categoria-nome-numero.png
@@ -6,6 +9,15 @@
 let imagensPorCategoria = {};
 let currentCategory = "";
 let currentIndex = 0;
+
+function syncUserProfile() {
+  const photoElement = document.getElementById("foto-perfil");
+  onAuthStateChanged(auth, (user) => {
+    if (user && user.photoURL && photoElement) {
+      photoElement.src = user.photoURL;
+    }
+  });
+}
 
 async function carregarGaleriaLocal() {
   const categorias = ["manicure", "pedicure", "unhas-em-gel"];
@@ -150,3 +162,7 @@ async function verificarImagem(url) {
 
 // Chama a função ao carregar a página
 document.addEventListener("DOMContentLoaded", carregarGaleriaLocal);
+document.addEventListener("DOMContentLoaded", () => {
+  carregarGaleriaLocal();
+  syncUserProfile();
+});
