@@ -317,13 +317,39 @@ async function inicializarAgendamento() {
 
       // Cálculo dos timestamps para lembretes (baseado em dataISO e horário)
       const dataAgendamentoISO = localStorage.getItem("dataAgendamentoISO");
-      const dataHoraObj = new Date(`${dataAgendamentoISO}T${horarioSalvo}`);
+
+      // Normalização do horário: remove "am", "pm", espaços e garante o formato HH:mm
+      const horarioNormalizado = horarioSalvo
+        .toLowerCase()
+        .replace(/(am|pm)/g, "")
+        .trim();
+
+      // Validação de integridade: evita strings como "nullT17:00" ou campos vazios
+      if (
+        !dataAgendamentoISO ||
+        dataAgendamentoISO === "null" ||
+        !horarioNormalizado
+      ) {
+        console.error("Data ou horário ausentes no agendamento:", {
+          dataAgendamentoISO,
+          horarioSalvo,
+        });
+        botaoAgendar.disabled = false;
+        botaoAgendar.textContent = "Confirmar Agendamento";
+        botaoAgendar.classList.remove("agendamento-button--disabled");
+        return;
+      }
+
+      // Montagem da data no formato ISO válido para o construtor (YYYY-MM-DDTHH:mm:ss)
+      const dataHoraObj = new Date(
+        `${dataAgendamentoISO}T${horarioNormalizado}:00`,
+      );
 
       if (isNaN(dataHoraObj.getTime())) {
-        console.error(
-          "Data inválida no agendamento:",
-          `${dataAgendamentoISO}T${horarioSalvo}`,
-        );
+        console.error("Data inválida no agendamento:", {
+          dataAgendamentoISO,
+          horarioNormalizado,
+        });
         botaoAgendar.disabled = false;
         botaoAgendar.textContent = "Confirmar Agendamento";
         botaoAgendar.classList.remove("agendamento-button--disabled");
