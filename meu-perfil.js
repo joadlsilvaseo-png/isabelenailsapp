@@ -1,4 +1,5 @@
 import { auth, db } from "./firebase-config.js";
+import { webhookUrl } from "./config.js";
 import {
   onAuthStateChanged,
   signOut,
@@ -178,14 +179,11 @@ function criarCardAtivo({
       // Dispara para Webhook (Redundância para WhatsApp)
       (async () => {
         try {
-          await fetch(
-            "https://hook.us2.make.com/5p8lpujp64yt92rirmi8yyhlycggyoqp",
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(eventPayloadCancelCliente),
-            },
-          );
+          await fetch(webhookUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(eventPayloadCancelCliente),
+          });
         } catch (err) {
           console.error(
             "Falha no disparo para o Webhook (Make.com - Cancelamento Cliente):",

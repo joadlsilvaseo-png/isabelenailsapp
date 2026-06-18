@@ -1,4 +1,5 @@
 import { auth, db } from "./firebase-config.js";
+import { webhookUrl } from "./config.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
 import {
   collection,
@@ -192,14 +193,11 @@ async function carregarAgendamentosDoPainel() {
           // Dispara para Webhook (Redundância para WhatsApp)
           (async () => {
             try {
-              await fetch(
-                "https://hook.us2.make.com/5p8lpujp64yt92rirmi8yyhlycggyoqp",
-                {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify(eventPayloadCancelAdmin),
-                },
-              );
+              await fetch(webhookUrl, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(eventPayloadCancelAdmin),
+              });
             } catch (err) {
               console.error(
                 "Falha no disparo para o Webhook (Make.com - Cancelamento Admin):",
