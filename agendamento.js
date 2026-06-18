@@ -173,35 +173,62 @@ function limparHorariosOcupados(horarios) {
 }
 
 // Consulta agendamentos no Firestore para a data selecionada e marca horários ocupados
-async function verificarHorariosOcupados(dataSelecionada) {
-  if (!dataSelecionada) return;
+async function verificarHorariosOcupados(dataIso) {
+  if (!dataIso) return;
 
   try {
-    const dateKey = String(dataSelecionada).trim();
+    const dateKey = String(dataIso).trim();
+    // Removido: console.log("DEBUG: Buscando data no Firestore exatamente como:", `"${dateKey}"`);
+
     const q = query(
       collection(db, "agendamentos"),
       where("data", "==", dateKey),
     );
+    console.log("Consultando Firestore para data:", dateKey);
     const querySnapshot = await getDocs(q);
+    console.log("Documentos encontrados:", querySnapshot.size);
 
     const horariosOcupados = [];
     querySnapshot.forEach((doc) => {
       const data = doc.data();
-      if (data && data.horario)
+
+      // REGRA: Apenas agendamentos com intenção de execução bloqueiam o horário.
+      // Horários 'concluidos' ou 'realizados' liberam o slot para novos atendimentos.
+      const statusAtivos = ["agendado", "reagendado", "confirmado"];
+
+      const isOcupado =
+        data &&
+        data.horario &&
+        (!data.status || statusAtivos.includes(data.status));
+
+      if (isOcupado) {
         horariosOcupados.push(String(data.horario).trim());
+      }
     });
 
     const horarios = Array.from(document.querySelectorAll(".agendamento-time"));
     limparHorariosOcupados(horarios);
 
-    horariosOcupados.forEach((hora) => {
-      const match = horarios.find((h) => h.textContent.trim() === hora);
-      if (match) {
-        match.classList.add("horario-ocupado");
-        match.setAttribute("aria-disabled", "true");
-        match.disabled = true;
-        if (match.classList.contains("agendamento-time--active")) {
-          match.classList.remove("agendamento-time--active");
+    horariosOcupados.forEach((horaDB) => {
+      // 1. Limpa o que vem do Banco
+      const dbRaw = String(horaDB).trim().toLowerCase();
+
+      // 2. Procura no DOM (usando 'horarios' que é a variável definida no escopo)
+      const slotEncontrado = horarios.find((s) => {
+        const btnRaw = String(s.textContent).trim().toLowerCase();
+
+        // Compara se um está contido no outro (mais tolerante a formatos como '9:00' e '09:00')
+        return btnRaw.includes(dbRaw) || dbRaw.includes(btnRaw);
+      });
+
+      if (slotEncontrado) {
+        slotEncontrado.classList.add("horario-ocupado");
+        slotEncontrado.disabled = true;
+        slotEncontrado.setAttribute("aria-disabled", "true");
+
+        // UX: Se o horário ocupado era o que estava ativo, removemos a seleção
+        if (slotEncontrado.classList.contains("agendamento-time--active")) {
+          slotEncontrado.classList.remove("agendamento-time--active");
           localStorage.removeItem("horarioAgendamento");
         }
       }
@@ -246,12 +273,11 @@ async function inicializarAgendamento() {
         document.querySelectorAll(".agendamento-time"),
       );
       limparHorariosOcupados(horariosList);
-      const dataText = formatarData(botao);
-      localStorage.setItem("dataAgendamento", dataText);
+      localStorage.setItem("dataAgendamento", formatarData(botao));
       // Salva também a versão ISO técnica para integrações
       const dataIso = obterDataIso(botao);
       if (dataIso) localStorage.setItem("dataAgendamentoISO", dataIso);
-      verificarHorariosOcupados(dataText);
+      verificarHorariosOcupados(dataIso);
     });
   });
 
@@ -356,7 +382,7 @@ async function inicializarAgendamento() {
         horario: horarioFinal,
         duracao: serviceDuration,
         observacoes: observacoesValor,
-        status: reagendarId ? "reagendado" : "agendado",
+        status: reagendarId ? "reagendado" : "agendado", // Status inicial
         reminder_24h: reminder24h.toISOString(),
         reminder_2h: reminder2h.toISOString(),
         email_lembrete_24h: false,
@@ -409,6 +435,9 @@ async function inicializarAgendamento() {
             timestamp: new Date().toISOString(),
           });
         }
+
+        // Sincroniza os horários ocupados imediatamente após o sucesso do agendamento
+        await verificarHorariosOcupados(dataAgendamentoISO);
 
         // 1.1 Rastreamento do GA4
         trackEvent("agendamento_concluido", {
@@ -465,7 +494,7 @@ async function inicializarAgendamento() {
   const diaAtivo =
     obterSelecionado(datas, "agendamento-date--active") || datas[0];
   if (diaAtivo) {
-    verificarHorariosOcupados(formatarData(diaAtivo));
+    verificarHorariosOcupados(obterDataIso(diaAtivo));
   }
 }
 

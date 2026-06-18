@@ -247,7 +247,7 @@ async function concluirAtendimento(id, valor, servico) {
 
     // 2. Mudança de Estado (Único local onde "realizado" é atribuído)
     await updateDoc(doc(db, "agendamentos", id), {
-      status: "realizado",
+      status: "concluido", // Alterado para 'concluido' conforme o objetivo
     });
 
     alert("Receita registrada e atendimento concluído!");

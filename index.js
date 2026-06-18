@@ -39,7 +39,7 @@ async function processReminders(timeField, statusField, messageTitle) {
     .collection("agendamentos")
     .where(timeField, "<=", agora)
     .where(statusField, "==", false)
-    .where("status", "==", "confirmado")
+    .where("status", "in", ["agendado", "confirmado"]) // Lembretes para agendados e confirmados (legado)
     .get();
 
   if (snapshot.empty) return;

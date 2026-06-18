@@ -215,12 +215,22 @@ function criarCardHistorico({
   let labelStatus = "Realizado";
   let corStatus = "#2a7a4a";
 
-  if (statusAgendamento.startsWith("cancelado")) {
+  if (statusAgendamento === "concluido") {
+    // Novo status 'concluido'
+    labelStatus = "Concluído";
+    corStatus = "#2a7a4a";
+  } else if (statusAgendamento.startsWith("cancelado")) {
     labelStatus =
       statusAgendamento === "cancelado_cliente"
         ? "Cancelado por Você"
         : "Cancelado pela Profissional";
     corStatus = "#b53f60";
+  }
+
+  if (statusAgendamento === "reagendado") {
+    // Reagendado no histórico
+    labelStatus = "Reagendado";
+    corStatus = "#d97706";
   }
 
   const historyRow = document.createElement("div");
