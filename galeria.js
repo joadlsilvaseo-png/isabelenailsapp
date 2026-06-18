@@ -1,3 +1,5 @@
+import { trackEvent } from "./analytics.js";
+
 /**
  * Função para carregar a galeria de imagens localmente.
  * Busca arquivos na pasta assets/ seguindo o padrão: categoria-nome-numero.png
@@ -59,6 +61,11 @@ async function carregarGaleriaLocal() {
  * Troca de abas estilo Instagram
  */
 window.switchTab = function (categoria, btn) {
+  // Rastreia a mudança de categoria na galeria
+  trackEvent("gallery_tab_switch", {
+    category: categoria,
+  });
+
   // Atualiza botões
   document
     .querySelectorAll(".tab-btn")
@@ -87,6 +94,12 @@ function abrirLightbox(categoria, index) {
 
   currentCategory = categoria;
   currentIndex = index;
+
+  // Rastreia a visualização ampliada de uma imagem
+  trackEvent("gallery_image_view", {
+    category: categoria,
+    index: index,
+  });
 
   // Popula o carrossel com imagens da categoria
   carousel.innerHTML = "";
@@ -149,4 +162,8 @@ async function verificarImagem(url) {
 }
 
 // Chama a função ao carregar a página
-document.addEventListener("DOMContentLoaded", carregarGaleriaLocal);
+document.addEventListener("DOMContentLoaded", () => {
+  carregarGaleriaLocal();
+  // Rastreia o acesso inicial à página de galeria
+  trackEvent("view_gallery");
+});
