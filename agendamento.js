@@ -42,35 +42,13 @@ function obterDataIso(botaoData) {
   return botaoData.dataset?.dateIso || null;
 }
 
-function validateAgendamento(data, hora) {
-  if (!data || !hora) {
-    console.error("Agendamento inválido", { data, hora });
-    return false;
-  }
+function validarAgendamento(data, hora) {
+  if (!data || !hora) return false;
 
   const dataOk = /^\d{4}-\d{2}-\d{2}$/.test(data);
   const horaOk = /^([01]\d|2[0-3]):[0-5]\d$/.test(hora);
 
-  if (!dataOk || !horaOk) {
-    console.error("Agendamento inválido", { data, hora });
-    return false;
-  }
-  return true;
-}
-
-function sanitizeHorario(horario) {
-  if (!horario) return "";
-  const sanitized = String(horario)
-    .toLowerCase()
-    .replace(/\s+/g, "")
-    .replace(/(am|pm)/g, "")
-    .trim();
-
-  if (sanitized.includes(":")) {
-    const [h, m] = sanitized.split(":");
-    return `${h.padStart(2, "0")}:${m.padStart(2, "0")}`;
-  }
-  return sanitized;
+  return dataOk && horaOk;
 }
 
 // Gera exatamente 5 dias úteis (Terça a Sábado) a partir do próximo dia útil disponível
@@ -308,21 +286,25 @@ async function inicializarAgendamento() {
         "agendamento-time--active",
       );
 
-      // 1. Captura de dados brutos e Validação (Passo 1 do fluxo)
+      // Captura os valores direto do DOM ou do localStorage
       const dataAgendamentoISO = localStorage.getItem("dataAgendamentoISO");
-      const horarioOriginal =
+      const horarioSalvo =
         localStorage.getItem("horarioAgendamento") ||
         (horarioSelecionado ? horarioSelecionado.textContent : "");
 
-      if (!validateAgendamento(dataAgendamentoISO, horarioOriginal)) {
+      // Normalização mínima do horário para evitar crashes
+      const horarioNormalizado = String(horarioSalvo)
+        .toLowerCase()
+        .replace(/(am|pm)/g, "")
+        .trim();
+
+      // Validação usando a função simples
+      if (!validarAgendamento(dataAgendamentoISO, horarioNormalizado)) {
         window.alert(
           "Por favor, selecione uma data e um horário válidos antes de prosseguir.",
         );
         return;
       }
-
-      // 2. Sanitização do Horário (Passo 2 do fluxo)
-      const horarioNormalizado = sanitizeHorario(horarioOriginal);
 
       if (!serviceId) {
         window.alert(
@@ -338,13 +320,13 @@ async function inicializarAgendamento() {
       const observacoesValor =
         textareaComentarios.value.trim() || "sem observações";
 
-      // 3. Criação Segura de Data ISO (Passo 3 do fluxo)
+      // Montagem da data no formato ISO
       const dataHoraObj = new Date(
         `${dataAgendamentoISO}T${horarioNormalizado}:00`,
       );
 
       if (isNaN(dataHoraObj.getTime())) {
-        console.error("Falha crítica na criação da data", {
+        console.error("Data inválida no agendamento:", {
           dataAgendamentoISO,
           horarioNormalizado,
         });
@@ -354,9 +336,9 @@ async function inicializarAgendamento() {
         return;
       }
 
-      // Formatos garantidos para o processamento e salvamento
       const dataSalva = dataAgendamentoISO;
-      const horarioSalvo = horarioNormalizado;
+      // O horarioSalvo para o payload será o normalizado
+      const horarioFinal = horarioNormalizado;
 
       // Lembrete 24h antes
       const reminder24h = new Date(dataHoraObj.getTime() - 24 * 60 * 60 * 1000);
@@ -370,7 +352,7 @@ async function inicializarAgendamento() {
         servico: serviceName, // Gravando o nome do serviço no agendamento
         data: dataSalva,
         dataISO: dataAgendamentoISO,
-        horario: horarioSalvo,
+        horario: horarioFinal,
         duracao: serviceDuration,
         observacoes: observacoesValor,
         status: "confirmado",
@@ -389,7 +371,7 @@ async function inicializarAgendamento() {
         // 1.1 Rastreamento do GA4
         trackEvent("agendamento_concluido", {
           servico: serviceName,
-          horario: horarioSalvo,
+          horario: horarioFinal,
         });
 
         // 2. Dispara webhook do Make em background (não bloqueia o redirecionamento)
@@ -421,7 +403,7 @@ async function inicializarAgendamento() {
           serviceName || "Manicure Simples",
         );
         const dataUrl = encodeURIComponent(dataSalva);
-        const horarioUrl = encodeURIComponent(horarioSalvo);
+        const horarioUrl = encodeURIComponent(horarioFinal);
 
         // Redireciona passando os dados como "presente" na URL
         window.location.href = `confirmacao.html?servico=${servicoUrl}&data=${dataUrl}&horario=${horarioUrl}`;
