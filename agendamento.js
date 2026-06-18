@@ -9,6 +9,7 @@ import {
   query,
   where,
   addDoc,
+  updateDoc,
   serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
 
@@ -220,6 +221,7 @@ async function inicializarAgendamento() {
   const textareaComentarios = document.querySelector("#agendamento-notes");
   const urlParams = new URLSearchParams(window.location.search);
   const serviceId = urlParams.get("id");
+  const reagendarId = urlParams.get("reagendar");
 
   if (
     !botaoAgendar ||
@@ -355,7 +357,7 @@ async function inicializarAgendamento() {
         horario: horarioFinal,
         duracao: serviceDuration,
         observacoes: observacoesValor,
-        status: "confirmado",
+        status: reagendarId ? "reagendado" : "agendado",
         reminder_24h: reminder24h.toISOString(),
         reminder_2h: reminder2h.toISOString(),
         email_lembrete_24h: false,
@@ -364,9 +366,17 @@ async function inicializarAgendamento() {
       };
 
       try {
-        // 1. Salva no Firestore
-        const docRef = await addDoc(collection(db, "agendamentos"), payload);
-        console.log("Agendamento salvo com SUCESSO! ID:", docRef.id);
+        // 1. Persistência Protegida (Apenas no clique do botão)
+        let finalDocId = reagendarId;
+
+        if (reagendarId) {
+          await updateDoc(doc(db, "agendamentos", reagendarId), payload);
+          console.log("Agendamento REAGENDADO com SUCESSO! ID:", reagendarId);
+        } else {
+          const docRef = await addDoc(collection(db, "agendamentos"), payload);
+          finalDocId = docRef.id;
+          console.log("Agendamento salvo com SUCESSO! ID:", finalDocId);
+        }
 
         // 1.1 Rastreamento do GA4
         trackEvent("agendamento_concluido", {
@@ -380,7 +390,7 @@ async function inicializarAgendamento() {
             const payloadToSend = {
               ...payload,
               servico: serviceName || "Manicure Simples",
-              idAgendamento: docRef.id,
+              idAgendamento: finalDocId,
             };
 
             await fetch(

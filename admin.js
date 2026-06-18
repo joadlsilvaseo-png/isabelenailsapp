@@ -4,6 +4,7 @@ import {
   collection,
   getDocs,
   query,
+  where,
   orderBy,
   doc,
   getDoc,
@@ -40,6 +41,8 @@ async function carregarAgendamentosDoPainel() {
   try {
     const q = query(
       collection(db, "agendamentos"),
+      // INCLUÍDO "confirmado" PARA SUPORTAR DADOS LEGADOS E EVITAR QUE SUMAM DO PAINEL
+      where("status", "in", ["agendado", "reagendado", "confirmado"]),
       orderBy("dataCriacao", "desc"),
     );
     const querySnapshot = await getDocs(q);
@@ -132,10 +135,20 @@ async function carregarAgendamentosDoPainel() {
         concluirAtendimento(documentoOf.id, valorServico, nomeServico),
       );
 
+      // Botão Reagendar (Profissional)
+      const rebookButton = document.createElement("button");
+      rebookButton.type = "button";
+      rebookButton.className = "btn-acao btn-reagendar";
+      rebookButton.textContent = "Reagendar";
+      rebookButton.style.backgroundColor = "#d97706";
+      rebookButton.onclick = () => {
+        window.location.href = `agendamento.html?id=${dados.idServico}&reagendar=${documentoOf.id}`;
+      };
+
       const cancelButton = document.createElement("button");
       cancelButton.type = "button";
       cancelButton.className = "btn-acao btn-cancelar";
-      cancelButton.textContent = "Cancelar Agendamento";
+      cancelButton.textContent = "Cancelar";
       cancelButton.setAttribute("data-id", documentoOf.id);
       cancelButton.addEventListener("click", async () => {
         const confirmDelete = window.confirm(
@@ -144,9 +157,12 @@ async function carregarAgendamentosDoPainel() {
         if (!confirmDelete) return;
 
         try {
-          await deleteDoc(doc(db, "agendamentos", documentoOf.id));
-          card.remove();
-          console.log(`Agendamento ${documentoOf.id} cancelado com sucesso.`);
+          // AÇÃO EXPLÍCITA: Registro do motivo do cancelamento
+          await updateDoc(doc(db, "agendamentos", documentoOf.id), {
+            status: "cancelado_profissional",
+          });
+          alert("Agendamento cancelado!");
+          location.reload();
         } catch (error) {
           console.error("Erro ao cancelar agendamento:", error);
           window.alert(
@@ -173,6 +189,7 @@ async function carregarAgendamentosDoPainel() {
 
       const acoesDiv = card.querySelector(".agenda-acoes");
       acoesDiv.appendChild(finishButton);
+      acoesDiv.appendChild(rebookButton);
       acoesDiv.appendChild(cancelButton);
       listaContainer.appendChild(card);
     }
@@ -186,11 +203,16 @@ async function carregarAgendamentosDoPainel() {
  * Registra a receita na coleção B.I. e marca o agendamento como concluído
  */
 async function concluirAtendimento(id, valor, servico) {
+  // STATUS SÓ PODE SER ALTERADO POR AÇÃO DO USUÁRIO (CLIQUE NO BOTÃO)
+  // NUNCA ALTERAR EM FUNÇÕES DE RENDER OU FETCH
+  // GUARD CLAUSE: Só prossegue se houver ID válido (Garantia contra chamadas automáticas)
+  if (!id) return;
+
   const data = new Date();
   const mes = data.toISOString().substring(0, 7);
 
   try {
-    // 1. Adiciona o registro financeiro na coleção B.I.
+    // 1. Fluxo Financeiro (Apenas no clique)
     await addDoc(collection(db, "B.I."), {
       valor: parseFloat(valor),
       servico: servico,
@@ -198,8 +220,10 @@ async function concluirAtendimento(id, valor, servico) {
       data: serverTimestamp(),
     });
 
-    // 2. Atualiza o status do agendamento
-    await updateDoc(doc(db, "agendamentos", id), { status: "concluido" });
+    // 2. Mudança de Estado (Único local onde "realizado" é atribuído)
+    await updateDoc(doc(db, "agendamentos", id), {
+      status: "realizado",
+    });
 
     alert("Receita registrada e atendimento concluído!");
     location.reload();

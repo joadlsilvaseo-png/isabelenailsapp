@@ -10,6 +10,7 @@ import {
   getDocs,
   query,
   where,
+  updateDoc,
   deleteDoc,
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
 
@@ -92,7 +93,14 @@ async function resolveNomeServicoVisual(dados) {
   return "Serviço Agendado";
 }
 
-function criarCardAtivo({ titulo, data, horario, id }) {
+function criarCardAtivo({
+  titulo,
+  data,
+  horario,
+  id,
+  idServico,
+  status: statusAgendamento,
+}) {
   const card = document.createElement("article");
   card.className = "perfil-card perfil-card--confirmed";
 
@@ -102,7 +110,10 @@ function criarCardAtivo({ titulo, data, horario, id }) {
   title.textContent = titulo;
   const status = document.createElement("p");
   status.className = "perfil-card-status";
-  status.textContent = "Confirmado";
+  status.textContent =
+    statusAgendamento === "reagendado" ? "Reagendado" : "Agendado";
+  if (statusAgendamento === "reagendado")
+    status.style.color = "var(--color-secondary)";
 
   content.appendChild(title);
   content.appendChild(status);
@@ -118,6 +129,20 @@ function criarCardAtivo({ titulo, data, horario, id }) {
   meta.appendChild(dateEl);
   meta.appendChild(timeEl);
 
+  // Container de ações para isolar cliques
+  const actions = document.createElement("div");
+  actions.className = "perfil-card-actions";
+  actions.style.display = "flex";
+  actions.style.gap = "8px";
+  actions.style.marginTop = "12px";
+
+  const rebookButton = document.createElement("button");
+  rebookButton.className = "perfil-button btn-reagendar";
+  rebookButton.textContent = "Reagendar";
+  rebookButton.onclick = () => {
+    window.location.href = `agendamento.html?id=${idServico}&reagendar=${id}`;
+  };
+
   const cancelButton = document.createElement("button");
   cancelButton.type = "button";
   cancelButton.className = "perfil-button btn-cancelar";
@@ -132,9 +157,13 @@ function criarCardAtivo({ titulo, data, horario, id }) {
     cancelButton.textContent = "Cancelando...";
 
     try {
-      await deleteDoc(doc(db, "agendamentos", id));
+      // STATUS SÓ PODE SER ALTERADO POR AÇÃO DO USUÁRIO (CLIQUE NO BOTÃO)
+      // ALTERAÇÃO PARA STATUS EM VEZ DE DELETAR O REGISTRO
+      await updateDoc(doc(db, "agendamentos", id), {
+        status: "cancelado_cliente",
+      });
       window.alert("Agendamento cancelado com sucesso!");
-      card.remove();
+      window.location.reload();
 
       if (
         containerAgendamentos &&
@@ -154,16 +183,35 @@ function criarCardAtivo({ titulo, data, horario, id }) {
     }
   });
 
+  actions.appendChild(rebookButton);
+  actions.appendChild(cancelButton);
+
   card.appendChild(content);
   card.appendChild(meta);
-  card.appendChild(cancelButton);
+  card.appendChild(actions);
 
   return card;
 }
 
-function criarCardHistorico({ titulo, data, horario }) {
+function criarCardHistorico({
+  titulo,
+  data,
+  horario,
+  status: statusAgendamento,
+}) {
   const card = document.createElement("article");
   card.className = "perfil-card perfil-card--history";
+
+  let labelStatus = "Realizado";
+  let corStatus = "#2a7a4a";
+
+  if (statusAgendamento.startsWith("cancelado")) {
+    labelStatus =
+      statusAgendamento === "cancelado_cliente"
+        ? "Cancelado por Você"
+        : "Cancelado pela Profissional";
+    corStatus = "#b53f60";
+  }
 
   const historyRow = document.createElement("div");
   historyRow.className = "perfil-card-history-row";
@@ -190,7 +238,8 @@ function criarCardHistorico({ titulo, data, horario }) {
 
   const status = document.createElement("p");
   status.className = "perfil-card-status perfil-card-status--done";
-  status.textContent = "Realizado";
+  status.textContent = labelStatus;
+  status.style.color = corStatus;
 
   card.appendChild(historyRow);
   card.appendChild(meta);
@@ -270,19 +319,23 @@ async function carregarAgendamentos(uid) {
       console.log("Agendamento encontrado:", dados);
 
       const nomeServicoVisual = await resolveNomeServicoVisual(dados);
-      const dataTexto = dados.data || "Data não disponível";
-      const horarioTexto = dados.horario || "Horário não disponível";
 
       const agendamentoData = {
         titulo: nomeServicoVisual,
-        data: dataTexto,
-        horario: horarioTexto,
+        data: dados.data || "--/--",
+        horario: dados.horario || "--:--",
         id: docItem.id,
+        idServico: dados.idServico,
+        status: dados.status || "agendado",
       };
 
-      if (isDataFuturaOuHoje(agendamentoData.data)) {
+      if (
+        agendamentoData.status === "agendado" ||
+        agendamentoData.status === "reagendado" ||
+        agendamentoData.status === "confirmado"
+      ) {
         containerAgendamentos.appendChild(criarCardAtivo(agendamentoData));
-      } else {
+      } else if (agendamentoData.status !== "pendente") {
         containerHistorico.appendChild(criarCardHistorico(agendamentoData));
       }
     }
