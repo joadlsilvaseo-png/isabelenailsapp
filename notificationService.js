@@ -1,56 +1,60 @@
-import { db } from "./firebase-config.js";
+import { app, db } from "./firebase-config.js";
 import {
   doc,
   setDoc,
   serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
+import {
+  getMessaging,
+  getToken,
+  onMessage,
+} from "https://www.gstatic.com/firebasejs/12.14.0/firebase-messaging.js";
 import { trackEvent } from "./analytics.js";
 
-// Chave VAPID pública
-const VAPID_PUBLIC_KEY =
-  "BIsX3O0M9_X_8u3v4N_S5P_R9x2Y7Z6x5W4v3U2t1s0r9Q8P7O6N5M4L3K2J1I0H9G8F7E";
+// Inicializa o Firebase Messaging
+const messaging = getMessaging(app);
 
 /**
- * Configura Push Notifications para o usuário logado
+ * Configura Firebase Cloud Messaging para o usuário logado
  */
 export async function setupPushNotifications(userId) {
-  if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
-    console.warn("Push não suportado neste navegador.");
+  if (!("serviceWorker" in navigator)) {
+    console.warn("Service Worker não suportado neste navegador.");
     return null;
   }
 
   try {
+    // 1. Solicitar permissão
     const permission = await Notification.requestPermission();
-
     if (permission !== "granted") {
       console.warn("Permissão de notificações negada pelo usuário.");
       return null;
     }
 
+    // 2. Obter o Service Worker pronto
     const registration = await navigator.serviceWorker.ready;
 
-    if (!registration) {
-      console.error("Service Worker não disponível.");
+    // 3. Obter Token FCM
+    const token = await getToken(messaging, {
+      serviceWorkerRegistration: registration,
+    });
+
+    if (!token) {
+      console.warn("Nenhum token FCM gerado.");
       return null;
     }
 
-    const applicationServerKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
-
-    const subscription = await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey,
+    // 4. Salva no Firestore na nova coleção fcmTokens
+    await setDoc(doc(db, "fcmTokens", userId), {
+      token: token,
+      updatedAt: serverTimestamp(),
     });
 
-    const subJSON = subscription.toJSON();
-
-    // Salva no Firestore (idempotente por userId)
-    await setDoc(doc(db, "pushSubscriptions", userId), {
-      endpoint: subJSON.endpoint,
-      keys: {
-        p256dh: subJSON.keys.p256dh,
-        auth: subJSON.keys.auth,
-      },
-      updatedAt: serverTimestamp(),
+    // 5. Listener para mensagens em foreground
+    onMessage(messaging, (payload) => {
+      console.log("Mensagem recebida em foreground: ", payload);
+      // Exibe um alerta simples ou toast customizado
+      alert(`${payload.notification.title}: ${payload.notification.body}`);
     });
 
     trackEvent("push_subscription_opt_in", {
@@ -59,26 +63,9 @@ export async function setupPushNotifications(userId) {
       status: "granted",
     });
 
-    return subscription;
+    return token;
   } catch (error) {
-    console.error("Erro ao configurar Push Notifications:", error);
+    console.error("Erro ao configurar FCM:", error);
     return null;
   }
-}
-
-/**
- * Converte base64 VAPID para Uint8Array (Web Push API padrão)
- */
-function urlBase64ToUint8Array(base64String) {
-  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
-
-  const rawData = window.atob(base64);
-  const outputArray = new Uint8Array(rawData.length);
-
-  for (let i = 0; i < rawData.length; ++i) {
-    outputArray[i] = rawData.charCodeAt(i);
-  }
-
-  return outputArray;
 }
