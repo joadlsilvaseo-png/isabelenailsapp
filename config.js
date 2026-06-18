@@ -9,4 +9,5 @@ export const firebaseConfig = {
 };
 
 // URL do Webhook para Make.com
-export const webhookUrl = "https://hook.us2.make.com/5p8lpujp64yt92rirmi8yyhlycggyoqp";
+export const webhookUrl =
+  "https://hook.us2.make.com/5p8lpujp64yt92rirmi8yyhlycggyoqp";
