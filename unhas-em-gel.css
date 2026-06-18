@@ -1,0 +1,214 @@
+/* Mobile-first styling for Unhas em Gel */
+
+:root {
+  --color-bg: #591c31;
+  --color-card: #f0c1d1;
+  --color-card-border: #934761;
+  --color-surface: #f6f6f6;
+  --color-text: #591c31;
+  --color-text-light: #ffd9e7;
+  --color-text-muted: #591c31;
+  --color-button: #591c31;
+  --color-button-text: #ffd9e7;
+  --radius-card: 20px;
+  --radius-panel: 60px;
+  --shadow: 0px 2px 4px rgba(0, 0, 0, 0.25);
+}
+
+body {
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+img {
+  max-width: 100%;
+  display: block;
+}
+
+button,
+a {
+  font: inherit;
+}
+
+.app-container {
+  max-width: 480px;
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: 16px 16px 24px;
+  display: flex;
+  flex-direction: column;
+}
+
+.unhas-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.unhas-nav-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-light);
+  text-decoration: none;
+  background: none;
+  border: none;
+  padding: 6px;
+  border-radius: 0;
+}
+
+.unhas-title {
+  font-size: clamp(24px, 6vw, 30px);
+  font-weight: 700;
+  color: var(--color-text-light);
+  text-align: center;
+  flex: 1;
+}
+
+.unhas-title::before,
+.unhas-title::after {
+  content: "";
+  display: inline-block;
+  width: 44px;
+}
+
+.unhas-main {
+  background: var(--color-surface);
+  border-radius: var(--radius-panel) var(--radius-panel) 0 0;
+  padding: 24px 16px 20px;
+  flex: 1;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.unhas-subtitle {
+  font-size: 20px;
+  font-weight: 500;
+  color: var(--color-text);
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.unhas-list {
+  list-style: none;
+  display: grid;
+  gap: 16px;
+}
+
+.unhas-card {
+  background: var(--color-card);
+  border-radius: var(--radius-card);
+  padding: 18px 16px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 2px solid transparent;
+  transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+}
+
+.unhas-card.selected {
+  border-color: #591C31;
+  background: #591C31;
+}
+
+.unhas-card.selected .unhas-card-title,
+.unhas-card.selected .unhas-card-price,
+.unhas-card.selected .unhas-card-label,
+.unhas-card.selected .unhas-card-duration {
+  color: #F0C1D1;
+}
+
+.unhas-card-group {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.unhas-card-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.unhas-card-label,
+.unhas-card-duration {
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.unhas-card-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.unhas-card-price {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.unhas-footer {
+  padding-top: 18px;
+}
+
+.unhas-action-button {
+  display: inline-flex;
+  width: 100%;
+  min-height: 52px;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 2px solid var(--color-card-border);
+  border-radius: 20px;
+  text-decoration: none;
+  font-size: 18px;
+  font-weight: 600;
+  box-shadow: var(--shadow);
+  transition: background 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.unhas-action-button:hover,
+.unhas-action-button:focus-visible {
+  background: rgba(89, 28, 49, 0.08);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(89, 28, 49, 0.12);
+}
+
+.unhas-action-button:active,
+.unhas-action-button.touch-active {
+  transform: translateY(-1px);
+}
+
+@media (hover: none) {
+  .unhas-action-button:hover {
+    transform: none;
+    box-shadow: none;
+  }
+}
+
+/* When selected, keep button visuals unchanged; only hover/active provide feedback */
+.unhas-action-button.enabled {
+  /* intentionally empty - visual enabled state handled by hover/active rules */
+}
+
+@media (max-width: 360px) {
+  .unhas-main {
+    padding: 20px 14px 18px;
+  }
+
+  .unhas-card {
+    padding: 16px 14px;
+  }
+
+  .unhas-title {
+    font-size: 26px;
+  }
+}

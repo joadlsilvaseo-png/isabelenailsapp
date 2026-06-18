@@ -1,0 +1,473 @@
+/* ============================================================
+   RESET E VARIÁVEIS GLOBAIS
+   ============================================================ */
+
+:root {
+  /* Cores */
+  --color-primary: #934761;
+  --color-primary-light: #f0c1d1;
+  --color-primary-dark: #591c31;
+  --color-accent: #a8617b;
+  --color-input-bg: #f9f8f6;
+  --color-input-border-light: #f0c1d1;
+  --color-input-border-dark: #d2cec5;
+  --color-text-primary: #934761;
+  --color-text-dark: #591c31;
+  --color-gradient-top: #ffd9e7;
+  --color-gradient-bottom: #a8617b;
+
+  /* Tipografia */
+  --font-family-base: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  --font-size-body: 16px;
+  --font-size-title: 30px;
+  --font-size-label: 25px;
+  --font-size-button: 25px;
+  --font-size-social-label: 15px;
+  --line-height-base: 1.5;
+
+  /* Espaçamento */
+  --spacing-xs: 8px;
+  --spacing-sm: 12px;
+  --spacing-md: 16px;
+  --spacing-lg: 20px;
+  --spacing-xl: 24px;
+  --spacing-2xl: 32px;
+
+  /* Border Radius */
+  --radius-sm: 10px;
+  --radius-md: 20px;
+
+  /* Sombras */
+  --shadow-sm: 0px 2px 4px 0px rgba(0, 0, 0, 0.25);
+  --shadow-input-light: 0px 2px 4px 0px #f0c1d1;
+
+  /* Transições */
+  --transition-base: 0.3s ease-in-out;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-base);
+  background: linear-gradient(
+    180deg,
+    var(--color-gradient-top) 0%,
+    var(--color-gradient-bottom) 100%
+  );
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: var(--spacing-md);
+}
+
+/* ============================================================
+   CONTAINER PRINCIPAL
+   ============================================================ */
+
+.app-container {
+  width: 100%;
+  max-width: 480px;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(
+    180deg,
+    var(--color-gradient-top) 0%,
+    var(--color-gradient-bottom) 100%
+  );
+}
+
+/* ============================================================
+   MAIN
+   ============================================================ */
+
+.login-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  padding: var(--spacing-xl) var(--spacing-md);
+  gap: var(--spacing-2xl);
+}
+
+/* ============================================================
+   HEADER
+   ============================================================ */
+
+.login-header {
+  padding-top: var(--spacing-lg);
+  margin-bottom: var(--spacing-lg);
+}
+
+.login-title {
+  font-size: var(--font-size-title);
+  font-weight: 600;
+  color: var(--color-primary);
+  text-align: left;
+}
+
+/* ============================================================
+   FORMULÁRIO
+   ============================================================ */
+
+.login-form-section {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2xl);
+  width: 100%;
+}
+
+/* ============================================================
+   FORM GROUP (Label + Input)
+   ============================================================ */
+
+.login-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  width: 100%;
+}
+
+.login-label {
+  font-size: var(--font-size-label);
+  font-weight: 700;
+  color: var(--color-primary);
+  display: block;
+}
+
+/* ============================================================
+   INPUTS
+   ============================================================ */
+
+.login-input {
+  width: 100%;
+  padding: var(--spacing-sm) var(--spacing-lg);
+  font-size: var(--font-size-body);
+  font-family: var(--font-family-base);
+  background-color: hsba(40, 1%, 98%, 1);
+  border: 1px solid hsba(340, 20%, 94%, 1);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-input-light);
+  transition: all var(--transition-base);
+  min-height: 44px;
+  color: var(--color-text-dark);
+}
+
+.login-input::placeholder {
+  color: #b0a89d;
+  opacity: 0.8;
+}
+
+.login-input:focus {
+  outline: none;
+  background-color: var(--color-primary);
+  color: #ffffff;
+  border-color: var(--color-primary);
+  box-shadow: 0px 2px 8px 0px rgba(147, 71, 97, 0.3);
+}
+
+.login-input:focus::placeholder {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.login-input:invalid:not(:placeholder-shown) {
+  border-color: #d32f2f;
+}
+
+/* ============================================================
+   BOTÕES
+   ============================================================ */
+
+.login-button {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: var(--spacing-md);
+  min-height: 44px;
+  padding: var(--spacing-sm) var(--spacing-lg);
+  font-size: var(--font-size-button);
+  font-weight: 600;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  font-family: var(--font-family-base);
+  width: 100%;
+}
+
+/* Botão Login Primário */
+.login-button--primary {
+  background-color: var(--color-primary);
+  color: var(--color-primary-light);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+  width: auto;
+  min-width: 159px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.login-button--primary:hover {
+  background-color: #7d3a4f;
+  transform: translateY(-2px);
+  box-shadow: 0px 4px 8px 0px rgba(0, 0, 0, 0.3);
+}
+
+.login-button--primary:active {
+  transform: translateY(0);
+  box-shadow: var(--shadow-sm);
+}
+
+.login-button--primary:focus-visible {
+  outline: 2px solid var(--color-primary-light);
+  outline-offset: 2px;
+}
+
+/* Botão Google */
+.login-button--google {
+  background-color: #ffffff;
+  color: var(--color-primary-dark);
+  border: 1px solid var(--color-input-border-dark);
+  gap: 12px;
+  padding: clamp(12px, 3vw, 16px);
+  box-shadow: var(--shadow-sm);
+  font-size: var(--font-size-social-label);
+  font-weight: 500;
+  width: 100%;
+}
+
+.login-button--google:hover {
+  background-color: #fbe9f2;
+  transform: translateY(-2px);
+  box-shadow: 0px 4px 8px 0px rgba(0, 0, 0, 0.2);
+  border-color: var(--color-primary);
+}
+
+.login-button--google:active {
+  background-color: var(--color-primary);
+  color: var(--color-primary-light);
+  transform: translateY(0);
+  box-shadow: var(--shadow-sm);
+  border-color: var(--color-primary-dark);
+}
+
+.login-button--google:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* ============================================================
+   ÍCONE GOOGLE
+   ============================================================ */
+
+.login-google-icon {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  display: block;
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   DIVISOR
+   ============================================================ */
+
+.login-divider {
+  width: 100%;
+  height: 1px;
+  background-color: rgba(147, 71, 97, 0.1);
+  margin: var(--spacing-lg) 0;
+}
+
+/* ============================================================
+   SOCIAL LOGIN SECTION
+   ============================================================ */
+
+.login-social-section {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ============================================================
+   FOOTER
+   ============================================================ */
+
+.login-footer {
+  width: 100%;
+  padding: var(--spacing-lg) 0;
+  text-align: center;
+  margin-top: auto;
+  padding-bottom: var(--spacing-2xl);
+}
+
+.login-footer-text {
+  font-size: 14px;
+  color: var(--color-text-dark);
+  line-height: 1.4;
+}
+
+.login-link {
+  color: var(--color-primary);
+  text-decoration: none;
+  font-weight: 600;
+  transition: all var(--transition-base);
+}
+
+.login-link--highlight {
+  color: var(--color-primary-light);
+}
+
+.login-link--highlight:hover {
+  color: var(--color-primary);
+}
+
+.login-link:hover {
+  text-decoration: underline;
+  color: #7d3a4f;
+}
+
+.login-link:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Estilização do Toggle de Senha */
+.show-password-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: -12px; /* Aproxima o checkbox do campo de input */
+  margin-bottom: 8px;
+}
+
+.show-password-container label {
+  font-size: 14px;
+  color: var(--color-primary);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.show-password-container input {
+  cursor: pointer;
+  accent-color: var(--color-primary);
+  width: 16px;
+  height: 16px;
+}
+
+/* ============================================================
+   RESPONSIVIDADE
+   ============================================================ */
+
+/* Extra Small Devices (320px - 375px) */
+@media (max-width: 375px) {
+  :root {
+    --font-size-title: 28px;
+    --font-size-label: 22px;
+    --font-size-button: 22px;
+    --spacing-xl: 20px;
+    --spacing-2xl: 24px;
+  }
+
+  .login-main {
+    padding: var(--spacing-md) var(--spacing-sm);
+  }
+
+  .login-button--primary {
+    min-width: 140px;
+  }
+}
+
+/* Small Devices (376px - 480px) */
+@media (min-width: 376px) and (max-width: 480px) {
+  .login-main {
+    padding: var(--spacing-xl) var(--spacing-md);
+  }
+}
+
+/* Medium Devices and above (481px+) */
+@media (min-width: 481px) {
+  .app-container {
+    max-width: 480px;
+  }
+}
+
+/* ============================================================
+   ACESSIBILIDADE
+   ============================================================ */
+
+/* Focus visible para navegação por teclado */
+.login-input:focus-visible {
+  outline: none;
+}
+
+/* Reduz motion para usuários que preferem */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .login-button:hover {
+    transform: none;
+  }
+}
+
+/* High contrast mode */
+@media (prefers-contrast: more) {
+  :root {
+    --color-primary: #6d1f3a;
+    --color-input-bg: #ffffff;
+    --color-text-dark: #000000;
+  }
+
+  .login-input {
+    border-width: 2px;
+  }
+}
+
+/* Dark mode (se aplicável) */
+@media (prefers-color-scheme: dark) {
+  body {
+    background: linear-gradient(180deg, #d4b5c8 0%, #8b4d63 100%);
+  }
+
+  .app-container {
+    background: linear-gradient(180deg, #d4b5c8 0%, #8b4d63 100%);
+  }
+
+  .login-input {
+    background-color: #2a2a2a;
+    color: #f0f0f0;
+    border-color: #4a4a4a;
+  }
+
+  .login-input::placeholder {
+    color: #999;
+  }
+
+  .login-button--google {
+    background-color: #3a3a3a;
+    color: #f0f0f0;
+    border-color: #5a5a5a;
+  }
+
+  .login-footer-text {
+    color: #ddd;
+  }
+}

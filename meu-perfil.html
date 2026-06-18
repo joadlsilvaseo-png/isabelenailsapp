@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Meu Perfil | Isabele Mariana Nails">
+  <meta name="theme-color" content="#591c31">
+  <title>Meu Perfil | Isabele Mariana Nails</title>
+  <link rel="stylesheet" href="base.css">
+  <link rel="stylesheet" href="meu-perfil.css">
+</head>
+
+<body data-page="meu-perfil">
+  <div class="app-container">
+    <header class="perfil-header">
+      <nav class="perfil-nav" aria-label="Navegação do perfil">
+        <!-- Voltar: history-aware, fallback para principal.html -->
+        <a href="principal.html" data-back="history" class="perfil-nav-link" aria-label="Voltar">
+          <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M15 18L9 12L15 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </a>
+        <h1 class="perfil-title">Meu Perfil</h1>
+        <a href="principal.html" class="perfil-nav-link" aria-label="Página inicial">
+          <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M4 10L12 3L20 10V20C20 20.5523 19.5523 21 19 21H5C4.44772 21 4 20.5523 4 20V10Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            <path d="M9 21V13H15V21" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </a>
+      </nav>
+    </header>
+
+    <main class="perfil-main">
+      <section class="perfil-summary" aria-labelledby="perfil-nome">
+        <div class="perfil-info">
+          <div class="perfil-details">
+            <p class="perfil-greeting">Seja Bem-vinda</p>
+            <p id="nome-cliente" class="perfil-name">Nome da Cliente</p>
+          </div>
+          <div class="perfil-avatar">
+            <img id="foto-cliente" src="https://www.w3schools.com/howto/img_avatar2.png" alt="Avatar feminino do perfil da cliente" loading="lazy">
+          </div>
+        </div>
+
+        <div class="perfil-field">
+          <label for="celular-cliente" class="perfil-label">Celular</label>
+          <input id="celular-cliente" class="perfil-input" type="tel" placeholder="(11) 99999-9999" aria-label="Celular" readonly>
+        </div>
+
+        <div class="perfil-field">
+          <label for="email-cliente" class="perfil-label">Email</label>
+          <input id="email-cliente" class="perfil-input" type="email" placeholder="seu@email.com" aria-label="Email" readonly>
+        </div>
+      </section>
+
+      <section id="container-agendamentos" class="perfil-agendamentos" aria-labelledby="perfil-agendamentos-title">
+        <h2 id="perfil-agendamentos-title" class="perfil-section-title">Meus Agendamentos</h2>
+      </section>
+
+      <section id="container-historico" class="perfil-historico" aria-labelledby="perfil-historico-title">
+        <h2 id="perfil-historico-title" class="perfil-section-title">Histórico</h2>
+      </section>
+
+      <footer class="perfil-footer">
+        <!-- Sair: retorna para a tela de login conforme fluxo -->
+        <a id="logout-button" href="#" class="perfil-exit-button">Sair</a>
+      </footer>
+    </main>
+  </div>
+  <script type="module" src="meu-perfil.js"></script>
+</body>
+
+</html>

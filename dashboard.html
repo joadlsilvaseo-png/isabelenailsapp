@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Painel de Isabele Mariana | Isabele Mariana Nails</title>
+  <link rel="stylesheet" href="base.css">
+  <link rel="stylesheet" href="dashboard.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Urbanist:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    /* Mantemos apenas o loading screen aqui por ser uma sobreposição crítica */
+    #loading-screen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #2d0b19;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      font-weight: 600;
+      color: #FFD9E7;
+    }
+
+    /* Ajustes solicitados para o Painel de B.I. */
+    .header {
+      display: flex;
+      flex-direction: column;
+      /* Alinhamento vertical */
+      align-items: center;
+      text-align: center;
+      gap: 15px;
+      /* Espaço entre título, filtros e botão */
+      padding: 20px 0;
+      margin-bottom: 10px;
+    }
+
+    .header h1 {
+      margin: 0;
+      font-size: 24px;
+      width: 100%;
+    }
+
+    .filters {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      flex-wrap: wrap;
+      /* Garante que não quebre em telas muito pequenas */
+    }
+
+    /* Diminuir o tamanho dos botões e seletores */
+    .btn-admin {
+      font-size: 12px !important;
+      padding: 6px 10px !important;
+      height: auto !important;
+      min-height: unset !important;
+      width: auto !important;
+      border-radius: 8px !important;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="loading-screen">Verificando Credenciais...</div>
+  <div class="dashboard-container">
+    <header class="header">
+      <h1>Painel de Isabele Mariana</h1>
+      <div class="filters">
+        <select id="filter-year" class="btn-admin" style="background: var(--vinho-card); color: #FFD9E7; border: 1px solid rgba(255,255,255,0.1); cursor: pointer;">
+          <option value="Geral">Ano: Geral</option>
+        </select>
+        <select id="filter-month" class="btn-admin" style="background: var(--vinho-card); color: #FFD9E7; border: 1px solid rgba(255,255,255,0.1); cursor: pointer;">
+          <option value="Geral">Mês: Geral</option>
+          <option value="01">Janeiro</option>
+          <option value="02">Fevereiro</option>
+          <option value="03">Março</option>
+          <option value="04">Abril</option>
+          <option value="05">Maio</option>
+          <option value="06">Junho</option>
+          <option value="07">Julho</option>
+          <option value="08">Agosto</option>
+          <option value="09">Setembro</option>
+          <option value="10">Outubro</option>
+          <option value="11">Novembro</option>
+          <option value="12">Dezembro</option>
+        </select>
+      </div>
+      <a href="admin.html" class="btn-admin">Meus Agendamentos</a>
+    </header>
+
+    <p id="current-month-label" style="margin-bottom: 20px; color: var(--rosa-detalhe); font-weight: 600; text-transform: capitalize;">Período: Geral</p>
+
+    <main class="metrics-grid">
+      <div class="card">
+        <h3>Receita do Mês</h3>
+        <div id="valor-receita" class="value">R$ 0,00</div>
+      </div>
+      <div class="card">
+        <h3>Total Atendidos</h3>
+        <div id="total-atendimentos" class="value">0</div>
+      </div>
+    </main>
+
+    <section class="chart-section" style="height: auto; min-height: 350px; display: flex; flex-direction: column; align-items: center;">
+      <h3 style="color: var(--rosa-detalhe); margin-bottom: 20px; text-transform: uppercase; font-size: 14px; letter-spacing: 1px;">Distribuição de Serviços</h3>
+      <div style="width: 100%; max-width: 300px;"><canvas id="servicesChart"></canvas></div>
+    </section>
+
+    <section class="dashboard-actions" style="margin-top: 20px;">
+      <a href="principal.html" style="text-align: center; color: var(--vinho); font-weight: 500;">Voltar</a>
+    </section>
+  </div>
+
+  <script type="module" src="dashboard.js"></script>
+</body>
+
+</html>

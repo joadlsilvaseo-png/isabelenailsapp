@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Galeria de trabalhos de unhas da Isabele Mariana Nails">
+  <meta name="theme-color" content="#591C31">
+  <title>Galeria | Isabele Mariana Nails</title>
+  <link rel="stylesheet" href="base.css">
+  <style>
+    /* Instagram Dark Mode CSS */
+    :root {
+      --ig-black: #000;
+      --ig-white: #fff;
+      --ig-gray: #262626;
+      --ig-light-gray: #8e8e8e;
+    }
+
+    body {
+      background-color: var(--ig-black) !important;
+      color: var(--ig-white);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+
+    .app-container {
+      max-width: 480px;
+      margin: 0 auto;
+      padding-bottom: 50px;
+    }
+
+    /* Header Nav */
+    .galeria-header {
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--ig-gray);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      background: var(--ig-black);
+      z-index: 100;
+    }
+
+    .galeria-title {
+      font-size: 16px;
+      font-weight: 700;
+      margin: 0;
+    }
+
+    /* Profile Info */
+    .instagram-profile {
+      padding: 16px;
+    }
+
+    .profile-top {
+      display: flex;
+      align-items: center;
+      gap: 28px;
+      margin-bottom: 12px;
+    }
+
+    .profile-pic {
+      width: 77px;
+      height: 77px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 1px solid var(--ig-gray);
+    }
+
+    .profile-stats {
+      display: flex;
+      flex: 1;
+      justify-content: space-between;
+      text-align: center;
+      font-size: 14px;
+    }
+
+    .stat-val {
+      font-weight: 700;
+      display: block;
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: var(--ig-white);
+    }
+
+    .profile-bio {
+      font-size: 14px;
+      line-height: 1.4;
+    }
+
+    .profile-bio strong {
+      display: block;
+      margin-bottom: 2px;
+    }
+
+    /* Highlights */
+    .highlights-container {
+      display: flex;
+      gap: 18px;
+      padding: 0 16px 20px;
+      overflow-x: auto;
+    }
+
+    .highlights-container::-webkit-scrollbar {
+      display: none;
+    }
+
+    .highlight-item {
+      text-align: center;
+      font-size: 11px;
+      flex-shrink: 0;
+    }
+
+    .highlight-circle {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      padding: 3px;
+      border: 1px solid var(--ig-gray);
+      margin-bottom: 4px;
+    }
+
+    .highlight-circle img {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      object-fit: cover;
+    }
+
+    /* Tabs Nav */
+    .tabs-nav {
+      display: flex;
+      border-top: 1px solid var(--ig-gray);
+      margin-top: 10px;
+    }
+
+    .tab-btn {
+      flex: 1;
+      background: none;
+      border: none;
+      color: var(--ig-light-gray);
+      padding: 12px 0;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      border-top: 2px solid transparent;
+      text-transform: uppercase;
+      transition: color 0.2s;
+    }
+
+    .tab-btn.active {
+      color: var(--ig-white);
+      border-top: 2px solid var(--ig-white);
+    }
+
+    /* Grid Gallery */
+    .galeria-list {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 3px;
+      padding: 0;
+      margin: 0;
+      list-style: none;
+    }
+
+    .galeria-img {
+      width: 100%;
+      aspect-ratio: 1/1;
+      object-fit: cover;
+      cursor: pointer;
+      transition: transform 0.3s ease;
+    }
+
+    .galeria-img:hover {
+      transform: scale(1.05);
+      z-index: 2;
+    }
+
+    .section-container {
+      display: none;
+    }
+
+    .section-container.active {
+      display: block;
+    }
+
+    /* Lightbox Styles */
+    #lightbox {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #000;
+      z-index: 1000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+    }
+
+    #lightbox-close {
+      position: absolute;
+      top: 15px;
+      right: 20px;
+      color: #fff;
+      font-size: 35px;
+      background: none;
+      border: none;
+      z-index: 1010;
+    }
+
+    #lightbox-content {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+    }
+
+    #lightbox-carousel {
+      display: flex;
+      width: 100%;
+      overflow-x: auto;
+      scroll-snap-type: x mandatory;
+    }
+
+    .carousel-img {
+      min-width: 100%;
+      height: 80vh;
+      object-fit: contain;
+      scroll-snap-align: center;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app-container">
+    <header class="galeria-header">
+      <a href="principal.html" aria-label="Voltar">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M15 18L9 12L15 6" />
+        </svg>
+      </a>
+      <h1 class="galeria-title">isabele_nails</h1>
+      <a href="meu-perfil.html">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+        </svg>
+      </a>
+    </header>
+
+    <main class="galeria-main">
+      <section class="instagram-profile">
+        <div class="profile-top">
+          <img src="perfil.png" alt="Perfil" class="profile-pic" onerror="this.src='https://www.w3schools.com/howto/img_avatar2.png'">
+          <div class="profile-stats">
+            <div><span class="stat-val">154</span><span class="stat-label">publicações</span></div>
+            <div><span class="stat-val">2.4k</span><span class="stat-label">seguidores</span></div>
+            <div><span class="stat-val">850</span><span class="stat-label">seguindo</span></div>
+          </div>
+        </div>
+        <div class="profile-bio">
+          <strong>Isabele Mariana Nails</strong>
+          💅 Especialista em Alongamentos e Nail Art<br>
+          ✨ Realçando sua beleza através das mãos<br>
+          📅 Agendamentos via link na bio
+        </div>
+      </section>
+
+      <div class="highlights-container">
+        <div class="highlight-item">
+          <div class="highlight-circle"><img src="highlight-1.png" onerror="this.style.display='none'"></div>Feedbacks
+        </div>
+        <div class="highlight-item">
+          <div class="highlight-circle"><img src="highlight-2.png" onerror="this.style.display='none'"></div>Preços
+        </div>
+        <div class="highlight-item">
+          <div class="highlight-circle"><img src="highlight-3.png" onerror="this.style.display='none'"></div>Cuidados
+        </div>
+      </div>
+
+      <nav class="tabs-nav">
+        <button class="tab-btn active" onclick="switchTab('unhas-em-gel', this)">Unhas em Gel</button>
+        <button class="tab-btn" onclick="switchTab('manicure', this)">Manicure</button>
+        <button class="tab-btn" onclick="switchTab('pedicure', this)">Pedicure</button>
+      </nav>
+
+      <div id="section-unhas-em-gel" class="section-container active">
+        <ul id="galeria-unhas-em-gel" class="galeria-list"></ul>
+      </div>
+
+      <div id="section-manicure" class="section-container">
+        <ul id="galeria-manicure" class="galeria-list"></ul>
+      </div>
+
+      <div id="section-pedicure" class="section-container">
+        <ul id="galeria-pedicure" class="galeria-list"></ul>
+      </div>
+    </main>
+
+    <div id="lightbox" class="hidden">
+      <button id="lightbox-close" aria-label="Fechar">&times;</button>
+      <div id="lightbox-content">
+        <div id="lightbox-carousel"></div>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="galeria.js" defer></script>
+  <script src="app.js" defer></script>
+</body>
+
+</html>

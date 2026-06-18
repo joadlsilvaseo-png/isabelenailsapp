@@ -1,0 +1,110 @@
+:root{
+  --bg-app: #591c31;
+  --surface: #f7f3f6;
+  --accent: #7c334c;
+  --muted: #8b536a;
+  --white: #ffffff;
+  --radius: 28px;
+  --shadow: 0 18px 36px rgba(0,0,0,0.14);
+}
+
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body{
+  font-family: "Poppins", sans-serif;
+  background: linear-gradient(180deg,var(--bg-app) 0%, #7c334c 40%, #ffd9e7 100%);
+  color:var(--accent);
+  -webkit-font-smoothing:antialiased;
+}
+
+.app-container{
+  max-width:480px;
+  min-height:100vh;
+  margin:0 auto;
+  padding:20px 16px 24px;
+}
+
+.confirmacao-header{padding-bottom:18px}
+.confirmacao-nav{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.confirmacao-nav-link{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  color:var(--white);
+  text-decoration:none;
+  background:none;
+  border:none;
+  padding:6px;
+  border-radius:0;
+}
+.confirmacao-title{margin:0;font-weight:700;font-size:1.1rem;color:#F0C1D1;text-align:center;flex:1}
+
+.confirmacao-main{display:grid;gap:20px}
+
+.confirmacao-card{background:var(--surface);border-radius:42px;padding:26px 20px;box-shadow:var(--shadow);text-align:center}
+.confirmacao-icon{margin:6px auto 10px}
+.confirmacao-headline{margin:6px 0 6px;font-size:1.25rem;color:var(--accent)}
+.confirmacao-text{margin:0 0 16px;color:var(--muted)}
+
+.confirmacao-details{list-style:none;padding:0;margin:0 0 18px;border-radius:24px;overflow:hidden;background:linear-gradient(180deg,#fff,#fbf8fb);box-shadow:0 8px 20px rgba(124,51,76,0.06)}
+.detalhe-row{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;gap:12px;border-bottom:1px solid rgba(124,51,76,0.1)}
+.detalhe-row:last-child{border-bottom:none}
+.detalhe-label{font-weight:600;color:var(--muted);font-size:0.95rem}
+.detalhe-value{font-weight:700;color:var(--accent);text-align:right;max-width:65%;word-break:break-word}
+.detalhe-row--observacoes{align-items:flex-start}
+.detalhe-value--multiline{display:block;white-space:pre-wrap;word-break:break-word}
+
+.confirmacao-actions{
+  display:grid;
+  gap:14px;
+  margin-top:16px;
+}
+.confirmacao-button{display:inline-flex;width:100%;min-height:52px;align-items:center;justify-content:center;color:var(--white);text-decoration:none;border-radius:20px;font-weight:700}
+
+ #btn-whatsapp {
+   background-color: #25D366;
+   color: #FFFFFF;
+   padding: 0 18px;
+   border-radius: 20px;
+   min-height: 52px;
+   transition: background-color 0.3s ease;
+ }
+
+ #btn-whatsapp:hover {
+   background-color: #20BA56;
+ }
+
+/* Botão secundário (Voltar para o Início) mantém a cor bordô/rosa original */
+.confirmacao-button--secondary{
+  background: var(--accent);
+  color: var(--white);
+}
+
+/* Efeito de flutuar (hover/active) semelhante ao restante do site */
+.confirmacao-button{
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast), background-color var(--transition-fast);
+}
+.confirmacao-button:hover,
+.confirmacao-button:focus-visible{
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+.confirmacao-button:active{
+  transform: translateY(-1px);
+}
+
+/* Garantir o mesmo efeito para o botão Whatsapp */
+#btn-whatsapp{
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast), background-color var(--transition-fast);
+}
+#btn-whatsapp:hover{
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+#btn-whatsapp:active{
+  transform: translateY(-1px);
+}
+
+@media(max-width:380px){.app-container{padding:18px 14px 20px}.confirmacao-card{padding:20px 16px}}
+
+@media(max-width:320px){.confirmacao-detail{padding:10px}}

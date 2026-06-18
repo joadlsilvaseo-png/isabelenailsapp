@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Agendamento de horário na Isabele Mariana Nails">
+  <meta name="theme-color" content="#581f31">
+  <title>Agendamento | Isabele Mariana Nails</title>
+  <link rel="stylesheet" href="base.css">
+  <link rel="stylesheet" href="agendamento.css">
+</head>
+
+<body>
+  <div class="app-container">
+    <header class="agendamento-header">
+      <nav class="agendamento-nav" aria-label="Navegação do agendamento">
+        <!-- Voltar: tenta voltar na história do navegador, fallback para principal.html -->
+        <a href="principal.html" data-back="history" class="agendamento-nav-link" aria-label="Voltar">
+          <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M15 18L9 12L15 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </a>
+
+        <h1 class="agendamento-title">Agendamento</h1>
+
+        <a href="principal.html" class="agendamento-nav-link" aria-label="Página inicial">
+          <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M4 10L12 3L20 10V20C20 20.5523 19.5523 21 19 21H5C4.44772 21 4 20.5523 4 20V10Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            <path d="M9 21V13H15V21" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </a>
+      </nav>
+    </header>
+
+    <main class="agendamento-main">
+      <section class="agendamento-panel" aria-labelledby="agendamento-title">
+        <div class="agendamento-calendar" role="group" aria-label="Selecionar data">
+          <button type="button" class="agendamento-date">
+            <span class="agendamento-date-day">18</span>
+            <span class="agendamento-date-label">Ter</span>
+          </button>
+          <button type="button" class="agendamento-date">
+            <span class="agendamento-date-day">19</span>
+            <span class="agendamento-date-label">Qua</span>
+          </button>
+          <button type="button" class="agendamento-date agendamento-date--active" aria-pressed="true">
+            <span class="agendamento-date-day">20</span>
+            <span class="agendamento-date-label">Qui</span>
+          </button>
+          <button type="button" class="agendamento-date">
+            <span class="agendamento-date-day">21</span>
+            <span class="agendamento-date-label">Sex</span>
+          </button>
+          <button type="button" class="agendamento-date">
+            <span class="agendamento-date-day">18</span>
+            <span class="agendamento-date-label">Sab</span>
+          </button>
+        </div>
+
+        <div class="agendamento-section-title">
+          <p>Qual o seu melhor Horário?</p>
+        </div>
+
+        <div class="agendamento-times" role="group" aria-label="Selecionar horário">
+          <button type="button" class="agendamento-time">09:00 am</button>
+          <button type="button" class="agendamento-time agendamento-time--active" aria-pressed="true">11:00 am</button>
+          <button type="button" class="agendamento-time">13:00 pm</button>
+          <button type="button" class="agendamento-time">15:00 pm</button>
+          <button type="button" class="agendamento-time">17:00 pm</button>
+        </div>
+
+        <div class="agendamento-comments">
+          <label for="agendamento-notes" class="agendamento-label">Comentários Adicionais</label>
+          <textarea id="agendamento-notes" class="agendamento-textarea" rows="5" placeholder="Descreva se deseja algo específico..."></textarea>
+        </div>
+
+        <footer class="agendamento-footer">
+          <button type="button" class="agendamento-button">Agendar</button>
+        </footer>
+      </section>
+    </main>
+  </div>
+  <script type="module" src="agendamento.js" defer></script>
+  <script src="app.js" defer></script>
+</body>
+
+</html>

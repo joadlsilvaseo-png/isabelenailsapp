@@ -1,0 +1,218 @@
+/* ============================================================
+   RESET E VARIÁVEIS GLOBAIS - DESIGN SYSTEM
+   ============================================================ */
+
+:root {
+  --color-primary-dark: #591c31;
+  --color-primary-light: #f0c1d1;
+  --color-accent: #a8617b;
+  --color-text-light: #f2e4ee;
+  --color-gradient-top: #ffd9e7;
+  --color-gradient-bottom: #a8617b;
+
+  --font-family-base: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  --font-size-body: 16px;
+  --font-size-heading: clamp(28px, 7vw, 30px);
+  --font-size-button: clamp(22px, 5vw, 25px);
+  --line-height-base: 1.5;
+  --line-height-heading: 1.3;
+
+  --spacing-xs: 8px;
+  --spacing-sm: 12px;
+  --spacing-md: 16px;
+  --spacing-lg: 20px;
+  --spacing-xl: clamp(20px, 5vw, 24px);
+  --spacing-2xl: clamp(24px, 6vw, 32px);
+
+  --radius-md: 20px;
+  --radius-lg: 24px;
+
+  --shadow-sm: 0px 2px 4px 0px rgba(0, 0, 0, 0.25);
+  --shadow-hover: 0px 4px 8px 0px rgba(0, 0, 0, 0.3);
+
+  --transition-base: 0.3s ease-in-out;
+
+  /* Gradiente centralizado */
+  --gradient-main: linear-gradient(
+    180deg,
+    var(--color-gradient-top) 0%,
+    var(--color-gradient-bottom) 100%
+  );
+}
+
+body {
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-base);
+  background: var(--gradient-main);
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: var(--spacing-md);
+}
+
+/* ============================================================
+   CONTAINER PRINCIPAL
+   ============================================================ */
+
+.app-container {
+  width: 100%;
+  max-width: 480px;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--gradient-main);
+}
+
+/* ============================================================
+   MAIN - Layout Flex Otimizado
+   ============================================================ */
+
+.landing-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  width: 100%;
+  padding: var(--spacing-xl) var(--spacing-md);
+}
+
+/* ============================================================
+   HEADER - Logo
+   ============================================================ */
+
+.landing-header {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  padding-top: var(--spacing-lg);
+  margin-bottom: var(--spacing-lg);
+}
+
+.landing-logo-wrapper {
+  width: 100%;
+  max-width: 300px;
+  aspect-ratio: 239 / 167;
+}
+
+.landing-logo {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+/* ============================================================
+   CONTENT - Tagline
+   ============================================================ */
+
+.landing-content {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  padding: var(--spacing-2xl) var(--spacing-md);
+  text-align: center;
+}
+
+.landing-tagline {
+  font-size: var(--font-size-heading);
+  font-weight: 600;
+  color: var(--color-text-light);
+  line-height: var(--line-height-heading);
+  word-wrap: break-word;
+  max-width: clamp(100%, 90vw, 290px);
+}
+
+/* ============================================================
+   NAVEGAÇÃO - Botões CTA
+   ============================================================ */
+
+.landing-nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  width: 100%;
+  padding: var(--spacing-xl) 0 var(--spacing-xl) 0;
+}
+
+.landing-button {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 44px;
+  padding: var(--spacing-lg) var(--spacing-md);
+  font-size: var(--font-size-button);
+  font-weight: 500;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  text-decoration: none;
+  transition: all var(--transition-base);
+  font-family: inherit;
+  width: 100%;
+  max-width: 350px;
+  margin: 0 auto;
+}
+
+/* Estilos Base para Botões */
+.landing-button:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-hover);
+}
+
+.landing-button:active {
+  transform: translateY(0);
+  box-shadow: var(--shadow-sm);
+}
+
+.landing-button:focus-visible {
+  outline: 2px solid var(--color-text-light);
+  outline-offset: 2px;
+}
+
+/* Variantes de Botão */
+.landing-button--primary {
+  background-color: var(--color-primary-dark);
+  color: var(--color-primary-light);
+  box-shadow: var(--shadow-sm);
+}
+
+.landing-button--secondary {
+  background-color: var(--color-primary-light);
+  color: var(--color-primary-dark);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ============================================================
+   ACESSIBILIDADE
+   ============================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .landing-button:hover {
+    transform: none;
+  }
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --color-primary-dark: #3d0e20;
+    --color-primary-light: #f8e8f0;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-gradient-top: #d4b5c8;
+    --color-gradient-bottom: #8b4d63;
+  }
+}

@@ -1,0 +1,161 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: "Poppins", sans-serif;
+}
+
+body {
+  background-color: #581c2f; /* Cor base vinho */
+}
+
+/* Fundo simulando a tela do app com gradiente */
+.app-background {
+  min-height: 100vh;
+  background: linear-gradient(180deg, #581c2f 0%, #c88294 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px;
+}
+
+/* Cabeçalho superior */
+.admin-header {
+  width: 100%;
+  max-width: 450px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #ffffff;
+  margin-bottom: 20px;
+  padding: 0 10px;
+}
+
+.admin-header h2 {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.btn-back,
+.btn-home {
+  background: rgba(255, 255, 255, 0.15);
+  border: none;
+  color: white;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  font-size: 20px;
+  cursor: pointer;
+}
+
+/* O Card Principal Branco com as bordas super arredondadas do print */
+.admin-card {
+  width: 100%;
+  max-width: 450px;
+  background-color: #fdf6f6; /* Off-white rosado */
+  border-radius: 32px;
+  padding: 30px 24px;
+  box-shadow: 0px 10px 25px rgba(0, 0, 0, 0.2);
+  min-height: 70vh;
+}
+
+.card-header h3 {
+  color: #581c2f;
+  font-size: 22px;
+  margin-bottom: 6px;
+}
+
+.card-header p {
+  color: #706064;
+  font-size: 13px;
+  margin-bottom: 24px;
+  line-height: 1.4;
+}
+
+/* Lista de agendamentos estruturada em blocos/cards */
+.agenda-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Card individual de cada cliente */
+.item-agendamento {
+  background: #ffffff;
+  border-left: 5px solid #c88294; /* Detalhe lateral em rosa antigo */
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0px 4px 12px rgba(88, 28, 47, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.agenda-tempo {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #c88294;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.agenda-detalhes h4 {
+  color: #581c2f;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.agenda-detalhes p {
+  color: #706064;
+  font-size: 13px;
+  margin-top: 2px;
+}
+
+.agenda-obs {
+  font-size: 12px;
+  color: #a09094;
+  background: #fdf6f6;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-style: italic;
+}
+
+/* Botões de ação do card com o formato arredondado padrão */
+.agenda-acoes {
+  display: flex;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.btn-acao {
+  flex: 1;
+  padding: 10px;
+  border-radius: 20px; /* Botão estilo pílula arredondado */
+  border: none;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-confirmar {
+  background-color: #c88294;
+  color: white;
+}
+
+.btn-confirmar:hover {
+  background-color: #b46e80;
+}
+
+.btn-cancelar {
+  background-color: #e2d5d8;
+  color: #581c2f;
+}
+
+.loading {
+  text-align: center;
+  color: #c88294;
+  padding: 40px 0;
+  font-weight: 500;
+}

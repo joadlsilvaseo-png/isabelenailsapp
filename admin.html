@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Painel Isabele Nails</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="admin-style.css">
+</head>
+
+<body>
+
+  <div class="app-background">
+    <header class="admin-header">
+      <button class="btn-back" id="btn-voltar-admin">‹</button>
+      <h2>Painel de Agendamentos</h2>
+      <button class="btn-home">⌂</button>
+    </header>
+
+    <main class="admin-card">
+      <div class="card-header">
+        <h3>Próximos Horários</h3>
+        <p>Confira e gerencie os agendamentos das suas clientes.</p>
+      </div>
+
+      <section class="agenda-lista" id="listaAgendamentos">
+        <div class="loading">Carregando agendamentos...</div>
+      </section>
+    </main>
+  </div>
+
+  <script type="module" src="admin.js"></script>
+
+  <script type="module">
+    import { auth, db } from "./firebase-config.js";
+    import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
+    import { doc, getDoc } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+
+    // Lógica para transformar o botão de voltar em atalho para Dashboard
+    onAuthStateChanged(auth, async (user) => {
+      const btnBack = document.getElementById('btn-voltar-admin');
+      if (!btnBack) return;
+
+      let isAdmin = false;
+
+      if (user) {
+        try {
+          // Verifica a role na coleção 'clientes'
+          const userRef = doc(db, "clientes", user.uid);
+          const userSnap = await getDoc(userRef);
+
+          if (userSnap.exists() && userSnap.data().role === 'admin') {
+            isAdmin = true;
+          }
+        } catch (error) {
+          console.error("Erro ao verificar permissão de admin:", error);
+        }
+      }
+
+      // Define o comportamento dinâmico do clique
+      btnBack.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (isAdmin) {
+          // Se for admin, vai para o Dashboard
+          window.location.href = 'dashboard.html';
+        } else {
+          // Se não for, mantém a função original de voltar
+          window.history.length > 1 ? window.history.back() : window.location.href = 'principal.html';
+        }
+      });
+    });
+  </script>
+</body>
+
+</html>

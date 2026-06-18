@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Página inicial da Isabele Mariana Nails para acessar perfil, agendamentos e serviços">
+  <meta name="theme-color" content="#591c31">
+  <title>Principal | Isabele Mariana Nails</title>
+  <link rel="stylesheet" href="base.css">
+  <link rel="stylesheet" href="principal.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body data-page="principal">
+
+  <div class="app-container">
+
+    <header class="principal-header">
+      <nav class="principal-nav" aria-label="Navegação principal">
+        <a href="index.html" class="nav-link" aria-label="Voltar ao início">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+            <path d="M15 18L9 12L15 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </a>
+        <h1 class="principal-title">Principal</h1>
+        <a href="meu-perfil.html" class="nav-link" aria-label="Meu perfil">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 12c2.761 0 5-2.239 5-5s-2.239-5-5-5-5 2.239-5 5 2.239 5 5 5z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+            <path d="M4 20c0-4 4-6 8-6s8 2 8 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </a>
+      </nav>
+
+      <div class="profile-card">
+        <div class="profile-info">
+          <p class="profile-greeting">Seja Bem-vinda</p>
+          <h2 id="nome-cliente" class="profile-name">Nome da Cliente</h2>
+        </div>
+        <div class="profile-avatar">
+          <img id="foto-perfil" src="https://www.w3schools.com/howto/img_avatar2.png" alt="Avatar feminino do perfil" loading="lazy">
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <form class="search-form" role="search" action="#" onsubmit="return false;">
+          <input type="search" class="search-input" placeholder="O que Você Procura Hoje?" aria-label="Pesquisar">
+          <button class="search-btn" aria-label="Pesquisar">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M21 21l-4.35-4.35" stroke="#7c334c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+              <circle cx="11" cy="11" r="6" stroke="#7c334c" stroke-width="2" />
+            </svg>
+          </button>
+        </form>
+
+        <a href="meu-perfil.html" class="btn-profile">Meu Perfil ›</a>
+      </div>
+    </header>
+
+    <div class="app-content">
+      <main class="principal-main">
+        <section class="principal-services" aria-labelledby="services-title">
+          <h3 id="services-title">Serviços</h3>
+          <ul class="services-list">
+            <li>
+              <a href="unhas-em-gel.html" class="service-row">
+                <span class="service-icon"></span>
+                <span class="service-label">Unhas em Gel</span>
+                <span class="service-chevron">›</span>
+              </a>
+            </li>
+            <li>
+              <a href="manicure.html" class="service-row">
+                <span class="service-icon"></span>
+                <span class="service-label">Manicure</span>
+                <span class="service-chevron">›</span>
+              </a>
+            </li>
+            <li>
+              <a href="pedicure.html" class="service-row">
+                <span class="service-icon"></span>
+                <span class="service-label">Pedicure</span>
+                <span class="service-chevron">›</span>
+              </a>
+            </li>
+          </ul>
+        </section>
+
+
+
+        <section class="principal-gallery" aria-labelledby="gallery-title">
+          <h3 id="gallery-title">Vitrine</h3>
+          <div class="gallery-row">
+            <!-- Imagens carregadas dinamicamente do Firestore pelo vitrine.js -->
+          </div>
+          <a href="galeria.html" class="btn-gallery">Veja Galeria Completa ›</a>
+        </section>
+      </main>
+    </div>
+
+    <!-- Lightbox com Carrossel (Igual à Galeria) -->
+    <div id="lightbox" class="hidden">
+      <button id="lightbox-close" aria-label="Fechar">&times;</button>
+      <button id="lightbox-prev" class="lightbox-nav" aria-label="Anterior">&lsaquo;</button>
+      <div id="lightbox-content">
+        <div id="lightbox-carousel"></div>
+      </div>
+      <a href="galeria.html" class="lightbox-gallery-btn">Acesse a Galeria ›</a>
+      <button id="lightbox-next" class="lightbox-nav" aria-label="Próximo">&rsaquo;</button>
+    </div>
+
+  </div>
+
+  <script type="module" src="vitrine.js" defer></script>
+  <script type="module" src="principal.js"></script>
+  <script type="module" src="principal-categories.fixed.js" defer></script>
+  <script src="app.js" defer></script>
+</body>
+
+</html>

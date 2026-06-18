@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#581F31">
+  <title>Recuperar Senha | Isabele Mariana Nails</title>
+  <meta name="description" content="Recupere sua senha - Isabele Mariana Nails">
+<link rel="stylesheet" href="base.css">
+  <link rel="stylesheet" href="esqueci-senha.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+  <div class="app-container">
+
+    <header class="esqueci-header">
+      <nav class="esqueci-nav" aria-label="Navegação de recuperação de senha">
+        <!-- Voltar: history-aware, fallback para login.html -->
+        <a href="login.html" data-back="history" class="esqueci-nav-link" aria-label="Voltar para login">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+            <path d="M15 18L9 12L15 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </a>
+
+        <h1 class="esqueci-title">Recuperar Senha</h1>
+
+        <!-- Home: aponta para principal.html conforme padrão do app -->
+        <a href="principal.html" class="esqueci-nav-link" aria-label="Ir para página inicial">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+            <path d="M4 10L12 3L20 10V20C20 20.5523 19.5523 21 19 21H5C4.44772 21 4 20.5523 4 20V10Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            <path d="M9 21V13H15V21" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </a>
+      </nav>
+    </header>
+
+    <main class="esqueci-main">
+      <section class="esqueci-card" aria-labelledby="esqueci-heading">
+        <h2 id="esqueci-heading" class="esqueci-card-title">Esqueceu sua senha?</h2>
+        <p class="esqueci-card-text">Informe o e-mail utilizado no cadastro para receber as instruções de redefinição de senha.</p>
+
+        <form class="esqueci-form" novalidate>
+          <div class="esqueci-field">
+            <label for="esqueci-email" class="esqueci-label">Email</label>
+            <input id="esqueci-email" class="esqueci-input" type="email" name="email" placeholder="seu@email.com" aria-label="Email" required>
+            <div id="esqueci-feedback" class="esqueci-feedback" aria-live="polite"></div>
+          </div>
+
+          <button type="button" class="esqueci-button">Enviar Link</button>
+        </form>
+
+        <p class="esqueci-help">Lembrou sua senha? <a href="login.html" class="esqueci-link">Voltar para Login</a></p>
+      </section>
+    </main>
+
+  </div>
+  <script src="esqueci-senha.js" defer></script>
+  <script src="app.js" defer></script>
+</body>
+
+</html>
+
+
+
+

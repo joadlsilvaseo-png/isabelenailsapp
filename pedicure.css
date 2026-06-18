@@ -1,0 +1,198 @@
+/* Mobile-first styling for Pedicure page */
+
+:root {
+  --color-bg: #591c31;
+  --color-surface: #f6f6f6;
+  --color-card: #f0c1d1;
+  --color-border: #934761;
+  --color-text: #591c31;
+  --color-text-light: #ffd9e7;
+  --radius-panel: 60px;
+  --radius-card: 20px;
+  --shadow: 0px 2px 4px rgba(0, 0, 0, 0.25);
+}
+
+body {
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+img {
+  max-width: 100%;
+  display: block;
+}
+
+.app-container {
+  max-width: 480px;
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: 16px 16px 24px;
+  display: flex;
+  flex-direction: column;
+}
+
+.pedicure-header {
+  margin-bottom: 24px;
+}
+
+.pedicure-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.pedicure-nav-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-light);
+  text-decoration: none;
+  background: none;
+  border: none;
+  padding: 6px;
+  border-radius: 0;
+}
+
+.pedicure-title {
+  font-size: clamp(24px, 6vw, 30px);
+  font-weight: 700;
+  color: #F0C1D1;
+  text-align: center;
+  flex: 1;
+}
+
+.pedicure-main {
+  background: var(--color-surface);
+  border-radius: var(--radius-panel) var(--radius-panel) 0 0;
+  padding: 24px 16px 20px;
+  flex: 1;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.pedicure-panel-title {
+  font-size: 20px;
+  font-weight: 500;
+  color: var(--color-text);
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.pedicure-list {
+  list-style: none;
+  display: grid;
+  gap: 16px;
+}
+
+.pedicure-card {
+  background: var(--color-card);
+  border-radius: var(--radius-card);
+  padding: 18px 16px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 2px solid transparent;
+  transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+}
+
+.pedicure-card.selected {
+  border-color: #591C31;
+  background: #591C31;
+}
+
+.pedicure-card.selected .pedicure-card-name,
+.pedicure-card.selected .pedicure-card-price,
+.pedicure-card.selected .pedicure-card-label,
+.pedicure-card.selected .pedicure-card-duration {
+  color: #F0C1D1;
+}
+
+.pedicure-card-text {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.pedicure-card-name {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.pedicure-card-label,
+.pedicure-card-duration {
+  font-size: 13px;
+  color: var(--color-text);
+  opacity: 0.75;
+}
+
+.pedicure-card-details {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.pedicure-card-price {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.pedicure-footer {
+  padding-top: 18px;
+}
+
+.pedicure-button {
+  display: inline-flex;
+  width: 100%;
+  min-height: 52px;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 2px solid var(--color-border);
+  border-radius: 20px;
+  text-decoration: none;
+  font-size: 18px;
+  font-weight: 600;
+  transition: background 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.pedicure-button:hover,
+.pedicure-button:focus-visible {
+  background: rgba(89, 28, 49, 0.08);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(89, 28, 49, 0.12);
+}
+
+.pedicure-button:active,
+.pedicure-button.touch-active {
+  transform: translateY(-1px);
+}
+
+@media (hover: none) {
+  .pedicure-button:hover {
+    transform: none;
+    box-shadow: none;
+  }
+}
+
+@media (max-width: 360px) {
+  .app-container {
+    padding: 20px 14px 18px;
+  }
+
+  .pedicure-title {
+    font-size: 26px;
+  }
+
+  .pedicure-card {
+    padding: 16px 14px;
+  }
+}

@@ -1,0 +1,225 @@
+/* Base global compartilhado para todas as páginas */
+:root {
+  --color-primary: #591c31;
+  --color-secondary: #934761;
+  --color-surface: #f6f6f6;
+  --color-surface-soft: #f0c1d1;
+  --color-text: #591c31;
+  --color-text-muted: rgba(89, 28, 49, 0.75);
+  --color-text-light: #ffd9e7;
+  --color-border: rgba(147, 71, 97, 0.18);
+  --color-background: #ffd9e7;
+  --radius-sm: 14px;
+  --radius-md: 20px;
+  --radius-lg: 28px;
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.12);
+  --shadow-md: 0 12px 24px rgba(0, 0, 0, 0.12);
+  --shadow-soft: 0 8px 20px rgba(0, 0, 0, 0.08);
+  --transition-fast: 0.2s ease;
+  --transition-base: 0.3s ease;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  font-family: "Poppins", sans-serif;
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  min-height: 100vh;
+  color: var(--color-text);
+  background-color: var(--color-background);
+  text-rendering: optimizeLegibility;
+}
+
+img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+button,
+input,
+textarea,
+a {
+  font: inherit;
+}
+
+button {
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid rgba(89, 28, 49, 0.3);
+  outline-offset: 2px;
+}
+
+.touch-active {
+  transform: translateY(-1px);
+}
+
+button:disabled,
+button[disabled] {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.app-container {
+  width: min(100%, 480px);
+  min-height: 100vh;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.main-section {
+  flex: 1;
+}
+
+.section-title {
+  margin-bottom: 16px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.form-group {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.form-label {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.input,
+textarea {
+  width: 100%;
+  min-height: 44px;
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: #fff;
+  color: var(--color-text);
+  transition:
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+
+textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+
+.input:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 4px rgba(89, 28, 49, 0.08);
+}
+
+.button,
+.button-inline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 52px;
+  padding: 0 18px;
+  border-radius: 24px;
+  transition:
+    transform var(--transition-fast),
+    box-shadow var(--transition-fast),
+    background-color var(--transition-fast);
+}
+
+.button {
+  width: 100%;
+}
+
+.button--primary {
+  background-color: var(--color-secondary);
+  color: var(--color-text-light);
+  box-shadow: var(--shadow-sm);
+}
+
+.button--secondary {
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+}
+
+.button:hover,
+.button:focus-visible {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.button:active {
+  transform: translateY(-1px);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.text-right {
+  text-align: right;
+}
+
+.grid-auto {
+  display: grid;
+  gap: 16px;
+}
+
+@media (max-width: 380px) {
+  .app-container {
+    padding: 18px 14px 20px;
+  }
+}
+
+/* Ajustes de Respiro e UI - Vitrine e Serviços */
+.principal-services,
+.principal-gallery {
+  margin-top: 20px;
+  margin-bottom: 20px;
+}
+
+.principal-services h3,
+.principal-gallery h3 {
+  margin-bottom: 16px;
+}
+
+.gallery-row {
+  display: flex;
+  gap: 12px;
+  padding-bottom: 10px;
+  overflow-x: auto; /* Garante que o scroll horizontal funcione sem cortes */
+}

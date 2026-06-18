@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Relatórios Históricos | Isabele Mariana Nails</title>
+  <link rel="stylesheet" href="base.css">
+  <link rel="stylesheet" href="dashboard.css">
+  <link href="https://fonts.googleapis.com/css2?family=Urbanist:wght@400;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+  <div id="loading-screen" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #2d0b19; display: flex; align-items: center; justify-content: center; z-index: 9999; color: #FFD9E7; font-weight: 600;">
+    Verificando Credenciais...
+  </div>
+
+  <div class="dashboard-container">
+    <header class="header">
+      <h1>Relatórios Históricos</h1>
+      <a href="dashboard.html" class="btn-admin">Voltar ao Painel</a>
+    </header>
+
+    <section class="card" style="margin-bottom: 20px;">
+      <label for="year-filter" style="color: var(--rosa-detalhe); font-weight: 700; margin-right: 10px;">Filtrar por Ano:</label>
+      <select id="year-filter" style="background: var(--vinho-principal); color: #FFD9E7; border: 1px solid rgba(255,255,255,0.2); padding: 8px; border-radius: 8px; cursor: pointer;">
+        <!-- Anos preenchidos via JS -->
+      </select>
+    </section>
+
+    <div class="card" style="padding: 0; overflow-x: auto;">
+      <table class="recent-table">
+        <thead>
+          <tr>
+            <th>Mês/Ano</th>
+            <th>Faturamento</th>
+            <th>Atendimentos</th>
+          </tr>
+        </thead>
+        <tbody id="reports-body">
+          <!-- Linhas preenchidas via JS -->
+        </tbody>
+      </table>
+    </div>
+
+    <section style="margin-top: 30px; text-align: center;">
+      <a href="principal.html" style="color: var(--rosa-detalhe); text-decoration: none; font-weight: 600; font-size: 14px;">← Voltar para a Home</a>
+    </section>
+  </div>
+
+  <script type="module" src="relatorios.js"></script>
+</body>
+
+</html>

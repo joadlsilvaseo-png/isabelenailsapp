@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Escolha o procedimento de manicure na Isabele Mariana Nails">
+  <meta name="theme-color" content="#591c31">
+  <title>Manicure | Isabele Mariana Nails</title>
+  <link rel="stylesheet" href="base.css">
+  <link rel="stylesheet" href="manicure.css">
+</head>
+
+<body data-page="manicure">
+  <div class="app-container">
+    <header class="manicure-header">
+      <nav class="manicure-nav" aria-label="Navegação da página manicure">
+        <!-- Voltar: tenta voltar na história do navegador, com fallback para principal.html -->
+        <a href="principal.html" data-back="history" class="manicure-nav-link" aria-label="Voltar">
+          <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M15 18L9 12L15 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </a>
+
+        <h1 class="manicure-title">Manicure</h1>
+
+        <a href="principal.html" class="manicure-nav-link" aria-label="Página inicial">
+          <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M4 10L12 3L20 10V20C20 20.5523 19.5523 21 19 21H5C4.44772 21 4 20.5523 4 20V10Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            <path d="M9 21V13H15V21" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </a>
+      </nav>
+    </header>
+
+    <main class="manicure-main">
+      <section class="manicure-panel" aria-labelledby="procedimento-title">
+        <h2 id="procedimento-title" class="manicure-panel-title">Escolha o Procedimento</h2>
+
+        <ul id="lista-servicos" class="manicure-list" aria-live="polite"></ul>
+      </section>
+
+      <footer class="manicure-footer">
+        <!-- Próximo: segue para processo de agendamento -->
+        <a href="agendamento.html" class="manicure-button">Próximo</a>
+      </footer>
+    </main>
+  </div>
+  <script type="module" src="manicure.js"></script>
+  <script src="app.js" defer></script>
+</body>
+
+</html>

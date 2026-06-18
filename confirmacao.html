@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#591c31">
+  <title>Confirmação | Isabele Mariana Nails</title>
+  <meta name="description" content="Confirmação de agendamento - Isabele Mariana Nails">
+  <link rel="stylesheet" href="base.css">
+  <link rel="stylesheet" href="confirmacao.css">
+</head>
+
+<body>
+  <div class="app-container">
+    <header class="confirmacao-header">
+      <nav class="confirmacao-nav" aria-label="Navegação de confirmação">
+        <!-- Voltar: tenta voltar na história do navegador, fallback para principal.html -->
+        <a href="principal.html" data-back="history" class="confirmacao-nav-link" aria-label="Voltar para início">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+            <path d="M15 18L9 12L15 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </a>
+        <h1 class="confirmacao-title">Agendamento Confirmado</h1>
+        <a href="principal.html" class="confirmacao-nav-link" aria-label="Página inicial">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+            <path d="M4 10L12 3L20 10V20C20 20.5523 19.5523 21 19 21H5C4.44772 21 4 20.5523 4 20V10Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            <path d="M9 21V13H15V21" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </a>
+      </nav>
+    </header>
+
+    <main class="confirmacao-main" role="main">
+      <section class="confirmacao-card" aria-labelledby="confirmacao-success">
+        <div class="confirmacao-icon" aria-hidden="true">
+          <svg width="84" height="84" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="12" cy="12" r="10" fill="#F1D0DF" />
+            <path d="M8 12.5L10.5 15L16 9.5" stroke="#7C334C" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </div>
+
+        <h2 id="confirmacao-success" class="confirmacao-headline">Tudo certo!</h2>
+        <p class="confirmacao-text">Seu horário foi agendado com sucesso. Abaixo estão os detalhes.</p>
+
+        <div class="confirmacao-details">
+          <div class="detalhe-row">
+            <span class="detalhe-label">Serviço</span>
+            <span id="conf-servico" class="detalhe-value">Manicure Simples</span>
+          </div>
+          <div class="detalhe-row">
+            <span class="detalhe-label">Data</span>
+            <span id="conf-data" class="detalhe-value">--/--</span>
+          </div>
+          <div class="detalhe-row">
+            <span class="detalhe-label">Horário</span>
+            <span id="conf-horario" class="detalhe-value">--:--</span>
+          </div>
+          <div class="detalhe-row detalhe-row--observacoes">
+            <span class="detalhe-label">Observações</span>
+            <span id="confirmacao-observacoes" class="detalhe-value detalhe-value--multiline">—</span>
+          </div>
+        </div>
+        <div id="confirmacao-message" class="confirmacao-message" aria-live="polite" style="min-height:22px;margin-bottom:10px"></div>
+
+        <div class="confirmacao-actions">
+          <button id="btn-whatsapp" class="confirmacao-button confirmacao-button--primary" type="button">
+            <span class="confirmacao-button-icon">📱</span>
+            Clique aqui para enviar o comprovante no WhatsApp
+          </button>
+          <a href="principal.html" class="confirmacao-button confirmacao-button--secondary">Voltar para o Início</a>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script src="confirmacao.js"></script>
+</body>
+
+</html>
