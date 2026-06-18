@@ -347,11 +347,10 @@ async function inicializarAgendamento() {
       // Lembrete 2h antes
       const reminder2h = new Date(dataHoraObj.getTime() - 2 * 60 * 60 * 1000);
 
-      // Monta o payload exato para o banco de dados
+      // REGRA DE NEGÓCIO: Dados básicos do agendamento (editáveis)
       const payload = {
-        idCliente: userId,
         idServico: serviceId,
-        servico: serviceName, // Gravando o nome do serviço no agendamento
+        servico: serviceName,
         data: dataSalva,
         dataISO: dataAgendamentoISO,
         horario: horarioFinal,
@@ -362,18 +361,26 @@ async function inicializarAgendamento() {
         reminder_2h: reminder2h.toISOString(),
         email_lembrete_24h: false,
         lembrete_email_1hr: false,
-        dataCriacao: serverTimestamp(),
       };
 
       try {
-        // 1. Persistência Protegida (Apenas no clique do botão)
         let finalDocId = reagendarId;
 
         if (reagendarId) {
+          // REAGENDAMENTO: Atualiza apenas campos de horário/status. clienteId permanece o original do doc.
           await updateDoc(doc(db, "agendamentos", reagendarId), payload);
           console.log("Agendamento REAGENDADO com SUCESSO! ID:", reagendarId);
         } else {
-          const docRef = await addDoc(collection(db, "agendamentos"), payload);
+          // NOVO AGENDAMENTO: Define clienteId e data de criação (campos imutáveis)
+          const novoPayload = {
+            ...payload,
+            clienteId: userId,
+            dataCriacao: serverTimestamp(),
+          };
+          const docRef = await addDoc(
+            collection(db, "agendamentos"),
+            novoPayload,
+          );
           finalDocId = docRef.id;
           console.log("Agendamento salvo com SUCESSO! ID:", finalDocId);
         }

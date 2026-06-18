@@ -14,24 +14,33 @@ import {
   serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
 
-function iniciarAdminQuandoFirebasePronto() {
-  if (typeof auth === "undefined" || typeof db === "undefined") {
-    window.requestAnimationFrame(iniciarAdminQuandoFirebasePronto);
-    return;
-  }
-
-  onAuthStateChanged(auth, (user) => {
+// A função iniciarPainelAdmin é chamada diretamente no final do arquivo,
+// garantindo que 'auth' e 'db' já estejam disponíveis via import.
+function iniciarPainelAdmin() {
+  onAuthStateChanged(auth, async (user) => {
     const listaContainer = document.getElementById("listaAgendamentos");
     if (user) {
-      carregarAgendamentosDoPainel();
+      try {
+        const userRef = doc(db, "clientes", user.uid);
+        const userSnap = await getDoc(userRef);
+
+        if (userSnap.exists() && userSnap.data().role === "admin") {
+          console.log("Acesso Admin confirmado.");
+          carregarAgendamentosDoPainel();
+        } else {
+          console.warn("Acesso negado: Usuário não é administrador.");
+          window.location.href = "principal.html";
+        }
+      } catch (error) {
+        console.error("Erro ao validar permissões:", error);
+      }
     } else if (listaContainer) {
       listaContainer.innerHTML = `<div class="loading">Aguardando autenticação para exibir agendamentos...</div>`;
     }
   });
 }
 
-document.addEventListener("DOMContentLoaded", iniciarAdminQuandoFirebasePronto);
-
+// A função iniciarPainelAdmin é chamada diretamente no final do arquivo.
 async function carregarAgendamentosDoPainel() {
   const listaContainer = document.getElementById("listaAgendamentos");
   if (!listaContainer) return;
@@ -41,9 +50,7 @@ async function carregarAgendamentosDoPainel() {
   try {
     const q = query(
       collection(db, "agendamentos"),
-      // INCLUÍDO "confirmado" PARA SUPORTAR DADOS LEGADOS E EVITAR QUE SUMAM DO PAINEL
       where("status", "in", ["agendado", "reagendado", "confirmado"]),
-      orderBy("dataCriacao", "desc"),
     );
     const querySnapshot = await getDocs(q);
 
@@ -55,9 +62,16 @@ async function carregarAgendamentosDoPainel() {
       return;
     }
 
+    // Ordenação client-side para evitar a necessidade de criar índices compostos no console do Firebase
+    const agendamentosOrdenados = querySnapshot.docs.sort((a, b) => {
+      const dataA = a.data().dataCriacao?.seconds || 0;
+      const dataB = b.data().dataCriacao?.seconds || 0;
+      return dataB - dataA;
+    });
+
     listaContainer.innerHTML = "";
 
-    for (const documentoOf of querySnapshot.docs) {
+    for (const documentoOf of agendamentosOrdenados) {
       const dados = documentoOf.data();
       console.log("Documento encontrado:", dados);
 
@@ -77,12 +91,13 @@ async function carregarAgendamentosDoPainel() {
       let nomeServico = "Serviço não encontrado";
       let valorServico = 0;
 
-      const idClienteLimpo = dados.idCliente
-        ? String(dados.idCliente).trim()
-        : null;
-      if (idClienteLimpo) {
+      // JOIN MANUAL: Tenta capturar o ID tanto do novo padrão (clienteId) quanto do antigo (idCliente)
+      const rawId = dados.clienteId || dados.idCliente;
+      const clienteIdLimpo = rawId ? String(rawId).trim() : null;
+
+      if (clienteIdLimpo) {
         try {
-          const clienteRef = doc(db, "clientes", idClienteLimpo);
+          const clienteRef = doc(db, "clientes", clienteIdLimpo);
           const clienteSnap = await getDoc(clienteRef);
           if (clienteSnap.exists()) {
             const dadosCliente = clienteSnap.data();
@@ -93,7 +108,7 @@ async function carregarAgendamentosDoPainel() {
               "Sem nome cadastrado";
           }
         } catch (err) {
-          console.error(`Erro ao buscar cliente ${idClienteLimpo}:`, err);
+          console.error(`Erro ao buscar cliente ${clienteIdLimpo}:`, err);
         }
       }
 
@@ -179,7 +194,7 @@ async function carregarAgendamentosDoPainel() {
         <div class="agenda-detalhes">
           <h4>${nomeCliente}</h4>
           <p style="font-size: 14px; color: #581C2F; font-weight: 500; margin-top: 6px;">💅 ${nomeServico}</p>
-          <p style="font-size: 10px; color: #a09094; margin-top: 4px;">ID Cliente: ${dados.idCliente}</p>
+          <p style="font-size: 10px; color: #a09094; margin-top: 4px;">ID Cliente: ${clienteIdLimpo || "Não disponível"}</p>
         </div>
         <div class="agenda-obs">
           💬 ${dados.observacoes || "Sem observações"}
@@ -232,3 +247,5 @@ async function concluirAtendimento(id, valor, servico) {
     alert("Erro ao registrar atendimento. Verifique o console.");
   }
 }
+
+iniciarPainelAdmin(); // Inicia o painel administrativo após todas as funções estarem definidas.

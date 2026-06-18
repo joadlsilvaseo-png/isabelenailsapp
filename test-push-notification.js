@@ -29,7 +29,7 @@ async function runPushTest(userId) {
       `>>> [LOG] Passo 1: Criando agendamento de teste para o UID: ${userId}`,
     );
     const testDoc = await db.collection("agendamentos").add({
-      idCliente: userId,
+      clienteId: userId,
       servico: "Teste de Sistema E2E",
       horario: "00:00",
       data: "Data Teste",

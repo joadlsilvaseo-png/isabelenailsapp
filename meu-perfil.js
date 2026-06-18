@@ -280,13 +280,27 @@ async function carregarAgendamentos(uid) {
   console.log("Buscando agendamentos reais para o ID logado:", uidBusca);
 
   try {
-    const q = query(
+    // REGRA DE COMPATIBILIDADE: Busca por 'clienteId' (novo padrão)
+    const qClienteId = query(
+      collection(db, "agendamentos"),
+      where("clienteId", "==", uidBusca),
+    );
+    const snapshotClienteId = await getDocs(qClienteId);
+
+    // REGRA DE COMPATIBILIDADE: Busca por 'idCliente' (padrão legado)
+    const qIdCliente = query(
       collection(db, "agendamentos"),
       where("idCliente", "==", uidBusca),
     );
-    const querySnapshot = await getDocs(q);
+    const snapshotIdCliente = await getDocs(qIdCliente);
 
-    if (querySnapshot.empty) {
+    // Combina os resultados e remove duplicatas (se um agendamento tiver ambos os campos)
+    const allDocs = {};
+    snapshotClienteId.forEach((doc) => (allDocs[doc.id] = doc));
+    snapshotIdCliente.forEach((doc) => (allDocs[doc.id] = doc));
+    const mergedDocs = Object.values(allDocs);
+
+    if (mergedDocs.length === 0) {
       containerAgendamentos.appendChild(
         criarCardVazio("Nenhum agendamento ativo."),
       );
@@ -296,8 +310,15 @@ async function carregarAgendamentos(uid) {
       return;
     }
 
-    // Alterado para loop for...of para suportar o processamento assíncrono do nome do serviço
-    for (const docItem of querySnapshot.docs) {
+    // Ordena os agendamentos (ex: por data de criação, do mais recente para o mais antigo)
+    mergedDocs.sort((a, b) => {
+      const dataA = a.data().dataCriacao?.seconds || 0;
+      const dataB = b.data().dataCriacao?.seconds || 0;
+      return dataB - dataA; // Ordem decrescente
+    });
+
+    // Itera sobre os documentos combinados e ordenados
+    for (const docItem of mergedDocs) {
       const dados = docItem.data();
 
       const horarioValido = String(dados.horario || "")
@@ -335,7 +356,11 @@ async function carregarAgendamentos(uid) {
         agendamentoData.status === "confirmado"
       ) {
         containerAgendamentos.appendChild(criarCardAtivo(agendamentoData));
-      } else if (agendamentoData.status !== "pendente") {
+      } else if (
+        agendamentoData.status === "realizado" ||
+        agendamentoData.status === "cancelado_cliente" ||
+        agendamentoData.status === "cancelado_profissional"
+      ) {
         containerHistorico.appendChild(criarCardHistorico(agendamentoData));
       }
     }

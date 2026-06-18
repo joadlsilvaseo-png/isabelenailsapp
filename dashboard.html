@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Painel de Isabele Mariana | Isabele Mariana Nails</title>
   <link rel="stylesheet" href="base.css">
+  <link rel="stylesheet" href="admin-style.css">
   <link rel="stylesheet" href="dashboard.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Urbanist:wght@400;700&display=swap" rel="stylesheet">
@@ -24,25 +25,6 @@
       z-index: 9999;
       font-weight: 600;
       color: #FFD9E7;
-    }
-
-    /* Ajustes solicitados para o Painel de B.I. */
-    .header {
-      display: flex;
-      flex-direction: column;
-      /* Alinhamento vertical */
-      align-items: center;
-      text-align: center;
-      gap: 15px;
-      /* Espaço entre título, filtros e botão */
-      padding: 20px 0;
-      margin-bottom: 10px;
-    }
-
-    .header h1 {
-      margin: 0;
-      font-size: 24px;
-      width: 100%;
     }
 
     .filters {
@@ -68,8 +50,13 @@
 <body>
   <div id="loading-screen">Verificando Credenciais...</div>
   <div class="dashboard-container">
-    <header class="header">
-      <h1>Painel de Isabele Mariana</h1>
+    <header class="admin-header" style="max-width: none; margin-bottom: 25px;">
+      <a href="login.html" class="btn-back" aria-label="Sair">‹</a>
+      <h2 style="font-family: 'Urbanist', sans-serif; font-size: 22px;">Painel B.I.</h2>
+      <a href="login.html" class="btn-home" aria-label="Logout">⌂</a>
+    </header>
+
+    <div style="display: flex; flex-direction: column; align-items: center; gap: 15px; margin-bottom: 20px;">
       <div class="filters">
         <select id="filter-year" class="btn-admin" style="background: var(--vinho-card); color: #FFD9E7; border: 1px solid rgba(255,255,255,0.1); cursor: pointer;">
           <option value="Geral">Ano: Geral</option>
@@ -91,7 +78,7 @@
         </select>
       </div>
       <a href="admin.html" class="btn-admin">Meus Agendamentos</a>
-    </header>
+    </div>
 
     <p id="current-month-label" style="margin-bottom: 20px; color: var(--rosa-detalhe); font-weight: 600; text-transform: capitalize;">Período: Geral</p>
 

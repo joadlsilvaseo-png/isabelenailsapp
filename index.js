@@ -44,7 +44,7 @@ async function processReminders(timeField, statusField, messageTitle) {
 
   for (const doc of snapshot.docs) {
     const agendamento = doc.data();
-    const userId = agendamento.idCliente;
+    const userId = agendamento.clienteId;
 
     // Busca o token FCM do usuário
     const subSnap = await db.collection("fcmTokens").doc(userId).get();

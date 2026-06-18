@@ -13,9 +13,9 @@
 
   <div class="app-background">
     <header class="admin-header">
-      <button class="btn-back" id="btn-voltar-admin">‹</button>
+      <a href="dashboard.html" class="btn-back" id="btn-voltar-admin" aria-label="Voltar para Dashboard">‹</a>
       <h2>Painel de Agendamentos</h2>
-      <button class="btn-home">⌂</button>
+      <a href="login.html" class="btn-home" aria-label="Sair para Login">⌂</a>
     </header>
 
     <main class="admin-card">
@@ -32,45 +32,6 @@
 
   <script type="module" src="admin.js"></script>
 
-  <script type="module">
-    import { auth, db } from "./firebase-config.js";
-    import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
-    import { doc, getDoc } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
-
-    // Lógica para transformar o botão de voltar em atalho para Dashboard
-    onAuthStateChanged(auth, async (user) => {
-      const btnBack = document.getElementById('btn-voltar-admin');
-      if (!btnBack) return;
-
-      let isAdmin = false;
-
-      if (user) {
-        try {
-          // Verifica a role na coleção 'clientes'
-          const userRef = doc(db, "clientes", user.uid);
-          const userSnap = await getDoc(userRef);
-
-          if (userSnap.exists() && userSnap.data().role === 'admin') {
-            isAdmin = true;
-          }
-        } catch (error) {
-          console.error("Erro ao verificar permissão de admin:", error);
-        }
-      }
-
-      // Define o comportamento dinâmico do clique
-      btnBack.addEventListener('click', (e) => {
-        e.preventDefault();
-        if (isAdmin) {
-          // Se for admin, vai para o Dashboard
-          window.location.href = 'dashboard.html';
-        } else {
-          // Se não for, mantém a função original de voltar
-          window.history.length > 1 ? window.history.back() : window.location.href = 'principal.html';
-        }
-      });
-    });
-  </script>
 </body>
 
 </html>
