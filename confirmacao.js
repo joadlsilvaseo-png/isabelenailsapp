@@ -1,30 +1,40 @@
 document.addEventListener("DOMContentLoaded", () => {
   // 1. Mapeia os elementos do HTML
+  const confCliente = document.getElementById("conf-cliente");
   const confServico = document.getElementById("conf-servico");
   const confData = document.getElementById("conf-data");
   const confHorario = document.getElementById("conf-horario");
+  const confObservacoes = document.getElementById("confirmacao-observacoes");
   const btnWhatsapp = document.getElementById("btn-whatsapp");
 
   // 2. Lê os parâmetros direto da URL do navegador
   const urlParams = new URLSearchParams(window.location.search);
 
-  // O decodeURIComponent serve para tirar os "%20" e transformar em espaços normais
-  const nomeServico = decodeURIComponent(
-    urlParams.get("servico") || "Manicure Simples",
-  );
-  const dataTexto = decodeURIComponent(urlParams.get("data") || "--/--");
-  const horarioTexto = decodeURIComponent(urlParams.get("horario") || "--:--");
+  // Tenta ler primeiro do localStorage e depois da URL
+  const nomeClienteTexto =
+    localStorage.getItem("nomeUsuario") ||
+    decodeURIComponent(urlParams.get("nome") || "");
+  const nomeServico =
+    localStorage.getItem("servicoAgendamento") ||
+    decodeURIComponent(urlParams.get("servico") || "Manicure Simples");
+  const dataTexto =
+    localStorage.getItem("dataAgendamento") ||
+    decodeURIComponent(urlParams.get("data") || "--/--");
+  const horarioTexto =
+    localStorage.getItem("horaAgendamento") ||
+    localStorage.getItem("horarioAgendamento") ||
+    decodeURIComponent(urlParams.get("horario") || "--:--");
+  const observacoesTexto =
+    localStorage.getItem("observacoesAgendamento") ||
+    decodeURIComponent(urlParams.get("observacoes") || "");
 
-  console.log("Dados extraídos da URL:", {
-    nomeServico,
-    dataTexto,
-    horarioTexto,
-  });
-
-  // 3. Injeta os dados nos spans do HTML
-  if (confServico) confServico.textContent = nomeServico;
-  if (confData) confData.textContent = dataTexto;
-  if (confHorario) confHorario.textContent = horarioTexto;
+  // 3. Injeta dados nos spans do HTML quando disponíveis
+  if (confCliente) confCliente.textContent = nomeClienteTexto || "Cliente não informado";
+  if (confServico) confServico.textContent = nomeServico || "Manicure Simples";
+  if (confData) confData.textContent = dataTexto || "--/--";
+  if (confHorario) confHorario.textContent = horarioTexto || "--:--";
+  if (confObservacoes)
+    confObservacoes.textContent = observacoesTexto || "—";
 
   // 4. Configuração do Botão do WhatsApp
   if (btnWhatsapp) {

@@ -9,8 +9,6 @@ import {
   doc,
   getDoc,
   getDocs,
-  query,
-  where,
   updateDoc,
   deleteDoc,
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
@@ -68,12 +66,18 @@ function isDataFuturaOuHoje(dataString) {
 }
 
 async function resolveNomeServicoVisual(dados) {
+  console.log("[meu-perfil] Resolvendo nome do serviço:", {
+    servico: dados.servico,
+    idServico: dados.idServico,
+  });
+
   // 1. Prioridade: Campo 'servico' gravado no agendamento (Novo fluxo)
   if (
     dados.servico &&
     typeof dados.servico === "string" &&
     dados.servico.trim()
   ) {
+    console.log("[meu-perfil] ✅ Usando nome do serviço do agendamento:", dados.servico);
     return dados.servico.trim();
   }
 
@@ -83,14 +87,17 @@ async function resolveNomeServicoVisual(dados) {
       const servicoRef = doc(db, "servicos", dados.idServico);
       const servicoSnap = await getDoc(servicoRef);
       if (servicoSnap.exists) {
-        return servicoSnap.data().nome || "Serviço Agendado";
+        const nome = servicoSnap.data().nome || "Serviço Agendado";
+        console.log("[meu-perfil] ✅ Usando nome do serviço do Firebase:", nome);
+        return nome;
       }
     } catch (error) {
-      console.error("Erro ao buscar nome do serviço legado:", error);
+      console.error("[meu-perfil] ⚠️ Erro ao buscar nome do serviço legado:", error);
     }
   }
 
   // 3. Fallback final
+  console.warn("[meu-perfil] ⚠️ Usando fallback - serviço não identificado");
   return "Serviço Agendado";
 }
 
@@ -300,6 +307,9 @@ function criarCardVazio(mensagem, historico = false) {
   return card;
 }
 
+
+
+
 async function carregarAgendamentos(uid) {
   if (!containerAgendamentos || !containerHistorico) return;
 
@@ -317,30 +327,53 @@ async function carregarAgendamentos(uid) {
     return;
   }
 
-  console.log("Buscando agendamentos reais para o ID logado:", uidBusca);
+  console.log("[meu-perfil] ===== INICIANDO BUSCA DE AGENDAMENTOS =====");
+  console.log("[meu-perfil] UID do usuário logado:", uidBusca);
 
   try {
-    // REGRA DE COMPATIBILIDADE: Busca por 'clienteId' (novo padrão)
-    const qClienteId = query(
-      collection(db, "agendamentos"),
-      where("clienteId", "==", uidBusca),
-    );
-    const snapshotClienteId = await getDocs(qClienteId);
-
-    // REGRA DE COMPATIBILIDADE: Busca por 'idCliente' (padrão legado)
-    const qIdCliente = query(
-      collection(db, "agendamentos"),
-      where("idCliente", "==", uidBusca),
-    );
-    const snapshotIdCliente = await getDocs(qIdCliente);
+    const agendamentosRef = collection(db, "agendamentos");
+    
+    // Estratégia: Ler todos e filtrar em JS para evitar problemas com regras de segurança ou índices
+    const snapshot = await getDocs(agendamentosRef);
+    console.log(`[meu-perfil] Total de documentos na coleção agendamentos: ${snapshot.size}`);
 
     // Combina os resultados e remove duplicatas (se um agendamento tiver ambos os campos)
     const allDocs = {};
-    snapshotClienteId.forEach((doc) => (allDocs[doc.id] = doc));
-    snapshotIdCliente.forEach((doc) => (allDocs[doc.id] = doc));
+    let matchCount = 0;
+    
+    snapshot.forEach((doc) => {
+      const dados = doc.data();
+      const clienteId = dados.clienteId || dados.idCliente;
+      
+      console.log(`[DEBUG] Doc ID: ${doc.id}, clienteId: ${clienteId}, uidBusca: ${uidBusca}, Match: ${clienteId === uidBusca}`, dados);
+      
+      if (clienteId === uidBusca) {
+        allDocs[doc.id] = doc;
+        matchCount++;
+      }
+    });
+    
     const mergedDocs = Object.values(allDocs);
+    console.log(`[meu-perfil] Encontrados ${mergedDocs.length} agendamentos para o usuário (${matchCount} matches)`);
 
     if (mergedDocs.length === 0) {
+      console.log("[meu-perfil] Nenhum agendamento encontrado");
+      console.warn("[DEBUG] INFORMAÇÕES DE DEBUG:");
+      console.warn(`   - UID do usuário: ${uidBusca}`);
+      console.warn(`   - Total de agendamentos no Firebase: ${snapshot.size}`);
+      console.warn("   - Verifique no Firebase Console se os agendamentos têm o campo 'clienteId' preenchido");
+      console.warn("   - Lista de todos os agendamentos no Firebase:");
+      snapshot.docs.forEach((doc, index) => {
+        console.warn(`     [${index}]`, {
+          docId: doc.id,
+          clienteId: doc.data().clienteId,
+          idCliente: doc.data().idCliente,
+          nomeCliente: doc.data().nomeCliente,
+          status: doc.data().status,
+          data: doc.data().data,
+        });
+      });
+      
       containerAgendamentos.appendChild(
         criarCardVazio("Nenhum agendamento ativo."),
       );
@@ -349,6 +382,8 @@ async function carregarAgendamentos(uid) {
       );
       return;
     }
+    
+    console.log(`[meu-perfil] Total de agendamentos encontrados: ${mergedDocs.length}`);
 
     // Ordena os agendamentos (ex: por data de criação, do mais recente para o mais antigo)
     mergedDocs.sort((a, b) => {
@@ -390,18 +425,29 @@ async function carregarAgendamentos(uid) {
         status: dados.status || "agendado",
       };
 
+      console.log("[meu-perfil] Agendamento processado com título:", {
+        titulo: agendamentoData.titulo,
+        status: agendamentoData.status,
+        data: agendamentoData.data,
+      });
+
       if (
         agendamentoData.status === "agendado" ||
         agendamentoData.status === "reagendado" ||
         agendamentoData.status === "confirmado"
       ) {
+        console.log("[meu-perfil] Agendamento adicionado à seção ATIVA:", agendamentoData);
         containerAgendamentos.appendChild(criarCardAtivo(agendamentoData));
       } else if (
         agendamentoData.status === "realizado" ||
         agendamentoData.status === "cancelado_cliente" ||
-        agendamentoData.status === "cancelado_profissional"
+        agendamentoData.status === "cancelado_profissional" ||
+        agendamentoData.status === "concluido"
       ) {
+        console.log("[meu-perfil] Agendamento adicionado ao HISTÓRICO:", agendamentoData);
         containerHistorico.appendChild(criarCardHistorico(agendamentoData));
+      } else {
+        console.warn("[DEBUG] Agendamento não foi exibido - status desconhecido:", agendamentoData);
       }
     }
   } catch (error) {
@@ -425,6 +471,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     const userName = user.displayName?.trim() || "Heitor Vieira";
+    localStorage.setItem("nomeUsuario", userName);
     if (nomeCliente) nomeCliente.textContent = userName;
     if (emailCliente) emailCliente.value = user.email || "";
     if (fotoCliente)

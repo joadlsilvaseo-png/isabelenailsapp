@@ -82,7 +82,7 @@ button {
 
 .perfil-title {
   margin: 0;
-  color: #F0C1D1;
+  color: #f0c1d1;
   font-size: 1.15rem;
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -262,7 +262,9 @@ button {
 }
 
 .btn-cancelar {
-  transition: transform 0.3s ease, opacity 0.3s ease;
+  transition:
+    transform 0.3s ease,
+    opacity 0.3s ease;
 }
 
 .btn-cancelar:hover {
@@ -275,7 +277,8 @@ button {
 }
 
 @keyframes flutuar {
-  0%, 100% {
+  0%,
+  100% {
     transform: translateY(0);
   }
   50% {
@@ -295,7 +298,9 @@ button {
   background: transparent;
   font-weight: 700;
   animation: flutuar 3.5s ease-in-out infinite;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .perfil-exit-button:active {
@@ -308,7 +313,7 @@ button {
 }
 
 .perfil-exit-button:hover {
-  box-shadow: 0 20px 30px rgba(81,25,47,0.18);
+  box-shadow: 0 20px 30px rgba(81, 25, 47, 0.18);
 }
 
 .perfil-agendamentos {

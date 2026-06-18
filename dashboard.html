@@ -50,19 +50,28 @@
 <body>
   <div id="loading-screen">Verificando Credenciais...</div>
   <div class="dashboard-container">
-    <header class="admin-header" style="max-width: none; margin-bottom: 25px;">
-      <a href="login.html" class="btn-back" aria-label="Sair">‹</a>
+    <header class="admin-header" style="max-width: none; margin-bottom: 10px;">
+      <a href="login.html" class="btn-back" aria-label="Sair">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+          <path d="M15 18L9 12L15 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+      </a>
       <h2 style="font-family: 'Urbanist', sans-serif; font-size: 22px;">Painel B.I.</h2>
-      <a href="login.html" class="btn-home" aria-label="Logout">⌂</a>
+      <a href="login.html" class="btn-home" aria-label="Logout">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+          <path d="M4 10L12 3L20 10V20C20 20.5523 19.5523 21 19 21H5C4.44772 21 4 20.5523 4 20V10Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          <path d="M9 21V13H15V21" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+      </a>
     </header>
 
     <div style="display: flex; flex-direction: column; align-items: center; gap: 15px; margin-bottom: 20px;">
       <div class="filters">
-        <select id="filter-year" class="btn-admin" style="background: var(--vinho-card); color: #FFD9E7; border: 1px solid rgba(255,255,255,0.1); cursor: pointer;">
-          <option value="Geral">Ano: Geral</option>
+        <select id="filter-year" class="btn-admin filter-select">
+          <option value="Geral" selected>Ano</option>
         </select>
-        <select id="filter-month" class="btn-admin" style="background: var(--vinho-card); color: #FFD9E7; border: 1px solid rgba(255,255,255,0.1); cursor: pointer;">
-          <option value="Geral">Mês: Geral</option>
+        <select id="filter-month" class="btn-admin filter-select">
+          <option value="Geral" selected>Mês</option>
           <option value="01">Janeiro</option>
           <option value="02">Fevereiro</option>
           <option value="03">Março</option>
@@ -77,19 +86,44 @@
           <option value="12">Dezembro</option>
         </select>
       </div>
-      <a href="admin.html" class="btn-admin">Meus Agendamentos</a>
+      <p id="current-month-label" class="period-label"></p>
+      <a href="admin.html" class="btn-admin" style="min-width: 260px; padding: 14px 30px; text-align: center; font-size: 14px;">Meus Agendamentos</a>
     </div>
 
-    <p id="current-month-label" style="margin-bottom: 20px; color: var(--rosa-detalhe); font-weight: 600; text-transform: capitalize;">Período: Geral</p>
-
     <main class="metrics-grid">
-      <div class="card">
-        <h3>Receita do Mês</h3>
+      <div class="card card-revenue">
+        <div class="card-header-row">
+          <h3>Receita do Mês</h3>
+          <span class="card-pill">Atendimentos</span>
+        </div>
         <div id="valor-receita" class="value">R$ 0,00</div>
+        <div class="card-meta-row">
+          <div class="meta-block">
+            <span class="meta-label">Total atendimentos</span>
+            <span id="total-atendimentos" class="meta-value">0</span>
+          </div>
+        </div>
       </div>
-      <div class="card">
-        <h3>Total Atendidos</h3>
-        <div id="total-atendimentos" class="value">0</div>
+
+      <div class="card card-cancelamento">
+        <div class="card-header-row">
+          <h3>Taxa de Cancelamento</h3>
+          <span class="card-pill">Status</span>
+        </div>
+        <div id="valor-cancelamento" class="value">0%</div>
+        <div class="card-chart">
+          <canvas id="cancelamentoChart"></canvas>
+        </div>
+      </div>
+
+      <div class="card card-top-clientes">
+        <div class="card-header-row">
+          <h3>Top Clientes</h3>
+          <span class="card-pill">Pedidos</span>
+        </div>
+        <div class="card-chart">
+          <canvas id="topClientesChart"></canvas>
+        </div>
       </div>
     </main>
 
