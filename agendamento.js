@@ -1,5 +1,6 @@
 import { trackEvent } from "./analytics.js";
 import { auth, db } from "./firebase-config.js";
+import { webhookUrl } from "./config.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
 import {
   collection,
@@ -285,12 +286,15 @@ async function inicializarAgendamento() {
       }
       aguardarRedirecionamento(botaoAgendar);
 
+      const nomeCliente = document.getElementById("nomeCliente")?.value.trim() || "";
+
       const payload = {
         idServico: serviceId,
         servico: serviceName,
         data: dataAgendamentoISO,
         horario: horarioNormalizado,
         duracao: serviceDuration,
+        nomeCliente: nomeCliente,
         observacoes: textareaComentarios.value.trim() || "sem observações",
         status: reagendarId ? "reagendado" : "agendado",
       };
@@ -305,6 +309,25 @@ async function inicializarAgendamento() {
             dataCriacao: serverTimestamp(),
           });
         }
+
+        // Após confirmar que o agendamento foi salvo no Firestore, disparar o Webhook
+        try {
+          console.log('Enviando Payload:', payload);
+          const response = await fetch(webhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          if (!response.ok) {
+            const text = await response.text().catch(() => '');
+            console.error('Erro no Webhook:', response.status, text);
+          } else {
+            console.log('Webhook disparado com sucesso.', response.status);
+          }
+        } catch (err) {
+          console.error('Falha ao disparar o Webhook:', err);
+        }
+
         window.location.href = `confirmacao.html?servico=${encodeURIComponent(serviceName)}&data=${encodeURIComponent(dataAgendamentoISO)}&horario=${encodeURIComponent(horarioNormalizado)}`;
       } catch (error) {
         console.error(error);
