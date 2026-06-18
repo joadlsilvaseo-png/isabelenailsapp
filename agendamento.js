@@ -421,6 +421,8 @@ async function inicializarAgendamento() {
           try {
             const payloadToSend = {
               ...payload,
+              clienteId: targetClientId, // Garante que o ID do cliente original seja enviado
+              email: user.email, // Email do usuário logado
               servico: serviceName || "Manicure Simples",
               idAgendamento: finalDocId,
             };
