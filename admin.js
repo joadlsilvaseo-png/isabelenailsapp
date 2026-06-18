@@ -178,13 +178,35 @@ async function carregarAgendamentosDoPainel() {
           });
 
           // Grava evento de notificação para Cancelamento pelo Admin
-          await addDoc(collection(db, "eventos_notificacao"), {
+          const eventPayloadCancelAdmin = {
             tipo: "cancelamento_admin",
             clienteId: clienteIdLimpo,
             agendamentoId: documentoOf.id,
             processado: false,
             timestamp: new Date().toISOString(),
-          });
+          };
+          await addDoc(
+            collection(db, "eventos_notificacao"),
+            eventPayloadCancelAdmin,
+          );
+          // Dispara para Webhook (Redundância para WhatsApp)
+          (async () => {
+            try {
+              await fetch(
+                "https://hook.us2.make.com/5p8lpujp64yt92rirmi8yyhlycggyoqp",
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(eventPayloadCancelAdmin),
+                },
+              );
+            } catch (err) {
+              console.error(
+                "Falha no disparo para o Webhook (Make.com - Cancelamento Admin):",
+                err,
+              );
+            }
+          })();
 
           alert("Agendamento cancelado!");
           location.reload();

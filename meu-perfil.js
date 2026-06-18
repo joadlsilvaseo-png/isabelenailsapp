@@ -164,13 +164,35 @@ function criarCardAtivo({
       });
 
       // Grava evento de notificação para Cancelamento pelo Cliente
-      await addDoc(collection(db, "eventos_notificacao"), {
+      const eventPayloadCancelCliente = {
         tipo: "cancelamento_cliente",
         clienteId: uidBusca,
         agendamentoId: id,
         processado: false,
         timestamp: new Date().toISOString(),
-      });
+      };
+      await addDoc(
+        collection(db, "eventos_notificacao"),
+        eventPayloadCancelCliente,
+      );
+      // Dispara para Webhook (Redundância para WhatsApp)
+      (async () => {
+        try {
+          await fetch(
+            "https://hook.us2.make.com/5p8lpujp64yt92rirmi8yyhlycggyoqp",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(eventPayloadCancelCliente),
+            },
+          );
+        } catch (err) {
+          console.error(
+            "Falha no disparo para o Webhook (Make.com - Cancelamento Cliente):",
+            err,
+          );
+        }
+      })();
 
       window.alert("Agendamento cancelado com sucesso!");
       window.location.reload();
