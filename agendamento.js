@@ -42,6 +42,37 @@ function obterDataIso(botaoData) {
   return botaoData.dataset?.dateIso || null;
 }
 
+function validateAgendamento(data, hora) {
+  if (!data || !hora) {
+    console.error("Agendamento inválido", { data, hora });
+    return false;
+  }
+
+  const dataOk = /^\d{4}-\d{2}-\d{2}$/.test(data);
+  const horaOk = /^([01]\d|2[0-3]):[0-5]\d$/.test(hora);
+
+  if (!dataOk || !horaOk) {
+    console.error("Agendamento inválido", { data, hora });
+    return false;
+  }
+  return true;
+}
+
+function sanitizeHorario(horario) {
+  if (!horario) return "";
+  const sanitized = String(horario)
+    .toLowerCase()
+    .replace(/\s+/g, "")
+    .replace(/(am|pm)/g, "")
+    .trim();
+
+  if (sanitized.includes(":")) {
+    const [h, m] = sanitized.split(":");
+    return `${h.padStart(2, "0")}:${m.padStart(2, "0")}`;
+  }
+  return sanitized;
+}
+
 // Gera exatamente 5 dias úteis (Terça a Sábado) a partir do próximo dia útil disponível
 function gerarCalendarioDias(container) {
   if (!container) return;
@@ -277,31 +308,21 @@ async function inicializarAgendamento() {
         "agendamento-time--active",
       );
 
-      // Captura os valores direto do DOM ou do localStorage para garantir
-      const dataSalva = String(
-        localStorage.getItem("dataAgendamento") ||
-          (dataSelecionada ? formatarData(dataSelecionada) : ""),
-      ).trim();
-      const horarioSalvo = String(
+      // 1. Captura de dados brutos e Validação (Passo 1 do fluxo)
+      const dataAgendamentoISO = localStorage.getItem("dataAgendamentoISO");
+      const horarioOriginal =
         localStorage.getItem("horarioAgendamento") ||
-          (horarioSelecionado ? horarioSelecionado.textContent : ""),
-      ).trim();
-      const observacoesValor =
-        textareaComentarios.value.trim() || "sem observações";
+        (horarioSelecionado ? horarioSelecionado.textContent : "");
 
-      // Validação estrita antes de mexer no banco
-      if (
-        !dataSelecionada ||
-        !horarioSelecionado ||
-        !dataSalva ||
-        !horarioSalvo ||
-        horarioSalvo === "--:--"
-      ) {
+      if (!validateAgendamento(dataAgendamentoISO, horarioOriginal)) {
         window.alert(
-          "Por favor, selecione uma data e um horário antes de prosseguir.",
+          "Por favor, selecione uma data e um horário válidos antes de prosseguir.",
         );
         return;
       }
+
+      // 2. Sanitização do Horário (Passo 2 do fluxo)
+      const horarioNormalizado = sanitizeHorario(horarioOriginal);
 
       if (!serviceId) {
         window.alert(
@@ -314,39 +335,16 @@ async function inicializarAgendamento() {
       aguardarRedirecionamento(botaoAgendar);
 
       const userId = String(user.uid).trim();
+      const observacoesValor =
+        textareaComentarios.value.trim() || "sem observações";
 
-      // Cálculo dos timestamps para lembretes (baseado em dataISO e horário)
-      const dataAgendamentoISO = localStorage.getItem("dataAgendamentoISO");
-
-      // Normalização do horário: remove "am", "pm", espaços e garante o formato HH:mm
-      const horarioNormalizado = horarioSalvo
-        .toLowerCase()
-        .replace(/(am|pm)/g, "")
-        .trim();
-
-      // Validação de integridade: evita strings como "nullT17:00" ou campos vazios
-      if (
-        !dataAgendamentoISO ||
-        dataAgendamentoISO === "null" ||
-        !horarioNormalizado
-      ) {
-        console.error("Data ou horário ausentes no agendamento:", {
-          dataAgendamentoISO,
-          horarioSalvo,
-        });
-        botaoAgendar.disabled = false;
-        botaoAgendar.textContent = "Confirmar Agendamento";
-        botaoAgendar.classList.remove("agendamento-button--disabled");
-        return;
-      }
-
-      // Montagem da data no formato ISO válido para o construtor (YYYY-MM-DDTHH:mm:ss)
+      // 3. Criação Segura de Data ISO (Passo 3 do fluxo)
       const dataHoraObj = new Date(
         `${dataAgendamentoISO}T${horarioNormalizado}:00`,
       );
 
       if (isNaN(dataHoraObj.getTime())) {
-        console.error("Data inválida no agendamento:", {
+        console.error("Falha crítica na criação da data", {
           dataAgendamentoISO,
           horarioNormalizado,
         });
@@ -355,6 +353,10 @@ async function inicializarAgendamento() {
         botaoAgendar.classList.remove("agendamento-button--disabled");
         return;
       }
+
+      // Formatos garantidos para o processamento e salvamento
+      const dataSalva = dataAgendamentoISO;
+      const horarioSalvo = horarioNormalizado;
 
       // Lembrete 24h antes
       const reminder24h = new Date(dataHoraObj.getTime() - 24 * 60 * 60 * 1000);
