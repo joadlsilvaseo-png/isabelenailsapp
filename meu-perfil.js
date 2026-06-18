@@ -162,6 +162,16 @@ function criarCardAtivo({
       await updateDoc(doc(db, "agendamentos", id), {
         status: "cancelado_cliente",
       });
+
+      // Grava evento de notificação para Cancelamento pelo Cliente
+      await addDoc(collection(db, "eventos_notificacao"), {
+        tipo: "cancelamento_cliente",
+        clienteId: uidBusca,
+        agendamentoId: id,
+        processado: false,
+        timestamp: new Date().toISOString(),
+      });
+
       window.alert("Agendamento cancelado com sucesso!");
       window.location.reload();
 

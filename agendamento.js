@@ -365,11 +365,27 @@ async function inicializarAgendamento() {
 
       try {
         let finalDocId = reagendarId;
+        let targetClientId = userId;
 
         if (reagendarId) {
           // REAGENDAMENTO: Atualiza apenas campos de horário/status. clienteId permanece o original do doc.
+          const docRef = doc(db, "agendamentos", reagendarId);
+          const snap = await getDoc(docRef);
+          if (snap.exists()) {
+            targetClientId = snap.data().clienteId || snap.data().idCliente;
+          }
+
           await updateDoc(doc(db, "agendamentos", reagendarId), payload);
           console.log("Agendamento REAGENDADO com SUCESSO! ID:", reagendarId);
+
+          // Grava evento de notificação para Reagendamento
+          await addDoc(collection(db, "eventos_notificacao"), {
+            tipo: "agendamento_reagendado",
+            clienteId: targetClientId,
+            agendamentoId: reagendarId,
+            processado: false,
+            timestamp: new Date().toISOString(),
+          });
         } else {
           // NOVO AGENDAMENTO: Define clienteId e data de criação (campos imutáveis)
           const novoPayload = {
@@ -383,6 +399,15 @@ async function inicializarAgendamento() {
           );
           finalDocId = docRef.id;
           console.log("Agendamento salvo com SUCESSO! ID:", finalDocId);
+
+          // Grava evento de notificação para Novo Agendamento
+          await addDoc(collection(db, "eventos_notificacao"), {
+            tipo: "agendamento_criado",
+            clienteId: userId,
+            agendamentoId: finalDocId,
+            processado: false,
+            timestamp: new Date().toISOString(),
+          });
         }
 
         // 1.1 Rastreamento do GA4

@@ -176,6 +176,16 @@ async function carregarAgendamentosDoPainel() {
           await updateDoc(doc(db, "agendamentos", documentoOf.id), {
             status: "cancelado_profissional",
           });
+
+          // Grava evento de notificação para Cancelamento pelo Admin
+          await addDoc(collection(db, "eventos_notificacao"), {
+            tipo: "cancelamento_admin",
+            clienteId: clienteIdLimpo,
+            agendamentoId: documentoOf.id,
+            processado: false,
+            timestamp: new Date().toISOString(),
+          });
+
           alert("Agendamento cancelado!");
           location.reload();
         } catch (error) {
