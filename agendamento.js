@@ -315,17 +315,28 @@ async function inicializarAgendamento() {
 
       const userId = String(user.uid).trim();
 
+      // Cálculo dos timestamps para lembretes (baseado em dataISO e horário)
+      const dataAgendamentoISO = localStorage.getItem("dataAgendamentoISO");
+      const dataHoraObj = new Date(`${dataAgendamentoISO}T${horarioSalvo}`);
+
+      // Lembrete 24h antes
+      const reminder24h = new Date(dataHoraObj.getTime() - 24 * 60 * 60 * 1000);
+      // Lembrete 2h antes
+      const reminder2h = new Date(dataHoraObj.getTime() - 2 * 60 * 60 * 1000);
+
       // Monta o payload exato para o banco de dados
       const payload = {
         idCliente: userId,
         idServico: serviceId,
         servico: serviceName, // Gravando o nome do serviço no agendamento
         data: dataSalva,
-        dataISO: localStorage.getItem("dataAgendamentoISO"),
+        dataISO: dataAgendamentoISO,
         horario: horarioSalvo,
         duracao: serviceDuration,
         observacoes: observacoesValor,
         status: "confirmado",
+        reminder_24h: reminder24h.toISOString(),
+        reminder_2h: reminder2h.toISOString(),
         email_lembrete_24h: false,
         lembrete_email_1hr: false,
         dataCriacao: serverTimestamp(),

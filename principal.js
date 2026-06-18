@@ -1,3 +1,4 @@
+import { setupPushNotifications } from "./notificationService.js";
 import { auth, db } from "./firebase-config.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
 import {
@@ -37,6 +38,10 @@ function initPrincipalPage() {
     if (photoElement) {
       photoElement.src = user.photoURL || fallbackAvatar;
     }
+
+    // Solicita permissão de notificações push
+    setupPushNotifications(user.uid);
+
     // Render category images for service cards on the home
     renderCategoryImages();
   });
