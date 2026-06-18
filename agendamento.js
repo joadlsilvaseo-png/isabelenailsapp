@@ -1,3 +1,4 @@
+import { trackEvent } from "./analytics.js";
 import { auth, db } from "./firebase-config.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
 import {
@@ -334,6 +335,12 @@ async function inicializarAgendamento() {
         // 1. Salva no Firestore
         const docRef = await addDoc(collection(db, "agendamentos"), payload);
         console.log("Agendamento salvo com SUCESSO! ID:", docRef.id);
+
+        // 1.1 Rastreamento do GA4
+        trackEvent("agendamento_concluido", {
+          servico: serviceName,
+          horario: horarioSalvo,
+        });
 
         // 2. Dispara webhook do Make em background (não bloqueia o redirecionamento)
         (async () => {

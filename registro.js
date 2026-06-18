@@ -1,3 +1,4 @@
+import { trackEvent } from "./analytics.js";
 import { auth, db, googleProvider } from "./firebase-config.js";
 
 import {
@@ -266,6 +267,8 @@ async function performSignup(name, email, phone, password) {
       email_domain: email.split("@")[1],
     });
 
+    trackEvent("registro");
+
     alert("Cadastro realizado com sucesso!");
 
     submitBtn.disabled = false;
@@ -312,21 +315,25 @@ function setupGoogleSignup() {
     try {
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
-      
+
       console.log("[GOOGLE SIGNUP] Usuário autenticado");
       console.log("[GOOGLE SIGNUP] UID:", user.uid);
       console.log("[GOOGLE SIGNUP] Email:", user.email);
       console.log("[GOOGLE SIGNUP] Nome:", user.displayName);
-      
+
       const userDocRef = doc(db, "clientes", user.uid);
-      
-      console.log("[GOOGLE SIGNUP] Verificando documento em clientes/" + user.uid);
+
+      console.log(
+        "[GOOGLE SIGNUP] Verificando documento em clientes/" + user.uid,
+      );
       const userDocSnapshot = await getDoc(userDocRef);
       console.log("[GOOGLE SIGNUP] getDoc() executado");
 
       if (!userDocSnapshot.exists()) {
-        console.log("[GOOGLE SIGNUP] Documento não encontrado - criando novo documento");
-        
+        console.log(
+          "[GOOGLE SIGNUP] Documento não encontrado - criando novo documento",
+        );
+
         await setDoc(userDocRef, {
           nome: user.displayName || "",
           email: user.email || "",
@@ -334,8 +341,11 @@ function setupGoogleSignup() {
           role: "cliente",
           dataCadastro: new Date().toISOString(),
         });
-        
-        console.log("[GOOGLE SIGNUP] setDoc() executado - documento criado com sucesso");
+
+        console.log(
+          "[GOOGLE SIGNUP] setDoc() executado - documento criado com sucesso",
+        );
+        trackEvent("registro");
       } else {
         console.log("[GOOGLE SIGNUP] Documento já existe - não sobrescrevendo");
       }

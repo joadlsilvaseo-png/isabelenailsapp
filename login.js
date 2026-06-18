@@ -1,3 +1,4 @@
+import { trackEvent } from "./analytics.js";
 import { auth, googleProvider, db } from "./firebase-config.js";
 import {
   doc,
@@ -113,6 +114,7 @@ function setupGoogleLogin() {
       }
 
       console.log("[Login] Sucesso");
+      trackEvent("login");
       await redirectByRole(result.user);
     } catch (error) {
       console.error("[Google Login] Erro", error);
@@ -191,6 +193,7 @@ async function performLogin(email, password) {
     );
 
     console.log("[Login] Sucesso");
+    trackEvent("login");
     await redirectByRole(userCredential.user);
   } catch (error) {
     console.error("[Login] Erro", error);
