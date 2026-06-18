@@ -161,7 +161,12 @@ async function renderizarHorarios(dataIso, servicoDuracao) {
     const intervalosOcupados = [];
     querySnapshot.forEach((doc) => {
       const data = doc.data();
-      console.log("Agendamento encontrado:", data.horario, "Status:", data.status);
+      console.log(
+        "Agendamento encontrado:",
+        data.horario,
+        "Status:",
+        data.status,
+      );
       if (
         data.horario &&
         (!data.status ||
@@ -189,11 +194,14 @@ async function renderizarHorarios(dataIso, servicoDuracao) {
       btn.className = "agendamento-time";
       btn.textContent = horarioTexto;
 
-      let indisponivel = !estaLivre && intervalosOcupados.some((appt) => {
-        const conflito = atual < appt.end && fimBloco > appt.start;
-        if (conflito) console.log(`Horário ${horarioTexto} bloqueado por conflito.`);
-        return conflito;
-      });
+      let indisponivel =
+        !estaLivre &&
+        intervalosOcupados.some((appt) => {
+          const conflito = atual < appt.end && fimBloco > appt.start;
+          if (conflito)
+            console.log(`Horário ${horarioTexto} bloqueado por conflito.`);
+          return conflito;
+        });
 
       if (indisponivel) {
         btn.classList.add("horario-ocupado");
@@ -286,7 +294,8 @@ async function inicializarAgendamento() {
       }
       aguardarRedirecionamento(botaoAgendar);
 
-      const nomeCliente = document.getElementById("nomeCliente")?.value.trim() || "";
+      const nomeCliente =
+        document.getElementById("nomeCliente")?.value.trim() || "";
 
       const payload = {
         idServico: serviceId,
@@ -312,20 +321,20 @@ async function inicializarAgendamento() {
 
         // Após confirmar que o agendamento foi salvo no Firestore, disparar o Webhook
         try {
-          console.log('Enviando Payload:', payload);
+          console.log("Enviando Payload:", payload);
           const response = await fetch(webhookUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
           });
           if (!response.ok) {
-            const text = await response.text().catch(() => '');
-            console.error('Erro no Webhook:', response.status, text);
+            const text = await response.text().catch(() => "");
+            console.error("Erro no Webhook:", response.status, text);
           } else {
-            console.log('Webhook disparado com sucesso.', response.status);
+            console.log("Webhook disparado com sucesso.", response.status);
           }
         } catch (err) {
-          console.error('Falha ao disparar o Webhook:', err);
+          console.error("Falha ao disparar o Webhook:", err);
         }
 
         window.location.href = `confirmacao.html?servico=${encodeURIComponent(serviceName)}&data=${encodeURIComponent(dataAgendamentoISO)}&horario=${encodeURIComponent(horarioNormalizado)}`;
