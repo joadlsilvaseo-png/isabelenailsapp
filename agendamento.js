@@ -243,11 +243,11 @@ async function inicializarAgendamento() {
   gerarCalendarioDias(calendarContainer);
   const datas = Array.from(document.querySelectorAll(".agendamento-date"));
   const botaoAgendar = document.querySelector(".agendamento-button");
-  console.log('Botão localizado:', !!botaoAgendar);
+  console.log("Botão localizado:", !!botaoAgendar);
   const textareaComentarios = document.querySelector("#agendamento-notes");
   const urlParams = new URLSearchParams(window.location.search);
   if (!botaoAgendar) {
-    console.error('Botão agendar não encontrado no DOM!');
+    console.error("Botão agendar não encontrado no DOM!");
   }
   const serviceId = urlParams.get("id");
   const reagendarId = urlParams.get("reagendar");
@@ -285,17 +285,24 @@ async function inicializarAgendamento() {
   }
 
   onAuthStateChanged(auth, (user) => {
-    console.log('Autenticação verificada. Usuário:', user ? user.uid : 'Nenhum usuário logado');
+    console.log(
+      "Autenticação verificada. Usuário:",
+      user ? user.uid : "Nenhum usuário logado",
+    );
     if (!user) return;
 
     const nomeInput = document.getElementById("nomeCliente");
     if (nomeInput) {
       const nomeUsuarioSalvo = localStorage.getItem("nomeUsuario");
-      console.log("[agendamento] Nome salvo no localStorage:", nomeUsuarioSalvo);
+      console.log(
+        "[agendamento] Nome salvo no localStorage:",
+        nomeUsuarioSalvo,
+      );
       console.log("[agendamento] Nome no Firebase Auth:", user.displayName);
-      
+
       // Prioridade 1: Nome salvo em meu-perfil (mais confiável)
-      const nomePerfil = nomeUsuarioSalvo || user.displayName || user.email || "";
+      const nomePerfil =
+        nomeUsuarioSalvo || user.displayName || user.email || "";
       if (nomePerfil) {
         nomeInput.value = nomePerfil;
         console.log("[agendamento] ✅ Nome carregado no campo:", nomePerfil);
@@ -303,8 +310,11 @@ async function inicializarAgendamento() {
     }
 
     botaoAgendar.addEventListener("click", async () => {
-      console.log('Evento de clique disparado!');
-      console.log('Botão clicado. Estado do botão:', botaoAgendar.disabled ? 'Desabilitado' : 'Habilitado');
+      console.log("Evento de clique disparado!");
+      console.log(
+        "Botão clicado. Estado do botão:",
+        botaoAgendar.disabled ? "Desabilitado" : "Habilitado",
+      );
       if (botaoAgendar.disabled) return;
       const horarioSalvo = localStorage.getItem("horarioAgendamento");
       const dataAgendamentoISO = localStorage.getItem("dataAgendamentoISO");
@@ -313,7 +323,9 @@ async function inicializarAgendamento() {
         .replace(/(am|pm)/g, "")
         .trim();
 
-      const dataSelecionada = document.querySelector(".agendamento-date--active");
+      const dataSelecionada = document.querySelector(
+        ".agendamento-date--active",
+      );
       if (dataSelecionada) {
         localStorage.setItem("dataAgendamento", formatarData(dataSelecionada));
       }
@@ -328,30 +340,39 @@ async function inicializarAgendamento() {
       }
       aguardarRedirecionamento(botaoAgendar);
 
-      const nomeInput = document.getElementById('nomeCliente') || document.querySelector('input[name="nome"]');
-      const nomeCliente = nomeInput ? nomeInput.value : 'Nome não informado';
+      const nomeInput =
+        document.getElementById("nomeCliente") ||
+        document.querySelector('input[name="nome"]');
+      const nomeCliente = nomeInput ? nomeInput.value : "Nome não informado";
       const servico = serviceName;
       const data = dataAgendamentoISO;
       const horario = horarioNormalizado;
       const observacoes = textareaComentarios?.value?.trim() || "";
-      
-      console.log('[agendamento] Confirmando agendamento com dados:', {
+
+      console.log("[agendamento] Confirmando agendamento com dados:", {
         nomeCliente,
         servico,
         serviceId,
         data,
         horario,
-        observacoes
+        observacoes,
       });
 
-      localStorage.setItem('servicoAgendamento', serviceName);
-      localStorage.setItem('observacoesAgendamento', textareaComentarios?.value?.trim() || "");
+      localStorage.setItem("servicoAgendamento", serviceName);
+      localStorage.setItem(
+        "observacoesAgendamento",
+        textareaComentarios?.value?.trim() || "",
+      );
       if (nomeCliente && nomeCliente.trim()) {
-        localStorage.setItem('nomeUsuario', nomeCliente.trim());
+        localStorage.setItem("nomeUsuario", nomeCliente.trim());
       }
 
       if (!servico || !data || !horario) {
-        console.error("[agendamento] ERRO: Dados incompletos para envio!", { servico, data, horario });
+        console.error("[agendamento] ERRO: Dados incompletos para envio!", {
+          servico,
+          data,
+          horario,
+        });
         return;
       }
 
@@ -374,9 +395,15 @@ async function inicializarAgendamento() {
             dataCriacao: serverTimestamp(),
             status: "agendado",
           };
-          console.log("[agendamento] Salvando novo agendamento com dados:", agendamentoData);
+          console.log(
+            "[agendamento] Salvando novo agendamento com dados:",
+            agendamentoData,
+          );
           await addDoc(collection(db, "agendamentos"), agendamentoData);
-          console.log("[agendamento] ✅ Agendamento salvo com sucesso para clienteId:", user.uid);
+          console.log(
+            "[agendamento] ✅ Agendamento salvo com sucesso para clienteId:",
+            user.uid,
+          );
         }
 
         const payloadWebhook = {
@@ -386,15 +413,25 @@ async function inicializarAgendamento() {
           duracaoMinutos: parseInt(serviceDuration, 10) || 60,
         };
 
-        await fetch(webhookUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+        // URL do Google Apps Script
+        const googleScriptUrl =
+          "https://script.google.com/macros/s/AKfycbz8pbdxHEt5QpGZg6_nS25TDFb_kjzqAns3ax9QMgngt2MO81b7gt-NUA_S_hUjI6u_Rw/exec";
+
+        await fetch(googleScriptUrl, {
+          method: "POST",
+          mode: "no-cors", // Essencial para evitar bloqueio do navegador
           body: JSON.stringify(payloadWebhook),
         });
-        console.log('Webhook enviado com sucesso:', payloadWebhook);
 
-        localStorage.setItem('dataAgendamento', data);
-        localStorage.setItem('horaAgendamento', horario);
+        console.log(
+          "Dados do agendamento enviados para o Google Apps Script:",
+          payloadWebhook,
+        );
+
+        localStorage.setItem("dataAgendamento", data);
+        localStorage.setItem("horaAgendamento", horario);
+        // Sugestão: salve o nome do cliente também para usar na tela de confirmação
+        localStorage.setItem("nomeCliente", payloadWebhook.nomeCliente);
 
         window.location.href = "confirmacao.html";
       } catch (error) {
