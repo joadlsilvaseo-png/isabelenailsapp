@@ -11,6 +11,7 @@ import {
   getDocs,
   updateDoc,
   deleteDoc,
+  addDoc,
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
 
 let containerAgendamentos = null;
@@ -183,7 +184,7 @@ function criarCardAtivo({
       // Grava evento de notificação para Cancelamento pelo Cliente
       const eventPayloadCancelCliente = {
         tipo: "cancelamento_cliente",
-        clienteId: uidBusca,
+        clienteId: auth.currentUser?.uid || null,
         agendamentoId: id,
         processado: false,
         timestamp: new Date().toISOString(),
@@ -209,7 +210,14 @@ function criarCardAtivo({
       })();
 
       window.alert("Agendamento cancelado com sucesso!");
-      window.location.reload();
+
+      // Remove imediatamente da tela
+      card.remove();
+
+      // Recarrega os cards sem precisar de F5
+      if (auth.currentUser) {
+        await carregarAgendamentos(auth.currentUser.uid);
+      }
 
       if (
         containerAgendamentos &&
