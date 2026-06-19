@@ -477,7 +477,24 @@ document.addEventListener("DOMContentLoaded", () => {
     if (fotoCliente)
       fotoCliente.src =
         user.photoURL || "https://www.w3schools.com/howto/img_avatar2.png";
-    if (celularCliente) celularCliente.value = "";
+
+    if (celularCliente) {
+      celularCliente.value = "";
+      try {
+        const clienteDocRef = doc(db, "clientes", user.uid);
+        const clienteDocSnap = await getDoc(clienteDocRef);
+
+        if (clienteDocSnap.exists()) {
+          const clienteData = clienteDocSnap.data();
+          celularCliente.value = clienteData.telefone || "";
+          console.log("[meu-perfil] Telefone carregado do Firestore:", clienteData.telefone);
+        } else {
+          console.warn("[meu-perfil] Documento clientes/" + user.uid + " não encontrado");
+        }
+      } catch (error) {
+        console.error("[meu-perfil] Erro ao carregar telefone do Firestore:", error);
+      }
+    }
 
     if (logoutButton) {
       logoutButton.addEventListener("click", (event) => {

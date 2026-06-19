@@ -14,6 +14,9 @@ import {
   serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
 
+const PENDING_GOOGLE_PHONE_KEY = "pendingPhone";
+
+
 /* ============================================================
    REGISTRATION PAGE - FORM VALIDATION & INTERACTIONS
    ============================================================ */
@@ -120,6 +123,88 @@ function setupFieldListeners() {
     if (this.checked) {
       clearError("termsCheckbox");
     }
+  });
+}
+
+function openGooglePhoneModal(defaultPhone = "") {
+  return new Promise((resolve, reject) => {
+    const overlay = document.createElement("div");
+    overlay.style.position = "fixed";
+    overlay.style.top = "0";
+    overlay.style.left = "0";
+    overlay.style.width = "100vw";
+    overlay.style.height = "100vh";
+    overlay.style.backgroundColor = "rgba(0, 0, 0, 0.6)";
+    overlay.style.display = "flex";
+    overlay.style.alignItems = "center";
+    overlay.style.justifyContent = "center";
+    overlay.style.zIndex = "10000";
+
+    const modal = document.createElement("div");
+    modal.style.width = "min(420px, 90vw)";
+    modal.style.backgroundColor = "#ffffff";
+    modal.style.borderRadius = "16px";
+    modal.style.boxShadow = "0 20px 50px rgba(0,0,0,0.2)";
+    modal.style.padding = "24px";
+    modal.style.display = "flex";
+    modal.style.flexDirection = "column";
+    modal.style.gap = "14px";
+
+    modal.innerHTML = `
+      <h2 style="margin:0;font-size:1.3rem;color:#1f1f1f;">Continue com Google</h2>
+      <p style="margin:0;color:#575757;line-height:1.45;">Digite seu telefone para concluir o cadastro com Google.</p>
+      <label style="display:flex;flex-direction:column;gap:8px;font-size:0.95rem;color:#333;">
+        <span>Celular</span>
+        <input id="googlePhoneInput" type="tel" value="${defaultPhone}" placeholder="(11) 99999-9999" style="width:100%;padding:12px 14px;border:1px solid #ccc;border-radius:10px;font-size:1rem;outline:none;" />
+        <span id="googlePhoneError" style="display:none;color:#b00020;font-size:0.85rem;"></span>
+      </label>
+      <div style="display:flex;justify-content:flex-end;gap:12px;margin-top:8px;">
+        <button id="googlePhoneCancel" type="button" style="padding:12px 18px;border:none;background:transparent;color:#333;cursor:pointer;border-radius:10px;">Cancelar</button>
+        <button id="googlePhoneContinue" type="button" style="padding:12px 18px;border:none;background:#4285f4;color:#fff;cursor:pointer;border-radius:10px;">Continuar com Google</button>
+      </div>
+    `;
+
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    const phoneInput = modal.querySelector("#googlePhoneInput");
+    const errorEl = modal.querySelector("#googlePhoneError");
+    const cancelBtn = modal.querySelector("#googlePhoneCancel");
+    const continueBtn = modal.querySelector("#googlePhoneContinue");
+
+    function closeModal() {
+      overlay.remove();
+    }
+
+    function validatePhone() {
+      const value = phoneInput.value.trim();
+      if (!isValidPhone(value)) {
+        errorEl.textContent = "Por favor, insira um celular válido.";
+        errorEl.style.display = "block";
+        phoneInput.style.borderColor = "#b00020";
+        return null;
+      }
+      return value;
+    }
+
+    phoneInput.addEventListener("input", () => {
+      errorEl.style.display = "none";
+      phoneInput.style.borderColor = "#ccc";
+    });
+
+    cancelBtn.addEventListener("click", () => {
+      closeModal();
+      reject(new Error("Modal cancelado"));
+    });
+
+    continueBtn.addEventListener("click", () => {
+      const validPhone = validatePhone();
+      if (!validPhone) return;
+      closeModal();
+      resolve(validPhone);
+    });
+
+    phoneInput.focus();
   });
 }
 
@@ -312,6 +397,18 @@ function setupGoogleSignup() {
 
     console.log("[GOOGLE SIGNUP] Clicado");
 
+    let pendingPhone;
+    try {
+      pendingPhone = await openGooglePhoneModal(
+        document.getElementById("phoneInput")?.value.trim() || "",
+      );
+      sessionStorage.setItem(PENDING_GOOGLE_PHONE_KEY, pendingPhone);
+      console.log("[GOOGLE SIGNUP] Telefone temporário salvo em sessionStorage");
+    } catch (modalError) {
+      console.log("[GOOGLE SIGNUP] Modal cancelado ou fechado", modalError.message);
+      return;
+    }
+
     try {
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
@@ -329,26 +426,35 @@ function setupGoogleSignup() {
       const userDocSnapshot = await getDoc(userDocRef);
       console.log("[GOOGLE SIGNUP] getDoc() executado");
 
+      const userPayload = {
+        nome: user.displayName || "",
+        email: user.email || "",
+        foto: user.photoURL || "",
+      };
+
+      if (pendingPhone) {
+        userPayload.telefone = pendingPhone;
+      }
+
       if (!userDocSnapshot.exists()) {
         console.log(
           "[GOOGLE SIGNUP] Documento não encontrado - criando novo documento",
         );
-
-        await setDoc(userDocRef, {
-          nome: user.displayName || "",
-          email: user.email || "",
-          telefone: "",
-          role: "cliente",
-          dataCadastro: new Date().toISOString(),
-        });
-
-        console.log(
-          "[GOOGLE SIGNUP] setDoc() executado - documento criado com sucesso",
-        );
-        trackEvent("registro");
+        userPayload.role = "cliente";
+        userPayload.criadoEm = new Date().toISOString();
       } else {
-        console.log("[GOOGLE SIGNUP] Documento já existe - não sobrescrevendo");
+        console.log("[GOOGLE SIGNUP] Documento já existe - atualizando com merge");
       }
+
+      try {
+        await setDoc(userDocRef, userPayload, { merge: true });
+        console.log("[GOOGLE SIGNUP] Documento atualizado/criado com sucesso");
+      } catch (setDocError) {
+        console.error("[GOOGLE SIGNUP] Erro ao gravar documento", setDocError);
+      }
+
+      sessionStorage.removeItem(PENDING_GOOGLE_PHONE_KEY);
+      console.log("[GOOGLE SIGNUP] pendingPhone removido do sessionStorage");
 
       logEvent("signup_success", { method: "google", user_id: user.uid });
       window.location.href = "principal.html";
