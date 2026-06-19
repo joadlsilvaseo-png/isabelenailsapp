@@ -77,7 +77,10 @@ async function resolveNomeServicoVisual(dados) {
     typeof dados.servico === "string" &&
     dados.servico.trim()
   ) {
-    console.log("[meu-perfil] ✅ Usando nome do serviço do agendamento:", dados.servico);
+    console.log(
+      "[meu-perfil] ✅ Usando nome do serviço do agendamento:",
+      dados.servico,
+    );
     return dados.servico.trim();
   }
 
@@ -88,11 +91,17 @@ async function resolveNomeServicoVisual(dados) {
       const servicoSnap = await getDoc(servicoRef);
       if (servicoSnap.exists) {
         const nome = servicoSnap.data().nome || "Serviço Agendado";
-        console.log("[meu-perfil] ✅ Usando nome do serviço do Firebase:", nome);
+        console.log(
+          "[meu-perfil] ✅ Usando nome do serviço do Firebase:",
+          nome,
+        );
         return nome;
       }
     } catch (error) {
-      console.error("[meu-perfil] ⚠️ Erro ao buscar nome do serviço legado:", error);
+      console.error(
+        "[meu-perfil] ⚠️ Erro ao buscar nome do serviço legado:",
+        error,
+      );
     }
   }
 
@@ -307,9 +316,6 @@ function criarCardVazio(mensagem, historico = false) {
   return card;
 }
 
-
-
-
 async function carregarAgendamentos(uid) {
   if (!containerAgendamentos || !containerHistorico) return;
 
@@ -332,36 +338,45 @@ async function carregarAgendamentos(uid) {
 
   try {
     const agendamentosRef = collection(db, "agendamentos");
-    
+
     // Estratégia: Ler todos e filtrar em JS para evitar problemas com regras de segurança ou índices
     const snapshot = await getDocs(agendamentosRef);
-    console.log(`[meu-perfil] Total de documentos na coleção agendamentos: ${snapshot.size}`);
+    console.log(
+      `[meu-perfil] Total de documentos na coleção agendamentos: ${snapshot.size}`,
+    );
 
     // Combina os resultados e remove duplicatas (se um agendamento tiver ambos os campos)
     const allDocs = {};
     let matchCount = 0;
-    
+
     snapshot.forEach((doc) => {
       const dados = doc.data();
       const clienteId = dados.clienteId || dados.idCliente;
-      
-      console.log(`[DEBUG] Doc ID: ${doc.id}, clienteId: ${clienteId}, uidBusca: ${uidBusca}, Match: ${clienteId === uidBusca}`, dados);
-      
+
+      console.log(
+        `[DEBUG] Doc ID: ${doc.id}, clienteId: ${clienteId}, uidBusca: ${uidBusca}, Match: ${clienteId === uidBusca}`,
+        dados,
+      );
+
       if (clienteId === uidBusca) {
         allDocs[doc.id] = doc;
         matchCount++;
       }
     });
-    
+
     const mergedDocs = Object.values(allDocs);
-    console.log(`[meu-perfil] Encontrados ${mergedDocs.length} agendamentos para o usuário (${matchCount} matches)`);
+    console.log(
+      `[meu-perfil] Encontrados ${mergedDocs.length} agendamentos para o usuário (${matchCount} matches)`,
+    );
 
     if (mergedDocs.length === 0) {
       console.log("[meu-perfil] Nenhum agendamento encontrado");
       console.warn("[DEBUG] INFORMAÇÕES DE DEBUG:");
       console.warn(`   - UID do usuário: ${uidBusca}`);
       console.warn(`   - Total de agendamentos no Firebase: ${snapshot.size}`);
-      console.warn("   - Verifique no Firebase Console se os agendamentos têm o campo 'clienteId' preenchido");
+      console.warn(
+        "   - Verifique no Firebase Console se os agendamentos têm o campo 'clienteId' preenchido",
+      );
       console.warn("   - Lista de todos os agendamentos no Firebase:");
       snapshot.docs.forEach((doc, index) => {
         console.warn(`     [${index}]`, {
@@ -373,7 +388,7 @@ async function carregarAgendamentos(uid) {
           data: doc.data().data,
         });
       });
-      
+
       containerAgendamentos.appendChild(
         criarCardVazio("Nenhum agendamento ativo."),
       );
@@ -382,8 +397,10 @@ async function carregarAgendamentos(uid) {
       );
       return;
     }
-    
-    console.log(`[meu-perfil] Total de agendamentos encontrados: ${mergedDocs.length}`);
+
+    console.log(
+      `[meu-perfil] Total de agendamentos encontrados: ${mergedDocs.length}`,
+    );
 
     // Ordena os agendamentos (ex: por data de criação, do mais recente para o mais antigo)
     mergedDocs.sort((a, b) => {
@@ -436,7 +453,10 @@ async function carregarAgendamentos(uid) {
         agendamentoData.status === "reagendado" ||
         agendamentoData.status === "confirmado"
       ) {
-        console.log("[meu-perfil] Agendamento adicionado à seção ATIVA:", agendamentoData);
+        console.log(
+          "[meu-perfil] Agendamento adicionado à seção ATIVA:",
+          agendamentoData,
+        );
         containerAgendamentos.appendChild(criarCardAtivo(agendamentoData));
       } else if (
         agendamentoData.status === "realizado" ||
@@ -444,10 +464,16 @@ async function carregarAgendamentos(uid) {
         agendamentoData.status === "cancelado_profissional" ||
         agendamentoData.status === "concluido"
       ) {
-        console.log("[meu-perfil] Agendamento adicionado ao HISTÓRICO:", agendamentoData);
+        console.log(
+          "[meu-perfil] Agendamento adicionado ao HISTÓRICO:",
+          agendamentoData,
+        );
         containerHistorico.appendChild(criarCardHistorico(agendamentoData));
       } else {
-        console.warn("[DEBUG] Agendamento não foi exibido - status desconhecido:", agendamentoData);
+        console.warn(
+          "[DEBUG] Agendamento não foi exibido - status desconhecido:",
+          agendamentoData,
+        );
       }
     }
   } catch (error) {
@@ -487,12 +513,20 @@ document.addEventListener("DOMContentLoaded", () => {
         if (clienteDocSnap.exists()) {
           const clienteData = clienteDocSnap.data();
           celularCliente.value = clienteData.telefone || "";
-          console.log("[meu-perfil] Telefone carregado do Firestore:", clienteData.telefone);
+          console.log(
+            "[meu-perfil] Telefone carregado do Firestore:",
+            clienteData.telefone,
+          );
         } else {
-          console.warn("[meu-perfil] Documento clientes/" + user.uid + " não encontrado");
+          console.warn(
+            "[meu-perfil] Documento clientes/" + user.uid + " não encontrado",
+          );
         }
       } catch (error) {
-        console.error("[meu-perfil] Erro ao carregar telefone do Firestore:", error);
+        console.error(
+          "[meu-perfil] Erro ao carregar telefone do Firestore:",
+          error,
+        );
       }
     }
 

@@ -16,7 +16,6 @@ import {
 
 const PENDING_GOOGLE_PHONE_KEY = "pendingPhone";
 
-
 /* ============================================================
    REGISTRATION PAGE - FORM VALIDATION & INTERACTIONS
    ============================================================ */
@@ -403,9 +402,14 @@ function setupGoogleSignup() {
         document.getElementById("phoneInput")?.value.trim() || "",
       );
       sessionStorage.setItem(PENDING_GOOGLE_PHONE_KEY, pendingPhone);
-      console.log("[GOOGLE SIGNUP] Telefone temporário salvo em sessionStorage");
+      console.log(
+        "[GOOGLE SIGNUP] Telefone temporário salvo em sessionStorage",
+      );
     } catch (modalError) {
-      console.log("[GOOGLE SIGNUP] Modal cancelado ou fechado", modalError.message);
+      console.log(
+        "[GOOGLE SIGNUP] Modal cancelado ou fechado",
+        modalError.message,
+      );
       return;
     }
 
@@ -443,7 +447,9 @@ function setupGoogleSignup() {
         userPayload.role = "cliente";
         userPayload.criadoEm = new Date().toISOString();
       } else {
-        console.log("[GOOGLE SIGNUP] Documento já existe - atualizando com merge");
+        console.log(
+          "[GOOGLE SIGNUP] Documento já existe - atualizando com merge",
+        );
       }
 
       try {
