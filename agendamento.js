@@ -413,20 +413,67 @@ async function inicializarAgendamento() {
           duracaoMinutos: parseInt(serviceDuration, 10) || 60,
         };
 
+        // ========================================================================
+        // INÍCIO: LOGS DE AUDITORIA PARA GOOGLE APPS SCRIPT (TEMPORÁRIO)
+        // ========================================================================
+        console.log("===== AUDITORIA DE ENVIO PARA GOOGLE APPS SCRIPT =====");
+
         // URL do Google Apps Script
         const googleScriptUrl =
-          "https://script.google.com/macros/s/AKfycbz8pbdxHEt5QpGZg6_nS25TDFb_kjzqAns3ax9QMgngt2MO81b7gt-NUA_S_hUjI6u_Rw/exec";
+          "https://script.google.com/macros/s/AKfycbzU9mjBQ3-RkHwShSkC6ADsrUiogFbXJs9wt8hn4YphVv7h0VsevtAhU-9fZYmWxHRQqA/exec";
+        console.log(`[AUDITORIA] URL de destino: ${googleScriptUrl}`);
 
-        await fetch(googleScriptUrl, {
-          method: "POST",
-          mode: "no-cors", // Essencial para evitar bloqueio do navegador
-          body: JSON.stringify(payloadWebhook),
-        });
-
+        console.log("[AUDITORIA] Payload completo:", payloadWebhook);
+        console.log("[AUDITORIA] Verificação de Tipos:");
         console.log(
-          "Dados do agendamento enviados para o Google Apps Script:",
-          payloadWebhook,
+          `  - nomeCliente: '${payloadWebhook.nomeCliente}' (tipo: ${typeof payloadWebhook.nomeCliente})`,
         );
+        console.log(
+          `  - servico: '${payloadWebhook.servico}' (tipo: ${typeof payloadWebhook.servico})`,
+        );
+        console.log(
+          `  - dataInicio: '${payloadWebhook.dataInicio}' (tipo: ${typeof payloadWebhook.dataInicio})`,
+        );
+        console.log(
+          `  - duracaoMinutos: ${payloadWebhook.duracaoMinutos} (tipo: ${typeof payloadWebhook.duracaoMinutos})`,
+        );
+
+        console.log("[AUDITORIA] Verificação de Valores Críticos:");
+        console.log(
+          `  - Valor de serviceDuration (antes do parseInt): '${serviceDuration}' (tipo: ${typeof serviceDuration})`,
+        );
+        console.log(
+          `  - Valor final de dataInicio: '${payloadWebhook.dataInicio}'`,
+        );
+        console.log(
+          `  - Valor final de nomeCliente: '${payloadWebhook.nomeCliente}'`,
+        );
+        console.log(
+          "==========================================================",
+        );
+        // ========================================================================
+        // FIM: LOGS DE AUDITORIA
+        // ========================================================================
+
+        try {
+          await fetch(googleScriptUrl, {
+            method: "POST",
+            mode: "no-cors", // Essencial para evitar bloqueio do navegador
+            body: JSON.stringify(payloadWebhook),
+          });
+          console.log(
+            "Dados do agendamento enviados para o Google Apps Script (requisição despachada).",
+          );
+        } catch (fetchError) {
+          console.error(
+            "[AUDITORIA] Ocorreu um erro de REDE ao tentar enviar para o Google Apps Script:",
+            fetchError,
+          );
+          // Adiciona um alerta para o usuário em caso de falha de rede
+          window.alert(
+            "Falha de conexão ao tentar salvar o agendamento. Verifique sua internet e tente novamente.",
+          );
+        }
 
         localStorage.setItem("dataAgendamento", data);
         localStorage.setItem("horaAgendamento", horario);
