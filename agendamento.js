@@ -163,45 +163,74 @@ async function renderizarHorarios(dataIso, servicoDuracao) {
       where("data", "==", String(dataIso).trim()),
     );
     const querySnapshot = await getDocs(q);
+    // ADICIONE ISSO PARA DEBUGAR:
+    console.log(
+      "Data que estamos buscando no Firebase:",
+      String(dataIso).trim(),
+    );
+    console.log("Quantos documentos foram encontrados:", querySnapshot.size);
+
+    querySnapshot.forEach((doc) => {
+      console.log("Documento encontrado:", doc.data());
+    });
 
     const intervalosOcupados = [];
     querySnapshot.forEach((doc) => {
       const data = doc.data();
-      if (
-        data.horario &&
-        (!data.status ||
-          ["agendado", "reagendado", "confirmado"].includes(data.status))
-      ) {
+
+      // Defina os status que realmente ocupam a agenda
+      const statusValidos = ["agendado", "reagendado", "confirmado"];
+
+      // Verifica se tem horário e se o status está na lista de válidos
+      if (data.horario && statusValidos.includes(data.status)) {
         const start = timeToMins(data.horario);
-        intervalosOcupados.push({ start, end: start + (data.duracao || 60) });
+
+        // Se existir data.duracao, usamos. Caso contrário, usamos 90 apenas como fallback para legados.
+        const duracaoDoAgendamento = data.duracao ? Number(data.duracao) : 90;
+
+        intervalosOcupados.push({ start, end: start + duracaoDoAgendamento });
+        console.log(
+          `[DEBUG] Bloqueando horário ${data.horario} (Duração: ${duracaoDoAgendamento} min).`,
+        );
+      } else {
+        console.log(
+          `[DEBUG] Ignorando agendamento ${data.horario} (Status: ${data.status})`,
+        );
       }
     });
 
     const estaLivre = querySnapshot.size === 0;
     const minAbertura = timeToMins("09:00");
     const minFechamento = timeToMins("18:00");
-    const step = 60;
 
     container.innerHTML = "";
     const fragment = document.createDocumentFragment();
 
-    for (let atual = minAbertura; atual < minFechamento; atual += 60) {
+    // Loop de 30 em 30 min para melhor granularidade, usando a duração do serviço
+    for (let atual = minAbertura; atual < minFechamento; atual += 30) {
       const horarioTexto = minsToTime(atual);
-      const fimBloco = atual + 60;
+      const fimBloco = atual + servicoDuracao;
+
+      // Se o serviço terminar após o horário de fechamento, para o loop
+      if (fimBloco > minFechamento) break;
 
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "agendamento-time";
       btn.textContent = horarioTexto;
 
-      let indisponivel =
-        !estaLivre &&
-        intervalosOcupados.some((appt) => {
-          const conflito = atual < appt.end && fimBloco > appt.start;
-          if (conflito)
-            console.log(`Horário ${horarioTexto} bloqueado por conflito.`);
-          return conflito;
-        });
+      // A lógica agora é: ocupado se conflita com agendamento OU se termina após o horário limite
+      // Corrigimos para garantir que o conflito seja detectado corretamente
+      let indisponivel = intervalosOcupados.some((appt) => {
+        const conflito =
+          atual < appt.end && atual + servicoDuracao > appt.start;
+        return conflito;
+      });
+
+      // Se o bloco ultrapassa o limite de funcionamento (ex: 18:00)
+      if (atual + servicoDuracao > minFechamento) {
+        indisponivel = true;
+      }
 
       if (indisponivel) {
         btn.classList.add("horario-ocupado");
@@ -391,6 +420,7 @@ async function inicializarAgendamento() {
         } else {
           const agendamentoData = {
             ...payload,
+            duracao: parseInt(serviceDuration, 10), // AQUI GARANTIMOS O SALVAMENTO
             clienteId: user.uid,
             dataCriacao: serverTimestamp(),
             status: "agendado",
