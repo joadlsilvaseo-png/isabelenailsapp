@@ -1,5 +1,8 @@
 (async function () {
+  console.log("Pedicure.js carregado com sucesso!");
+
   const serviceList = document.querySelector(".pedicure-list");
+  serviceList.style.opacity = "0";
   const nextButton = document.querySelector(".pedicure-button");
   const categoryName = "Pedicure";
   let selectedServiceId = null;
@@ -12,13 +15,7 @@
       import("https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js"),
     ]);
 
-    return {
-      db,
-      collection: firestore.collection,
-      query: firestore.query,
-      where: firestore.where,
-      getDocs: firestore.getDocs,
-    };
+    return { db, firestore };
   }
 
   function clearSelection() {
@@ -57,7 +54,8 @@
 
     const priceText =
       service.preco !== undefined ? `R$ ${service.preco}` : "R$ 180";
-    const durationText = service.duracao !== undefined ? `${service.duracao} min` : "2 horas";
+    const durationText =
+      service.duracao !== undefined ? `${service.duracao} min` : "2 horas";
 
     card.innerHTML = `
       <div class="pedicure-card-text">
@@ -75,7 +73,7 @@
   }
 
   function renderServices(services) {
-    serviceList.innerHTML = "";
+    serviceList.innerHTML = ""; // Isso limpa os cards "fantasmas" do HTML
 
     if (!services.length) {
       serviceList.innerHTML = `
@@ -105,7 +103,6 @@
         alert("Selecione um serviço antes de continuar.");
         return;
       }
-
       event.preventDefault();
       window.location.href = `agendamento.html?id=${selectedServiceId}`;
     });
@@ -113,13 +110,13 @@
 
   async function loadPedicureServices() {
     try {
-      const { db, collection, query, where, getDocs } = await loadFirestore();
-      const servicesRef = collection(db, "servicos");
-      const servicesQuery = query(
+      const { db, firestore } = await loadFirestore();
+      const servicesRef = firestore.collection(db, "servicos");
+      const servicesQuery = firestore.query(
         servicesRef,
-        where("categoria", "==", categoryName),
+        firestore.where("categoria", "==", categoryName),
       );
-      const querySnapshot = await getDocs(servicesQuery);
+      const querySnapshot = await firestore.getDocs(servicesQuery);
 
       const services = querySnapshot.docs.map((doc) => ({
         id: doc.id,
@@ -127,6 +124,8 @@
       }));
 
       renderServices(services);
+      serviceList.style.transition = "opacity 0.5s ease";
+      serviceList.style.opacity = "1";
     } catch (error) {
       console.error("Erro ao carregar serviços de pedicure:", error);
       serviceList.innerHTML = `
@@ -137,6 +136,8 @@
           </div>
         </li>
       `;
+      serviceList.style.transition = "opacity 0.5s ease";
+      serviceList.style.opacity = "1";
     }
   }
 

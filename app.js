@@ -131,5 +131,19 @@
       ".unhas-action-button",
       ".confirmacao-button",
     ]);
+
+    // ADIÇÃO: Proteção para não quebrar a página de pedicure
+    // Se a página for "pedicure", a função initSelectableCards não é chamada automaticamente
+    // para evitar conflito com a lógica do Firebase que você criou no pedicure.js
+    if (document.body.dataset.page === "principal") {
+      // Mantenha aqui as configs que você já usava para os cards da página principal
+      App.initSelectableCards({
+        containerSelector: ".services-list",
+        cardSelector: "li",
+        titleSelector: ".service-label",
+        activeClass: "selected",
+        storageKey: "servicoSelecionado",
+      });
+    }
   });
 })(window, document);

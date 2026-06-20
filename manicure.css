@@ -58,7 +58,7 @@ img {
 .manicure-title {
   font-size: clamp(24px, 6vw, 30px);
   font-weight: 700;
-  color: #F0C1D1;
+  color: #f0c1d1;
   text-align: center;
   flex: 1;
 }
@@ -94,19 +94,22 @@ img {
   flex-direction: column;
   gap: 10px;
   border: 2px solid transparent;
-  transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease,
+    color 0.2s ease;
 }
 
 .manicure-card.selected {
-  border-color: #591C31;
-  background: #591C31;
+  border-color: #591c31;
+  background: #591c31;
 }
 
 .manicure-card.selected .manicure-card-name,
 .manicure-card.selected .manicure-card-price,
 .manicure-card.selected .manicure-card-label,
 .manicure-card.selected .manicure-card-duration {
-  color: #F0C1D1;
+  color: #f0c1d1;
 }
 
 .manicure-card-text {
@@ -161,7 +164,10 @@ img {
   text-decoration: none;
   font-size: 18px;
   font-weight: 600;
-  transition: background 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    background 0.2s ease,
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .manicure-button:hover,
@@ -194,5 +200,9 @@ img {
 
   .manicure-card {
     padding: 16px 14px;
+  }
+  .manicure-list.loading {
+    opacity: 0;
+    transition: opacity 0.3s ease;
   }
 }

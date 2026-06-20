@@ -105,19 +105,22 @@ a {
   flex-direction: column;
   gap: 10px;
   border: 2px solid transparent;
-  transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease,
+    color 0.2s ease;
 }
 
 .unhas-card.selected {
-  border-color: #591C31;
-  background: #591C31;
+  border-color: #591c31;
+  background: #591c31;
 }
 
 .unhas-card.selected .unhas-card-title,
 .unhas-card.selected .unhas-card-price,
 .unhas-card.selected .unhas-card-label,
 .unhas-card.selected .unhas-card-duration {
-  color: #F0C1D1;
+  color: #f0c1d1;
 }
 
 .unhas-card-group {
@@ -172,7 +175,10 @@ a {
   font-size: 18px;
   font-weight: 600;
   box-shadow: var(--shadow);
-  transition: background 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    background 0.2s ease,
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .unhas-action-button:hover,
@@ -210,5 +216,9 @@ a {
 
   .unhas-title {
     font-size: 26px;
+  }
+  .unhas-list.loading {
+    opacity: 0;
+    transition: opacity 0.3s ease;
   }
 }

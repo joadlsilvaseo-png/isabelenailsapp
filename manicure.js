@@ -83,6 +83,7 @@ function renderServices(services) {
 async function loadManicureServices() {
   const serviceList = document.getElementById("lista-servicos");
   if (!serviceList) return;
+  serviceList.style.opacity = "0"; // ADICIONE ESTA LINHA
 
   const servicesRef = collection(db, "servicos");
   const servicesQuery = query(
@@ -98,6 +99,8 @@ async function loadManicureServices() {
     }));
 
     renderServices(services);
+    serviceList.style.transition = "opacity 0.5s ease";
+    serviceList.style.opacity = "1";
   } catch (error) {
     console.error("Erro ao carregar serviços de manicure:", error);
     serviceList.innerHTML = `
@@ -108,6 +111,8 @@ async function loadManicureServices() {
         </div>
       </li>
     `;
+    serviceList.style.transition = "opacity 0.5s ease";
+    serviceList.style.opacity = "1";
   }
 }
 
