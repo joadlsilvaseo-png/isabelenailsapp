@@ -117,6 +117,7 @@ function criarCardAtivo({
   horario,
   id,
   idServico,
+  calendarEventId,
   status: statusAgendamento,
 }) {
   const card = document.createElement("article");
@@ -208,7 +209,23 @@ function criarCardAtivo({
           );
         }
       })();
-
+      try {
+        await fetch(
+          "https://script.google.com/macros/s/AKfycbzU9mjBQ3-RkHwShSkC6ADsrUiogFbXJs9wt8hn4YphVv7h0VsevtAhU-9fZYmWxHRQqA/exec",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              acao: "CANCELAR",
+              eventId: calendarEventId,
+            }),
+          },
+        );
+      } catch (erroGas) {
+        console.error("Erro ao comunicar cancelamento para o GAS:", erroGas);
+      }
       window.alert("Agendamento cancelado com sucesso!");
 
       // Remove imediatamente da tela
@@ -447,6 +464,7 @@ async function carregarAgendamentos(uid) {
         horario: dados.horario || "--:--",
         id: docItem.id,
         idServico: dados.idServico,
+        calendarEventId: dados.calendarEventId || "",
         status: dados.status || "agendado",
       };
 

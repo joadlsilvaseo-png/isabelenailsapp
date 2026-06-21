@@ -51,7 +51,12 @@ async function carregarAgendamentosDoPainel() {
   try {
     const q = query(
       collection(db, "agendamentos"),
-      where("status", "in", ["agendado", "reagendado", "confirmado"]),
+      where("status", "in", [
+        "agendado",
+        "reagendado",
+        "confirmado",
+        "cancelado cliente",
+      ]),
     );
     const querySnapshot = await getDocs(q);
 
@@ -173,7 +178,33 @@ async function carregarAgendamentosDoPainel() {
         if (!confirmDelete) return;
 
         try {
-          // AÇÃO EXPLÍCITA: Registro do motivo do cancelamento
+          // Pegamos o ID diretamente do objeto original do documento
+          const idParaCancelar = documentoOf.data().calendarEventId;
+
+          console.log("Debug - Dados enviados para o GAS:", {
+            acao: "CANCELAR",
+            eventId: idParaCancelar,
+          });
+
+          // 1. DISPARA PARA O GOOGLE CALENDAR
+          if (idParaCancelar) {
+            await fetch(
+              "https://script.google.com/macros/s/AKfycbzU9mjBQ3-RkHwShSkC6ADsrUiogFbXJs9wt8hn4YphVv7h0VsevtAhU-9fZYmWxHRQqA/exec",
+              {
+                method: "POST",
+                mode: "no-cors",
+                body: JSON.stringify({
+                  acao: "CANCELAR",
+                  eventId: idParaCancelar,
+                }),
+              },
+            );
+            console.log("Cancelamento enviado ao Google Calendar!");
+
+            console.log("Cancelamento enviado ao Google Calendar!");
+          }
+
+          // 2. AÇÃO NO FIREBASE: Registro do cancelamento
           await updateDoc(doc(db, "agendamentos", documentoOf.id), {
             status: "cancelado_profissional",
           });

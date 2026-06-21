@@ -405,6 +405,17 @@ async function inicializarAgendamento() {
         return;
       }
 
+      const idEvento = "evt_" + Math.random().toString(36).substr(2, 9);
+
+      const payloadWebhook = {
+        acao: "AGENDAR",
+        nomeCliente,
+        servico,
+        dataInicio: `${data}T${horario}:00`,
+        duracaoMinutos: parseInt(serviceDuration, 10) || 60,
+        eventId: idEvento,
+      };
+
       const payload = {
         nomeCliente,
         servico,
@@ -412,6 +423,8 @@ async function inicializarAgendamento() {
         horario,
         observacoes,
         idServico: serviceId || null,
+        calendarEventId: idEvento, // Incluímos aqui para simplificar
+        duracao: parseInt(serviceDuration, 10),
       };
 
       try {
@@ -420,28 +433,12 @@ async function inicializarAgendamento() {
         } else {
           const agendamentoData = {
             ...payload,
-            duracao: parseInt(serviceDuration, 10), // AQUI GARANTIMOS O SALVAMENTO
             clienteId: user.uid,
             dataCriacao: serverTimestamp(),
             status: "agendado",
           };
-          console.log(
-            "[agendamento] Salvando novo agendamento com dados:",
-            agendamentoData,
-          );
           await addDoc(collection(db, "agendamentos"), agendamentoData);
-          console.log(
-            "[agendamento] ✅ Agendamento salvo com sucesso para clienteId:",
-            user.uid,
-          );
         }
-
-        const payloadWebhook = {
-          nomeCliente,
-          servico,
-          dataInicio: `${data}T${horario}:00`,
-          duracaoMinutos: parseInt(serviceDuration, 10) || 60,
-        };
 
         // ========================================================================
         // INÍCIO: LOGS DE AUDITORIA PARA GOOGLE APPS SCRIPT (TEMPORÁRIO)
