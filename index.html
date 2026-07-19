@@ -3,8 +3,11 @@
 
 <head>
   <meta charset="UTF-8">
+
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Isabele Mariana Nails - Criando Tendências & Realizando Sonhos">
+
+  <meta name="description" content="Isabele Mariana Nails — agende seus serviços de manicure, pedicure e unhas em gel.">
+
   <meta name="theme-color" content="#591c31">
 
   <meta name="mobile-web-app-capable" content="yes">
@@ -15,46 +18,150 @@
 
   <meta name="apple-mobile-web-app-title" content="IM Nails">
 
+  <meta property="og:title" content="Isabele Mariana Nails">
+
+  <meta property="og:description" content="Criando tendências e realizando sonhos.">
+
+  <meta property="og:type" content="website">
+
+  <title>Isabele Mariana Nails</title>
+
   <link rel="manifest" href="./manifest.json">
 
   <link rel="icon" type="image/png" href="./assets/favicon.png">
 
   <link rel="apple-touch-icon" href="./assets/apple-touch-icon.png">
-  <meta property="og:title" content="Isabele Mariana Nails">
-  <meta property="og:description" content="Criando Tendências & Realizando Sonhos">
-  <meta property="og:type" content="website">
-  <title>Isabele Mariana Nails</title>
-  <link rel="stylesheet" href="base.css">
-  <link rel="stylesheet" href="index.css">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="base.css?v=1.0.4">
+
+  <link rel="stylesheet" href="index.css?v=2.0.0">
 </head>
 
 <body data-page="landing">
+
   <div class="app-container">
+
+    <span class="landing-decoration landing-decoration--top" aria-hidden="true"></span>
+
+    <span class="landing-decoration landing-decoration--middle" aria-hidden="true"></span>
+
+    <span class="landing-decoration landing-decoration--bottom" aria-hidden="true"></span>
+
     <main class="landing-main">
+
       <header class="landing-header">
-        <div class="landing-logo-wrapper">
-          <img src="./assets/logo-isabele-mariana.png" alt="Logo Isabele Mariana Nails - IM com ícone de unhas" class="landing-logo" loading="lazy" width="239" height="167">
+
+        <div class="landing-brand-badge">
+          <span class="landing-brand-badge-dot" aria-hidden="true"></span>
+
+          <span>Beleza e cuidado em cada detalhe</span>
         </div>
+
+        <div class="landing-logo-card">
+
+          <span class="landing-logo-glow" aria-hidden="true"></span>
+
+          <div class="landing-logo-wrapper">
+            <img src="./assets/logo-isabele-mariana.png" alt="Logo Isabele Mariana Nails" class="landing-logo" width="239" height="167">
+          </div>
+
+          <div class="landing-logo-detail">
+            <span aria-hidden="true"></span>
+            <strong>Isabele Mariana Nails</strong>
+            <span aria-hidden="true"></span>
+          </div>
+
+        </div>
+
       </header>
 
-      <section class="landing-content">
-        <h1 class="landing-tagline">Criando Tendências &amp; Realizando Sonhos</h1>
+      <section class="landing-content" aria-labelledby="landing-title">
+        <span class="landing-eyebrow">
+          Seu momento de cuidado
+        </span>
+
+        <h1 id="landing-title" class="landing-tagline">
+          Criando tendências,
+          <span>realizando sonhos.</span>
+        </h1>
+
+        <p class="landing-description">
+          Escolha seu serviço, encontre o melhor horário e cuide
+          de você com praticidade.
+        </p>
+
+        <div class="landing-features" aria-label="Benefícios">
+          <span>
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M6.5 12.5L10.2 16L17.5 8.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+
+            Agendamento online
+          </span>
+
+          <span>
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M6.5 12.5L10.2 16L17.5 8.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+
+            Atendimento personalizado
+          </span>
+        </div>
       </section>
 
-      <nav class="landing-nav" aria-label="Navegação principal">
+      <nav class="landing-nav" aria-label="Acesso ao aplicativo">
         <a href="login.html" class="landing-button landing-button--primary" data-action="login">
-          Login
+          <span class="landing-button-content">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.8" />
+
+              <path d="M5 21C5 17.1 8.1 14 12 14C15.9 14 19 17.1 19 21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+            </svg>
+
+            <span>Entrar na minha conta</span>
+          </span>
+
+          <svg class="landing-button-arrow" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M9 18L15 12L9 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
         </a>
+
         <a href="registro.html" class="landing-button landing-button--secondary" data-action="signup">
-          Registre-se
+          <span class="landing-button-content">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" />
+            </svg>
+
+            <span>Criar minha conta</span>
+          </span>
         </a>
       </nav>
+
+      <footer class="landing-footer">
+        <span aria-hidden="true"></span>
+
+        <p>
+          Isabele Mariana Nails
+        </p>
+
+        <span aria-hidden="true"></span>
+      </footer>
+
     </main>
   </div>
-  <script type="module" src="analytics.js"></script>
-  <script src="index.js" defer></script>
-  <script src="app.js" defer></script>
-</body>
 
+  <script type="module" src="analytics.js?v=1.0.1"></script>
+
+  <script src="index.js?v=1.0.1" defer></script>
+
+  <script src="app.js?v=2.0.0" defer></script>
+
+</body>
 
 </html>

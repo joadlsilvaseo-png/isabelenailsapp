@@ -4,17 +4,26 @@
 // ======================================================
 
 const CACHE_PREFIX = "im-nails";
-const CACHE_VERSION = "v1";
+const CACHE_VERSION = "v3";
 const STATIC_CACHE = `${CACHE_PREFIX}-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `${CACHE_PREFIX}-runtime-${CACHE_VERSION}`;
 
 const APP_SHELL = [
   "./",
   "./index.html",
+  "./login.html",
+  "./registro.html",
+
   "./manifest.json",
+
   "./base.css",
   "./index.css",
+  "./login.css",
+  "./registro.css",
+
   "./index.js",
+  "./login.js",
+  "./registro.js",
   "./app.js",
 
   "./assets/favicon.png",
