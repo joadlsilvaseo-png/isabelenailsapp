@@ -1,235 +1,927 @@
 :root {
-  --bg-page: #581f31;
-  --bg-card: #f6edf1;
-  --bg-panel: #f8eaf0;
-  --border-soft: rgba(88, 31, 49, 0.18);
-  --text-dark: #5f243f;
-  --text-muted: #8b536a;
-  --text-light: #ffffff;
-  --accent: #c77c92;
-  --accent-dark: #b16a83;
-  --radius-card: 32px;
-  --radius-pill: 22px;
-  --shadow-soft: 0 16px 32px rgba(0, 0, 0, 0.12);
+  --booking-dark: #591c31;
+  --booking-primary: #7c334c;
+  --booking-secondary: #934761;
+  --booking-medium: #a8617b;
+  --booking-soft: #f0c1d1;
+
+  --booking-white: #ffffff;
+  --booking-card: #fffafb;
+  --booking-card-soft: #fff0f5;
+
+  --booking-text: #591c31;
+  --booking-text-muted: #8a5a6a;
+
+  --booking-border: rgba(89, 28, 49, 0.1);
+
+  --booking-shadow: 0 8px 20px rgba(66, 18, 35, 0.11);
+
+  --booking-shadow-strong: 0 14px 30px rgba(66, 18, 35, 0.17);
+}
+
+html,
+body {
+  width: 100%;
+  min-height: 100%;
+  overflow-x: hidden;
 }
 
 body {
+  min-height: 100vh;
+
   font-family: "Poppins", sans-serif;
-  background-color: var(--bg-page);
-  color: var(--text-dark);
-  -webkit-font-smoothing: antialiased;
+
+  color: var(--booking-text);
+  background: var(--booking-dark);
 }
 
 button,
+input,
 textarea {
   font: inherit;
 }
 
 button {
-  border: none;
-  cursor: pointer;
-}
-
-img {
-  display: block;
-  max-width: 100%;
-  height: auto;
+  border: 0;
 }
 
 .app-container {
+  width: 100%;
   max-width: 480px;
+
   min-height: 100vh;
+  min-height: 100svh;
+
   margin: 0 auto;
-  padding: 20px 16px 24px;
+
+  padding: max(16px, env(safe-area-inset-top)) 16px
+    max(28px, env(safe-area-inset-bottom));
+
+  background: linear-gradient(180deg, #591c31 0%, #a8617b 100%);
 }
 
+/* Cabeçalho */
+
 .agendamento-header {
-  padding-bottom: 18px;
+  width: 100%;
+  margin-bottom: 18px;
 }
 
 .agendamento-nav {
-  display: flex;
+  width: 100%;
+  min-height: 44px;
+
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) 42px;
   align-items: center;
-  justify-content: space-between;
+  gap: 12px;
 }
 
 .agendamento-nav-link {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-light);
-  text-decoration: none;
-  background: none;
-  border: none;
-  padding: 6px;
-  border-radius: 0;
+  width: 42px;
+  height: 42px;
+
+  display: grid;
+  place-items: center;
+
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 13px;
+
+  color: var(--booking-white);
+  background: rgba(255, 255, 255, 0.09);
+
+  box-shadow: 0 5px 14px rgba(45, 8, 21, 0.12);
+
+  transition:
+    transform 0.2s ease,
+    background-color 0.2s ease;
+}
+
+.agendamento-nav-link:hover,
+.agendamento-nav-link:focus-visible {
+  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.agendamento-nav-link svg {
+  width: 20px;
+  height: 20px;
 }
 
 .agendamento-title {
+  min-width: 0;
   margin: 0;
-  font-size: 1.15rem;
-  font-weight: 700;
-  color: #f0c1d1;
+
+  overflow: hidden;
+
+  font-size: 16px;
+  font-weight: 600;
   text-align: center;
-  flex: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  color: var(--booking-white);
 }
 
+/* Estrutura */
+
 .agendamento-main {
+  width: 100%;
+  min-width: 0;
+
   display: grid;
   gap: 18px;
 }
 
-.agendamento-panel {
-  padding: 22px 18px 24px;
-  border-radius: 42px;
-  background: var(--bg-card);
-  box-shadow: var(--shadow-soft);
+/* Resumo do serviço */
+
+.agendamento-service-card {
+  width: 100%;
+  padding: 16px;
+
+  display: flex;
+  align-items: center;
+  gap: 13px;
+
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 21px;
+
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.14),
+    rgba(255, 255, 255, 0.06)
+  );
+
+  box-shadow: 0 10px 24px rgba(45, 8, 21, 0.13);
+
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
-.agendamento-calendar {
+.agendamento-service-icon {
+  width: 52px;
+  height: 52px;
+  flex-shrink: 0;
+
+  display: grid;
+  place-items: center;
+
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 16px;
+
+  color: var(--booking-white);
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.agendamento-service-icon svg {
+  width: 27px;
+  height: 27px;
+}
+
+.agendamento-service-content {
+  min-width: 0;
+  flex: 1;
+}
+
+.agendamento-eyebrow {
+  display: block;
+  margin-bottom: 4px;
+
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.agendamento-service-card .agendamento-eyebrow {
+  color: var(--booking-soft);
+}
+
+.agendamento-service-card h2 {
+  margin: 0;
+
+  overflow: hidden;
+
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  color: var(--booking-white);
+}
+
+.agendamento-service-meta {
+  margin-top: 6px;
+
   display: flex;
-  justify-content: space-between;
-  gap: 10px;
+  align-items: center;
   flex-wrap: wrap;
+  gap: 6px;
+
+  font-size: 9.5px;
+
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.agendamento-service-meta strong {
+  font-weight: 600;
+  color: var(--booking-white);
+}
+
+/* Painel principal */
+
+.agendamento-panel {
+  width: 100%;
+  min-width: 0;
+  padding: 18px;
+
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: 23px;
+
+  background: rgba(255, 250, 252, 0.98);
+
+  box-shadow: 0 12px 28px rgba(66, 18, 35, 0.16);
+}
+
+.agendamento-panel-header {
+  margin-bottom: 21px;
+}
+
+.agendamento-panel-header .agendamento-eyebrow {
+  color: var(--booking-secondary);
+}
+
+.agendamento-panel-header h2 {
+  margin: 0;
+
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.3;
+
+  color: var(--booking-dark);
+}
+
+.agendamento-panel-header p {
+  margin: 7px 0 0;
+
+  font-size: 10.5px;
+  line-height: 1.55;
+
+  color: var(--booking-text-muted);
+}
+
+/* Etapas */
+
+.agendamento-step {
+  width: 100%;
+  min-width: 0;
+}
+
+.agendamento-step-heading {
+  margin-bottom: 14px;
+
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.agendamento-step-number {
+  width: 33px;
+  height: 33px;
+  flex-shrink: 0;
+
+  display: grid;
+  place-items: center;
+
+  border-radius: 11px;
+
+  font-size: 11px;
+  font-weight: 700;
+
+  color: var(--booking-white);
+  background: var(--booking-primary);
+
+  box-shadow: 0 6px 14px rgba(89, 28, 49, 0.16);
+}
+
+.agendamento-step-content {
+  min-width: 0;
+  flex: 1;
+}
+
+.agendamento-step-label {
+  display: block;
+
+  font-size: 8.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+
+  color: var(--booking-text-muted);
+}
+
+.agendamento-step-content h3 {
+  margin: 1px 0 0;
+
+  font-size: 14px;
+  font-weight: 700;
+
+  color: var(--booking-dark);
+}
+
+.agendamento-month-label,
+.agendamento-availability {
+  flex-shrink: 0;
+  padding: 6px 9px;
+
+  border-radius: 10px;
+
+  font-size: 9px;
+  font-weight: 600;
+
+  color: var(--booking-primary);
+  background: rgba(240, 193, 209, 0.34);
+}
+
+.agendamento-divider {
+  width: 100%;
+  height: 1px;
+  margin: 22px 0;
+
+  background: rgba(89, 28, 49, 0.08);
+}
+
+/* Calendário horizontal */
+
+.agendamento-calendar {
+  width: 100%;
+  padding: 2px 1px 8px;
+
+  display: flex;
+  gap: 9px;
+
+  overflow-x: auto;
+  overflow-y: hidden;
+
+  scrollbar-width: none;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior-inline: contain;
+}
+
+.agendamento-calendar::-webkit-scrollbar {
+  display: none;
 }
 
 .agendamento-date {
-  flex: 1 1 0;
-  min-width: 58px;
-  min-height: 84px;
-  padding: 12px 8px;
-  border-radius: 24px;
-  background: #f9f0f3;
-  border: 1px solid transparent;
-  color: var(--text-dark);
-  text-align: center;
+  position: relative;
+
+  width: 64px;
+  min-width: 64px;
+  min-height: 86px;
+  padding: 10px 7px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  border: 1px solid rgba(89, 28, 49, 0.08);
+  border-radius: 17px;
+
+  color: var(--booking-text);
+  background: var(--booking-card-soft);
+
+  scroll-snap-align: start;
+
+  transition:
+    transform 0.2s ease,
+    color 0.2s ease,
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
-.agendamento-date--active {
-  background: var(--accent);
-  color: #ffffff;
-  border-color: rgba(183, 124, 146, 0.28);
-  box-shadow: 0 18px 24px rgba(183, 124, 146, 0.18);
-}
+.agendamento-date:hover,
+.agendamento-date:focus-visible {
+  transform: translateY(-2px);
 
-.agendamento-date-day {
-  display: block;
-  font-size: 1rem;
-  font-weight: 700;
+  border-color: rgba(124, 51, 76, 0.22);
 }
 
 .agendamento-date-label {
-  display: block;
-  margin-top: 6px;
-  font-size: 0.85rem;
-  color: var(--text-muted);
+  order: 1;
+
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+
+  color: var(--booking-text-muted);
 }
 
-.agendamento-section-title {
-  margin: 28px 0 14px;
-  text-align: center;
-  font-size: 1.05rem;
-  font-weight: 600;
-  color: var(--text-dark);
+.agendamento-date-day {
+  order: 2;
+  margin: 3px 0 1px;
+
+  font-size: 21px;
+  font-weight: 700;
+  line-height: 1;
+
+  color: var(--booking-dark);
 }
+
+.agendamento-date-month {
+  order: 3;
+
+  font-size: 8.5px;
+  font-weight: 500;
+  text-transform: uppercase;
+
+  color: var(--booking-text-muted);
+}
+
+.agendamento-date--active {
+  border-color: var(--booking-primary);
+
+  color: var(--booking-white);
+  background: var(--booking-primary);
+
+  box-shadow: 0 9px 19px rgba(89, 28, 49, 0.23);
+}
+
+.agendamento-date--active .agendamento-date-label,
+.agendamento-date--active .agendamento-date-day,
+.agendamento-date--active .agendamento-date-month {
+  color: var(--booking-white);
+}
+
+.agendamento-date--today::after {
+  content: "Hoje";
+
+  position: absolute;
+  top: -5px;
+  right: -5px;
+
+  padding: 3px 5px;
+
+  border: 2px solid var(--booking-card);
+  border-radius: 7px;
+
+  font-size: 7px;
+  font-weight: 700;
+
+  color: var(--booking-dark);
+  background: var(--booking-soft);
+}
+
+.agendamento-selected-date {
+  min-height: 37px;
+  margin-top: 6px;
+  padding: 0 11px;
+
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  border: 1px solid rgba(89, 28, 49, 0.08);
+  border-radius: 11px;
+
+  font-size: 9.5px;
+  font-weight: 500;
+
+  color: var(--booking-text-muted);
+  background: rgba(255, 240, 245, 0.55);
+}
+
+.agendamento-selected-date svg {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+
+  color: var(--booking-secondary);
+}
+
+/* Legenda */
+
+.agendamento-time-legend {
+  margin-bottom: 13px;
+
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 13px;
+
+  font-size: 8.5px;
+
+  color: var(--booking-text-muted);
+}
+
+.agendamento-time-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.legend-dot {
+  width: 7px;
+  height: 7px;
+
+  display: inline-block;
+
+  border-radius: 50%;
+}
+
+.legend-dot--available {
+  background: var(--booking-secondary);
+}
+
+.legend-dot--occupied {
+  background: #cfc6c9;
+}
+
+/* Grupos de horários */
 
 .agendamento-times {
+  width: 100%;
+  min-width: 0;
+
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.agendamento-period {
+  width: 100%;
+  min-width: 0;
+}
+
+.agendamento-period-heading {
+  margin-bottom: 9px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 12px;
 }
 
+.agendamento-period-heading strong {
+  font-size: 10px;
+  font-weight: 700;
+
+  color: var(--booking-dark);
+}
+
+.agendamento-period-heading span {
+  font-size: 8.5px;
+
+  color: var(--booking-text-muted);
+}
+
+.agendamento-time-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
 .agendamento-time {
-  min-height: 44px;
-  border-radius: 18px;
-  background: #f2d5df;
-  color: var(--text-dark);
-  border: 1px solid transparent;
-  box-shadow: 0 10px 18px rgba(183, 124, 146, 0.12);
+  min-width: 0;
+  min-height: 42px;
+  padding: 0 8px;
+
+  border: 1px solid rgba(89, 28, 49, 0.09);
+  border-radius: 12px;
+
+  font-size: 10px;
+  font-weight: 600;
+
+  color: var(--booking-primary);
+  background: var(--booking-card-soft);
+
+  transition:
+    transform 0.2s ease,
+    color 0.2s ease,
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
-/* Estilo para horários ocupados/indisponíveis */
-.agendamento-time.horario-ocupado {
-  background: #e0e0e0; /* Um cinza claro para indicar indisponibilidade */
-  color: #a0a0a0; /* Texto mais claro */
-  cursor: not-allowed; /* Cursor de proibido */
-  box-shadow: none; /* Remove a sombra para diferenciar */
-  border-color: #d0d0d0; /* Borda mais suave */
-}
+.agendamento-time:not(:disabled):hover,
+.agendamento-time:not(:disabled):focus-visible {
+  transform: translateY(-1px);
 
-.agendamento-time.horario-ocupado:hover,
-.agendamento-time.horario-ocupado:active {
-  transform: none; /* Remove efeitos de hover/active para slots desabilitados */
+  border-color: rgba(124, 51, 76, 0.25);
 }
 
 .agendamento-time--active {
-  background: var(--accent-dark);
-  color: #ffffff;
+  border-color: var(--booking-primary);
+
+  color: var(--booking-white);
+  background: var(--booking-primary);
+
+  box-shadow: 0 7px 15px rgba(89, 28, 49, 0.2);
 }
 
+.agendamento-time.horario-ocupado {
+  cursor: not-allowed;
+
+  border-color: rgba(89, 28, 49, 0.04);
+
+  color: #aaa1a4;
+  background: #ede9ea;
+
+  box-shadow: none;
+  opacity: 0.74;
+}
+
+.agendamento-loading,
+.agendamento-time-state {
+  width: 100%;
+  padding: 22px 15px;
+
+  border: 1px dashed rgba(89, 28, 49, 0.14);
+  border-radius: 15px;
+
+  font-size: 10px;
+  line-height: 1.5;
+  text-align: center;
+
+  color: var(--booking-text-muted);
+  background: rgba(255, 240, 245, 0.52);
+}
+
+.agendamento-loading::before {
+  content: "";
+
+  width: 19px;
+  height: 19px;
+  margin: 0 auto 9px;
+
+  display: block;
+
+  border: 2px solid rgba(124, 51, 76, 0.18);
+  border-top-color: var(--booking-primary);
+  border-radius: 50%;
+
+  animation: booking-spin 0.8s linear infinite;
+}
+
+/* Formulário */
+
+.agendamento-form {
+  display: grid;
+  gap: 17px;
+}
+
+.agendamento-input-group,
 .agendamento-comments {
   display: grid;
-  gap: 10px;
-  margin-top: 22px;
+  gap: 7px;
 }
 
 .agendamento-label {
-  font-size: 0.95rem;
+  padding-left: 2px;
+
+  font-size: 9.5px;
   font-weight: 600;
-  color: var(--text-dark);
+
+  color: var(--booking-dark);
+}
+
+.agendamento-label span {
+  margin-left: 4px;
+
+  font-size: 8px;
+  font-weight: 500;
+
+  color: var(--booking-text-muted);
+}
+
+.agendamento-input-wrapper {
+  position: relative;
+
+  display: flex;
+  align-items: center;
+}
+
+.agendamento-input-icon {
+  position: absolute;
+  left: 13px;
+  z-index: 2;
+
+  width: 19px;
+  height: 19px;
+
+  display: grid;
+  place-items: center;
+
+  color: var(--booking-secondary);
+  pointer-events: none;
+}
+
+.agendamento-input-icon svg {
+  width: 17px;
+  height: 17px;
+}
+
+.agendamento-input,
+.agendamento-textarea {
+  width: 100%;
+  min-width: 0;
+
+  border: 1px solid rgba(89, 28, 49, 0.11);
+  outline: none;
+
+  font-size: 10.5px;
+  font-weight: 400;
+
+  color: var(--booking-dark);
+  background: var(--booking-white);
+
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.agendamento-input {
+  min-height: 47px;
+  padding: 0 14px 0 42px;
+
+  border-radius: 14px;
 }
 
 .agendamento-textarea {
-  width: 100%;
-  min-height: 120px;
-  padding: 16px;
-  border-radius: 24px;
-  border: 1px solid var(--border-soft);
-  background: #ffffff;
-  color: var(--text-dark);
+  min-height: 112px;
+  padding: 13px 14px;
+
+  border-radius: 15px;
+
+  line-height: 1.55;
   resize: vertical;
 }
 
-.agendamento-textarea::placeholder {
-  color: #a96a87;
+.agendamento-input:focus,
+.agendamento-textarea:focus {
+  border-color: rgba(124, 51, 76, 0.46);
+
+  box-shadow: 0 0 0 3px rgba(124, 51, 76, 0.08);
 }
 
+.agendamento-input::placeholder,
+.agendamento-textarea::placeholder {
+  color: rgba(89, 28, 49, 0.4);
+}
+
+.agendamento-helper {
+  padding-left: 2px;
+
+  font-size: 8.5px;
+  line-height: 1.45;
+
+  color: var(--booking-text-muted);
+}
+
+/* Rodapé */
+
 .agendamento-footer {
-  margin-top: 22px;
+  position: sticky;
+  bottom: 10px;
+  z-index: 20;
+
+  width: 100%;
+  margin-top: 23px;
+  padding: 12px;
+
+  border: 1px solid rgba(89, 28, 49, 0.08);
+  border-radius: 18px;
+
+  background: rgba(255, 250, 252, 0.96);
+
+  box-shadow: 0 12px 27px rgba(66, 18, 35, 0.16);
+
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.agendamento-summary {
+  margin-bottom: 10px;
+}
+
+.agendamento-summary .agendamento-eyebrow {
+  color: var(--booking-secondary);
+}
+
+.agendamento-summary strong {
+  display: block;
+
+  overflow: hidden;
+
+  font-size: 12px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  color: var(--booking-dark);
+}
+
+.agendamento-summary p {
+  margin: 4px 0 0;
+
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+
+  font-size: 9px;
+
+  color: var(--booking-text-muted);
 }
 
 .agendamento-button {
   width: 100%;
-  min-height: 52px;
-  border-radius: 24px;
-  background: #ffffff;
-  color: var(--text-dark);
-  font-size: 1rem;
-  font-weight: 700;
-  border: 1px solid var(--accent-dark);
+  min-height: 49px;
+  padding: 0 15px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  border-radius: 14px;
+
+  font-size: 11px;
+  font-weight: 600;
+  text-align: left;
+
+  color: var(--booking-white);
+  background: var(--booking-primary);
+
+  box-shadow: 0 7px 17px rgba(89, 28, 49, 0.2);
+
+  transition:
+    transform 0.2s ease,
+    background-color 0.2s ease,
+    box-shadow 0.2s ease,
+    opacity 0.2s ease;
+}
+
+.agendamento-button::after {
+  content: "›";
+
+  font-size: 22px;
+  font-weight: 300;
+  line-height: 1;
+}
+
+.agendamento-button:not(:disabled):hover,
+.agendamento-button:not(:disabled):focus-visible {
+  transform: translateY(-1px);
+
+  box-shadow: 0 10px 21px rgba(89, 28, 49, 0.25);
+}
+
+.agendamento-button:disabled {
+  cursor: not-allowed;
+
+  color: rgba(89, 28, 49, 0.43);
+  background: rgba(240, 193, 209, 0.55);
+
+  box-shadow: none;
+}
+
+.agendamento-button--disabled::after {
+  display: none;
+}
+
+@keyframes booking-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @media (max-width: 380px) {
   .app-container {
-    padding: 18px 14px 20px;
+    padding-left: 14px;
+    padding-right: 14px;
   }
 
   .agendamento-panel {
-    padding: 20px 16px 22px;
+    padding: 15px;
   }
 
-  .agendamento-times {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .agendamento-service-card {
+    padding: 14px;
+  }
+
+  .agendamento-service-icon {
+    width: 48px;
+    height: 48px;
+  }
+
+  .agendamento-time-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 340px) {
-  .agendamento-calendar {
-    gap: 8px;
-  }
-
-  .agendamento-date {
-    min-height: 72px;
-    padding: 10px 6px;
+  .agendamento-time-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

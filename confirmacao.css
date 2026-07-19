@@ -1,110 +1,644 @@
-:root{
-  --bg-app: #591c31;
-  --surface: #f7f3f6;
-  --accent: #7c334c;
-  --muted: #8b536a;
-  --white: #ffffff;
-  --radius: 28px;
-  --shadow: 0 18px 36px rgba(0,0,0,0.14);
+:root {
+  --confirmacao-dark: #591c31;
+  --confirmacao-primary: #7c334c;
+  --confirmacao-secondary: #934761;
+  --confirmacao-medium: #a8617b;
+  --confirmacao-soft: #f0c1d1;
+
+  --confirmacao-white: #ffffff;
+  --confirmacao-card: #fffafb;
+  --confirmacao-card-soft: #fff0f5;
+
+  --confirmacao-text: #591c31;
+  --confirmacao-text-muted: #8a5a6a;
+
+  --confirmacao-border: rgba(89, 28, 49, 0.1);
+
+  --confirmacao-shadow: 0 8px 20px rgba(66, 18, 35, 0.11);
+
+  --confirmacao-shadow-strong: 0 14px 30px rgba(66, 18, 35, 0.17);
 }
 
-*{box-sizing:border-box}
-html,body{margin:0;min-height:100%}
-body{
+html,
+body {
+  width: 100%;
+  min-height: 100%;
+  overflow-x: hidden;
+}
+
+body {
+  min-height: 100vh;
+
   font-family: "Poppins", sans-serif;
-  background: linear-gradient(180deg,var(--bg-app) 0%, #7c334c 40%, #ffd9e7 100%);
-  color:var(--accent);
-  -webkit-font-smoothing:antialiased;
+
+  color: var(--confirmacao-text);
+  background: var(--confirmacao-dark);
 }
 
-.app-container{
-  max-width:480px;
-  min-height:100vh;
-  margin:0 auto;
-  padding:20px 16px 24px;
+button,
+a {
+  font: inherit;
 }
 
-.confirmacao-header{padding-bottom:18px}
-.confirmacao-nav{display:flex;align-items:center;justify-content:space-between;gap:12px}
-.confirmacao-nav-link{
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  color:var(--white);
-  text-decoration:none;
-  background:none;
-  border:none;
-  padding:6px;
-  border-radius:0;
-}
-.confirmacao-title{margin:0;font-weight:700;font-size:1.1rem;color:#F0C1D1;text-align:center;flex:1}
-
-.confirmacao-main{display:grid;gap:20px}
-
-.confirmacao-card{background:var(--surface);border-radius:42px;padding:26px 20px;box-shadow:var(--shadow);text-align:center}
-.confirmacao-icon{margin:6px auto 10px}
-.confirmacao-headline{margin:6px 0 6px;font-size:1.25rem;color:var(--accent)}
-.confirmacao-text{margin:0 0 16px;color:var(--muted)}
-
-.confirmacao-details{list-style:none;padding:0;margin:0 0 18px;border-radius:24px;overflow:hidden;background:linear-gradient(180deg,#fff,#fbf8fb);box-shadow:0 8px 20px rgba(124,51,76,0.06)}
-.detalhe-row{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;gap:12px;border-bottom:1px solid rgba(124,51,76,0.1)}
-.detalhe-row:last-child{border-bottom:none}
-.detalhe-label{font-weight:600;color:var(--muted);font-size:0.95rem}
-.detalhe-value{font-weight:700;color:var(--accent);text-align:right;max-width:65%;word-break:break-word}
-.detalhe-row--observacoes{align-items:flex-start}
-.detalhe-value--multiline{display:block;white-space:pre-wrap;word-break:break-word}
-
-.confirmacao-actions{
-  display:grid;
-  gap:14px;
-  margin-top:16px;
-}
-.confirmacao-button{display:inline-flex;width:100%;min-height:52px;align-items:center;justify-content:center;color:var(--white);text-decoration:none;border-radius:20px;font-weight:700}
-
- #btn-whatsapp {
-   background-color: #25D366;
-   color: #FFFFFF;
-   padding: 0 18px;
-   border-radius: 20px;
-   min-height: 52px;
-   transition: background-color 0.3s ease;
- }
-
- #btn-whatsapp:hover {
-   background-color: #20BA56;
- }
-
-/* Botão secundário (Voltar para o Início) mantém a cor bordô/rosa original */
-.confirmacao-button--secondary{
-  background: var(--accent);
-  color: var(--white);
+button {
+  border: 0;
 }
 
-/* Efeito de flutuar (hover/active) semelhante ao restante do site */
-.confirmacao-button{
-  transition: transform var(--transition-fast), box-shadow var(--transition-fast), background-color var(--transition-fast);
+.app-container {
+  width: 100%;
+  max-width: 480px;
+
+  min-height: 100vh;
+  min-height: 100svh;
+
+  margin: 0 auto;
+
+  padding: max(16px, env(safe-area-inset-top)) 16px
+    max(28px, env(safe-area-inset-bottom));
+
+  background: linear-gradient(180deg, #591c31 0%, #a8617b 100%);
 }
+
+/* Cabeçalho */
+
+.confirmacao-header {
+  width: 100%;
+  margin-bottom: 18px;
+}
+
+.confirmacao-nav {
+  width: 100%;
+  min-height: 44px;
+
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) 42px;
+  align-items: center;
+  gap: 12px;
+}
+
+.confirmacao-nav-link {
+  width: 42px;
+  height: 42px;
+
+  display: grid;
+  place-items: center;
+
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 13px;
+
+  color: var(--confirmacao-white);
+  background: rgba(255, 255, 255, 0.09);
+
+  box-shadow: 0 5px 14px rgba(45, 8, 21, 0.12);
+
+  transition:
+    transform 0.2s ease,
+    background-color 0.2s ease;
+}
+
+.confirmacao-nav-link:hover,
+.confirmacao-nav-link:focus-visible {
+  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.confirmacao-nav-link svg {
+  width: 20px;
+  height: 20px;
+}
+
+.confirmacao-title {
+  min-width: 0;
+  margin: 0;
+
+  overflow: hidden;
+
+  font-size: 16px;
+  font-weight: 600;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  color: var(--confirmacao-white);
+}
+
+/* Estrutura */
+
+.confirmacao-main {
+  width: 100%;
+  min-width: 0;
+
+  display: grid;
+  gap: 18px;
+}
+
+/* Confirmação superior */
+
+.confirmacao-success {
+  width: 100%;
+  padding: 22px 18px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 22px;
+
+  text-align: center;
+
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.15),
+    rgba(255, 255, 255, 0.06)
+  );
+
+  box-shadow: 0 10px 24px rgba(45, 8, 21, 0.13);
+
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.confirmacao-icon-wrapper {
+  position: relative;
+
+  width: 76px;
+  height: 76px;
+  margin-bottom: 14px;
+
+  display: grid;
+  place-items: center;
+}
+
+.confirmacao-icon-ring {
+  position: absolute;
+  inset: 0;
+
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 50%;
+
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.confirmacao-icon {
+  position: relative;
+  z-index: 2;
+
+  width: 55px;
+  height: 55px;
+
+  display: grid;
+  place-items: center;
+
+  border: 2px solid rgba(255, 255, 255, 0.75);
+  border-radius: 50%;
+
+  color: var(--confirmacao-dark);
+  background: var(--confirmacao-soft);
+
+  box-shadow: 0 9px 20px rgba(45, 8, 21, 0.18);
+}
+
+.confirmacao-icon svg {
+  width: 28px;
+  height: 28px;
+}
+
+.confirmacao-eyebrow,
+.confirmacao-card-eyebrow {
+  display: block;
+  margin-bottom: 5px;
+
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.confirmacao-success .confirmacao-eyebrow {
+  color: var(--confirmacao-soft);
+}
+
+.confirmacao-success h2 {
+  margin: 0;
+
+  font-size: 22px;
+  font-weight: 700;
+
+  color: var(--confirmacao-white);
+}
+
+.confirmacao-success > p {
+  max-width: 330px;
+  margin: 7px 0 0;
+
+  font-size: 10.5px;
+  line-height: 1.55;
+
+  color: rgba(255, 255, 255, 0.73);
+}
+
+.confirmacao-status {
+  min-height: 35px;
+  margin-top: 15px;
+  padding: 0 11px;
+
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+
+  border: 1px solid rgba(255, 255, 255, 0.17);
+  border-radius: 12px;
+
+  font-size: 9px;
+  font-weight: 600;
+
+  color: rgba(255, 255, 255, 0.88);
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.confirmacao-status svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* Card de detalhes */
+
+.confirmacao-card {
+  width: 100%;
+  min-width: 0;
+  padding: 18px;
+
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: 23px;
+
+  background: rgba(255, 250, 252, 0.98);
+
+  box-shadow: 0 12px 28px rgba(66, 18, 35, 0.16);
+}
+
+.confirmacao-card-header {
+  margin-bottom: 16px;
+
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.confirmacao-card-header > div {
+  min-width: 0;
+  flex: 1;
+}
+
+.confirmacao-card-eyebrow {
+  color: var(--confirmacao-secondary);
+}
+
+.confirmacao-card-header h2 {
+  margin: 0;
+
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.3;
+
+  color: var(--confirmacao-dark);
+}
+
+.confirmacao-card-header p {
+  margin: 6px 0 0;
+
+  font-size: 10px;
+  line-height: 1.5;
+
+  color: var(--confirmacao-text-muted);
+}
+
+.confirmacao-card-check {
+  width: 43px;
+  height: 43px;
+  flex-shrink: 0;
+
+  display: grid;
+  place-items: center;
+
+  border: 1px solid rgba(168, 97, 123, 0.2);
+  border-radius: 14px;
+
+  color: var(--confirmacao-primary);
+  background: rgba(240, 193, 209, 0.35);
+}
+
+.confirmacao-card-check svg {
+  width: 21px;
+  height: 21px;
+}
+
+/* Detalhes */
+
+.confirmacao-details {
+  width: 100%;
+
+  display: grid;
+  gap: 9px;
+}
+
+.detalhe-row {
+  width: 100%;
+  min-width: 0;
+  min-height: 62px;
+  padding: 11px 12px;
+
+  display: flex;
+  align-items: center;
+  gap: 11px;
+
+  border: 1px solid rgba(89, 28, 49, 0.08);
+  border-radius: 15px;
+
+  background: var(--confirmacao-card-soft);
+}
+
+.detalhe-icon {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+
+  display: grid;
+  place-items: center;
+
+  border: 1px solid rgba(168, 97, 123, 0.15);
+  border-radius: 11px;
+
+  color: var(--confirmacao-secondary);
+  background: rgba(255, 255, 255, 0.75);
+}
+
+.detalhe-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.detalhe-content {
+  min-width: 0;
+  flex: 1;
+}
+
+.detalhe-label {
+  display: block;
+  margin-bottom: 3px;
+
+  font-size: 8.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+
+  color: var(--confirmacao-text-muted);
+}
+
+.detalhe-value {
+  display: block;
+  margin: 0;
+
+  overflow: hidden;
+
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  color: var(--confirmacao-dark);
+}
+
+.confirmacao-date-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.detalhe-row--compact {
+  min-width: 0;
+}
+
+.detalhe-row--compact .detalhe-icon {
+  width: 33px;
+  height: 33px;
+}
+
+.detalhe-row--observacoes {
+  align-items: flex-start;
+}
+
+.detalhe-value--multiline {
+  overflow: visible;
+
+  font-weight: 500;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.detalhe-row[hidden] {
+  display: none !important;
+}
+
+/* Mensagem */
+
+.confirmacao-message {
+  margin-top: 12px;
+  padding: 10px 12px;
+
+  border: 1px solid rgba(89, 28, 49, 0.1);
+  border-radius: 12px;
+
+  font-size: 9.5px;
+  line-height: 1.5;
+
+  color: var(--confirmacao-text-muted);
+  background: var(--confirmacao-card-soft);
+}
+
+.confirmacao-message.is-error {
+  color: #a73455;
+  background: rgba(181, 63, 96, 0.07);
+}
+
+.confirmacao-message[hidden] {
+  display: none !important;
+}
+
+/* Apresentação do WhatsApp */
+
+.confirmacao-whatsapp-card {
+  margin-top: 17px;
+  padding: 12px;
+
+  display: flex;
+  align-items: center;
+  gap: 11px;
+
+  border: 1px solid rgba(37, 211, 102, 0.14);
+  border-radius: 15px;
+
+  background: rgba(37, 211, 102, 0.06);
+}
+
+.confirmacao-whatsapp-icon {
+  width: 39px;
+  height: 39px;
+  flex-shrink: 0;
+
+  display: grid;
+  place-items: center;
+
+  border-radius: 12px;
+
+  color: #128c4a;
+  background: rgba(37, 211, 102, 0.14);
+}
+
+.confirmacao-whatsapp-icon svg {
+  width: 21px;
+  height: 21px;
+}
+
+.confirmacao-whatsapp-card div {
+  min-width: 0;
+}
+
+.confirmacao-whatsapp-card strong {
+  display: block;
+
+  font-size: 10.5px;
+  font-weight: 700;
+
+  color: #126b3b;
+}
+
+.confirmacao-whatsapp-card p {
+  margin: 3px 0 0;
+
+  font-size: 8.5px;
+  line-height: 1.4;
+
+  color: #4d8063;
+}
+
+/* Ações */
+
+.confirmacao-actions {
+  width: 100%;
+  margin-top: 14px;
+
+  display: grid;
+  gap: 9px;
+}
+
+.confirmacao-button {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 14px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+
+  border-radius: 14px;
+
+  font-size: 10.5px;
+  font-weight: 600;
+  text-decoration: none;
+
+  transition:
+    transform 0.2s ease,
+    background-color 0.2s ease,
+    box-shadow 0.2s ease,
+    opacity 0.2s ease;
+}
+
 .confirmacao-button:hover,
-.confirmacao-button:focus-visible{
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
-}
-.confirmacao-button:active{
+.confirmacao-button:focus-visible {
   transform: translateY(-1px);
 }
 
-/* Garantir o mesmo efeito para o botão Whatsapp */
-#btn-whatsapp{
-  transition: transform var(--transition-fast), box-shadow var(--transition-fast), background-color var(--transition-fast);
-}
-#btn-whatsapp:hover{
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
-}
-#btn-whatsapp:active{
-  transform: translateY(-1px);
+.confirmacao-button:active {
+  transform: scale(0.99);
 }
 
-@media(max-width:380px){.app-container{padding:18px 14px 20px}.confirmacao-card{padding:20px 16px}}
+.confirmacao-button--whatsapp {
+  justify-content: space-between;
 
-@media(max-width:320px){.confirmacao-detail{padding:10px}}
+  color: var(--confirmacao-white);
+  background: #1fbd5b;
+
+  box-shadow: 0 8px 18px rgba(18, 140, 74, 0.2);
+}
+
+.confirmacao-button--whatsapp:hover,
+.confirmacao-button--whatsapp:focus-visible {
+  background: #19a950;
+
+  box-shadow: 0 11px 22px rgba(18, 140, 74, 0.25);
+}
+
+.confirmacao-button-content {
+  min-width: 0;
+
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.confirmacao-button-content svg {
+  width: 19px;
+  height: 19px;
+  flex-shrink: 0;
+}
+
+.confirmacao-button-arrow {
+  width: 17px;
+  height: 17px;
+  flex-shrink: 0;
+}
+
+.confirmacao-button--primary {
+  justify-content: space-between;
+
+  color: var(--confirmacao-white);
+  background: var(--confirmacao-primary);
+
+  box-shadow: 0 7px 17px rgba(89, 28, 49, 0.18);
+}
+
+.confirmacao-button--primary > svg {
+  width: 17px;
+  height: 17px;
+}
+
+.confirmacao-button--secondary {
+  border: 1px solid rgba(89, 28, 49, 0.13);
+
+  color: var(--confirmacao-primary);
+  background: transparent;
+}
+
+@media (max-width: 380px) {
+  .app-container {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .confirmacao-success,
+  .confirmacao-card {
+    padding: 15px;
+  }
+
+  .confirmacao-date-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .detalhe-row--compact {
+    min-height: 58px;
+  }
+}

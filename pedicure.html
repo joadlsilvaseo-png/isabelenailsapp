@@ -3,94 +3,165 @@
 
 <head>
   <meta charset="UTF-8">
+
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Escolha o procedimento de pedicure na Isabele Mariana Nails">
+
+  <meta name="description" content="Conheça e escolha os procedimentos de pedicure da Isabele Mariana Nails">
+
   <meta name="theme-color" content="#591c31">
+
   <title>Pedicure | Isabele Mariana Nails</title>
-  <link rel="stylesheet" href="base.css">
-  <link rel="stylesheet" href="pedicure.css">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="base.css?v=1.0.3">
+  <link rel="stylesheet" href="pedicure.css?v=2.0.0">
 </head>
 
 <body data-page="pedicure">
+
   <div class="app-container">
-    <header class="pedicure-header">
-      <nav class="pedicure-nav" aria-label="Navegação da página pedicure">
-        <!-- Voltar: history fallback -->
-        <a href="principal.html" data-back="history" class="pedicure-nav-link" aria-label="Voltar">
-          <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M15 18L9 12L15 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-          </svg>
-        </a>
 
-        <h1 class="pedicure-title">Pedicure</h1>
+    <header class="pedicure-header" aria-label="Navegação da página">
+      <a href="principal.html" data-back="history" class="pedicure-nav-link" aria-label="Voltar">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M15 18L9 12L15 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+      </a>
 
-        <a href="principal.html" class="pedicure-nav-link" aria-label="Página inicial">
-          <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M4 10L12 3L20 10V20C20 20.5523 19.5523 21 19 21H5C4.44772 21 4 20.5523 4 20V10Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-            <path d="M9 21V13H15V21" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-          </svg>
-        </a>
-      </nav>
+      <h1 class="pedicure-title">
+        Pedicure
+      </h1>
+
+      <a href="principal.html" class="pedicure-nav-link" aria-label="Página principal">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M4 10L12 3L20 10V20C20 20.5523 19.5523 21 19 21H5C4.44772 21 4 20.5523 4 20V10Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+
+          <path d="M9 21V13H15V21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+      </a>
     </header>
 
     <main class="pedicure-main">
-      <section class="pedicure-panel" aria-labelledby="procedimento-title">
-        <h2 id="procedimento-title" class="pedicure-panel-title">Escolha o Procedimento</h2>
 
-        <ul class="pedicure-list">
-          <li class="pedicure-card">
-            <div class="pedicure-card-text">
-              <p class="pedicure-card-name">Pedicure</p>
-              <span class="pedicure-card-label">Duração</span>
-            </div>
-            <div class="pedicure-card-details">
-              <span class="pedicure-card-price">R$ 180</span>
-              <span class="pedicure-card-duration">2 horas</span>
-            </div>
+      <section class="pedicure-intro">
+
+        <span class="pedicure-intro-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <path d="M12.5 20C10.3 20 8.5 18.3 8.5 16.1C8.5 14.7 9.2 13.4 10.3 12.7C9.9 11.7 9.7 10.6 9.7 9.5C9.7 6.9 11.1 4.8 12.8 4.8C14.6 4.8 15.9 6.8 15.9 9.3C15.9 11 15.4 12.4 14.5 13.5C15.7 14.2 16.5 15.5 16.5 17C16.5 18.7 14.8 20 12.5 20Z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
+
+            <circle cx="8" cy="6" r="1" fill="currentColor" />
+            <circle cx="10.5" cy="3.5" r="1" fill="currentColor" />
+            <circle cx="13.5" cy="3" r="1" fill="currentColor" />
+            <circle cx="16.3" cy="4" r="1" fill="currentColor" />
+          </svg>
+        </span>
+
+        <div class="pedicure-intro-content">
+
+          <span class="pedicure-eyebrow">
+            Categoria
+          </span>
+
+          <h2>
+            Cuidado completo para seus pés
+          </h2>
+
+          <p>
+            Escolha o procedimento ideal para manter seus pés
+            bem cuidados, hidratados e com acabamento impecável.
+          </p>
+
+        </div>
+
+      </section>
+
+      <section class="pedicure-services" aria-labelledby="procedimento-title">
+        <div class="pedicure-section-heading">
+
+          <div>
+            <span class="pedicure-eyebrow">
+              Procedimentos
+            </span>
+
+            <h2 id="procedimento-title">
+              Serviços disponíveis
+            </h2>
+          </div>
+
+          <span id="pedicure-service-count" class="pedicure-service-count" aria-live="polite">
+            Carregando
+          </span>
+
+        </div>
+
+        <ul id="lista-servicos" class="pedicure-list loading" aria-live="polite" aria-busy="true">
+          <li class="pedicure-skeleton" aria-hidden="true">
+            <span class="pedicure-skeleton-icon"></span>
+
+            <span class="pedicure-skeleton-content">
+              <span class="pedicure-skeleton-line"></span>
+
+              <span class="pedicure-skeleton-line pedicure-skeleton-line--large"></span>
+
+              <span class="pedicure-skeleton-line pedicure-skeleton-line--medium"></span>
+            </span>
           </li>
 
-          <li class="pedicure-card">
-            <div class="pedicure-card-text">
-              <p class="pedicure-card-name">Spa dos Pés</p>
-              <span class="pedicure-card-label">Duração</span>
-            </div>
-            <div class="pedicure-card-details">
-              <span class="pedicure-card-price">R$ 180</span>
-              <span class="pedicure-card-duration">2 horas</span>
-            </div>
+          <li class="pedicure-skeleton" aria-hidden="true">
+            <span class="pedicure-skeleton-icon"></span>
+
+            <span class="pedicure-skeleton-content">
+              <span class="pedicure-skeleton-line"></span>
+
+              <span class="pedicure-skeleton-line pedicure-skeleton-line--large"></span>
+
+              <span class="pedicure-skeleton-line pedicure-skeleton-line--medium"></span>
+            </span>
           </li>
 
-          <li class="pedicure-card">
-            <div class="pedicure-card-text">
-              <p class="pedicure-card-name">Cutilagem</p>
-              <span class="pedicure-card-label">Duração</span>
-            </div>
-            <div class="pedicure-card-details">
-              <span class="pedicure-card-price">R$ 180</span>
-              <span class="pedicure-card-duration">2 horas</span>
-            </div>
-          </li>
+          <li class="pedicure-skeleton" aria-hidden="true">
+            <span class="pedicure-skeleton-icon"></span>
 
-          <li class="pedicure-card">
-            <div class="pedicure-card-text">
-              <p class="pedicure-card-name">Hidratação</p>
-              <span class="pedicure-card-label">Duração</span>
-            </div>
-            <div class="pedicure-card-details">
-              <span class="pedicure-card-price">R$ 180</span>
-              <span class="pedicure-card-duration">2 horas</span>
-            </div>
+            <span class="pedicure-skeleton-content">
+              <span class="pedicure-skeleton-line"></span>
+
+              <span class="pedicure-skeleton-line pedicure-skeleton-line--large"></span>
+
+              <span class="pedicure-skeleton-line pedicure-skeleton-line--medium"></span>
+            </span>
           </li>
         </ul>
+
       </section>
 
       <footer class="pedicure-footer">
-        <!-- Próximo: segue para agendamento -->
-        <a href="agendamento.html" class="pedicure-button">Próximo</a>
+
+        <p id="selected-service-summary" class="pedicure-selection-summary" aria-live="polite">
+          Selecione um procedimento para continuar
+        </p>
+
+        <button type="button" class="pedicure-button" disabled>
+          <span>Continuar para agendamento</span>
+
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M9 18L15 12L9 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </button>
+
       </footer>
+
     </main>
+
   </div>
-  <script type="module" src="pedicure.js"></script>
+
+  <script type="module" src="pedicure.js?v=2.0.0"></script>
+
+  <script src="app.js?v=1.0.3" defer></script>
 
 </body>
 

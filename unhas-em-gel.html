@@ -3,118 +3,146 @@
 
 <head>
   <meta charset="UTF-8">
+
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Escolha o procedimento de unhas em gel na Isabele Mariana Nails">
+
+  <meta name="description" content="Conheça e escolha os procedimentos de unhas em gel da Isabele Mariana Nails">
+
   <meta name="theme-color" content="#591c31">
+
   <title>Unhas em Gel | Isabele Mariana Nails</title>
-<link rel="stylesheet" href="base.css">
-  <link rel="stylesheet" href="unhas-em-gel.css">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="base.css?v=1.0.3">
+  <link rel="stylesheet" href="unhas-em-gel.css?v=2.0.0">
 </head>
 
-<body>
+<body data-page="unhas-em-gel">
+
   <div class="app-container">
-    <header class="unhas-header" aria-label="Navegação principal">
-      <!-- Voltar: prioriza history.back com fallback -->
-      <a href="principal.html" data-back="history" class="unhas-nav-link unhas-nav-link--back" aria-label="Voltar">
-        <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" fill="none" xmlns="http://www.w3.org/2000/svg">
+
+    <header class="unhas-header" aria-label="Navegação da página">
+      <a href="principal.html" data-back="history" class="unhas-nav-link" aria-label="Voltar">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <path d="M15 18L9 12L15 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
       </a>
-      <h1 class="unhas-title">Unhas em Gel</h1>
-      <a href="principal.html" class="unhas-nav-link unhas-nav-link--home" aria-label="Página inicial">
-        <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M4 10L12 3L20 10V20C20 20.5523 19.5523 21 19 21H5C4.44772 21 4 20.5523 4 20V10Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-          <path d="M9 21V13H15V21" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+
+      <h1 class="unhas-title">
+        Unhas em Gel
+      </h1>
+
+      <a href="principal.html" class="unhas-nav-link" aria-label="Página principal">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M4 10L12 3L20 10V20C20 20.5523 19.5523 21 19 21H5C4.44772 21 4 20.5523 4 20V10Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+
+          <path d="M9 21V13H15V21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
       </a>
     </header>
 
     <main class="unhas-main">
-      <section class="unhas-panel" aria-labelledby="procedimento-title">
-        <h2 id="procedimento-title" class="unhas-subtitle">Escolha o Procedimento</h2>
 
-        <ul class="unhas-list">
-          <li class="unhas-card">
-            <div class="unhas-card-group">
-              <p class="unhas-card-title">Fibra de Vidro</p>
-              <span class="unhas-card-label">Duração</span>
-            </div>
-            <div class="unhas-card-meta">
-              <strong class="unhas-card-price">R$ 180</strong>
-              <span class="unhas-card-duration">2 horas</span>
-            </div>
+      <section class="unhas-intro">
+        <span class="unhas-intro-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <path d="M12 3L13.2 6.2L16.5 7.5L13.2 8.8L12 12L10.8 8.8L7.5 7.5L10.8 6.2L12 3Z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
+
+            <path d="M18 13L18.8 15.2L21 16L18.8 16.8L18 19L17.2 16.8L15 16L17.2 15.2L18 13Z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
+
+            <path d="M6 13L6.7 14.8L8.5 15.5L6.7 16.2L6 18L5.3 16.2L3.5 15.5L5.3 14.8L6 13Z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </span>
+
+        <div class="unhas-intro-content">
+          <span class="unhas-eyebrow">
+            Categoria
+          </span>
+
+          <h2>
+            Escolha o cuidado ideal para suas unhas
+          </h2>
+
+          <p>
+            Conheça cada técnica e selecione o procedimento
+            que melhor combina com o resultado que você deseja.
+          </p>
+        </div>
+      </section>
+
+      <section class="unhas-services" aria-labelledby="procedimento-title">
+        <div class="unhas-section-heading">
+          <div>
+            <span class="unhas-eyebrow">
+              Procedimentos
+            </span>
+
+            <h2 id="procedimento-title">
+              Serviços disponíveis
+            </h2>
+          </div>
+
+          <span id="unhas-service-count" class="unhas-service-count" aria-live="polite">
+            Carregando
+          </span>
+        </div>
+
+        <ul class="unhas-list loading" aria-live="polite" aria-busy="true">
+          <li class="unhas-skeleton" aria-hidden="true">
+            <span class="unhas-skeleton-icon"></span>
+
+            <span class="unhas-skeleton-content">
+              <span class="unhas-skeleton-line"></span>
+              <span class="unhas-skeleton-line unhas-skeleton-line--small"></span>
+              <span class="unhas-skeleton-line unhas-skeleton-line--medium"></span>
+            </span>
           </li>
 
-          <li class="unhas-card">
-            <div class="unhas-card-group">
-              <p class="unhas-card-title">Alongamento</p>
-              <span class="unhas-card-label">Duração</span>
-            </div>
-            <div class="unhas-card-meta">
-              <strong class="unhas-card-price">R$ 180</strong>
-              <span class="unhas-card-duration">2 horas</span>
-            </div>
+          <li class="unhas-skeleton" aria-hidden="true">
+            <span class="unhas-skeleton-icon"></span>
+
+            <span class="unhas-skeleton-content">
+              <span class="unhas-skeleton-line"></span>
+              <span class="unhas-skeleton-line unhas-skeleton-line--small"></span>
+              <span class="unhas-skeleton-line unhas-skeleton-line--medium"></span>
+            </span>
           </li>
 
-          <li class="unhas-card">
-            <div class="unhas-card-group">
-              <p class="unhas-card-title">Banho de Gel</p>
-              <span class="unhas-card-label">Duração</span>
-            </div>
-            <div class="unhas-card-meta">
-              <strong class="unhas-card-price">R$ 180</strong>
-              <span class="unhas-card-duration">2 horas</span>
-            </div>
-          </li>
+          <li class="unhas-skeleton" aria-hidden="true">
+            <span class="unhas-skeleton-icon"></span>
 
-          <li class="unhas-card">
-            <div class="unhas-card-group">
-              <p class="unhas-card-title">Blindagem</p>
-              <span class="unhas-card-label">Duração</span>
-            </div>
-            <div class="unhas-card-meta">
-              <strong class="unhas-card-price">R$ 180</strong>
-              <span class="unhas-card-duration">2 horas</span>
-            </div>
-          </li>
-
-          <li class="unhas-card">
-            <div class="unhas-card-group">
-              <p class="unhas-card-title">Manutenção</p>
-              <span class="unhas-card-label">Duração</span>
-            </div>
-            <div class="unhas-card-meta">
-              <strong class="unhas-card-price">R$ 180</strong>
-              <span class="unhas-card-duration">2 horas</span>
-            </div>
-          </li>
-
-          <li class="unhas-card">
-            <div class="unhas-card-group">
-              <p class="unhas-card-title">Remoção</p>
-              <span class="unhas-card-label">Duração</span>
-            </div>
-            <div class="unhas-card-meta">
-              <strong class="unhas-card-price">R$ 180</strong>
-              <span class="unhas-card-duration">2 horas</span>
-            </div>
+            <span class="unhas-skeleton-content">
+              <span class="unhas-skeleton-line"></span>
+              <span class="unhas-skeleton-line unhas-skeleton-line--small"></span>
+              <span class="unhas-skeleton-line unhas-skeleton-line--medium"></span>
+            </span>
           </li>
         </ul>
       </section>
 
       <footer class="unhas-footer">
-          <!-- Próximo: direciona para agendamento -->
-          <a href="agendamento.html" class="unhas-action-button">Próximo</a>
+        <p id="selected-service-summary" class="unhas-selection-summary" aria-live="polite">
+          Selecione um procedimento para continuar
+        </p>
+
+        <button type="button" class="unhas-action-button" disabled>
+          <span>Continuar para agendamento</span>
+
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M9 18L15 12L9 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </button>
       </footer>
+
     </main>
   </div>
-  <script src="unhas-em-gel.js" defer></script>
-  <script src="app.js" defer></script>
+
+  <script src="unhas-em-gel.js?v=2.0.0" defer></script>
+  <script src="app.js?v=1.0.3" defer></script>
 </body>
 
 </html>
-
-
-
-
-

@@ -3,90 +3,275 @@
 
 <head>
   <meta charset="UTF-8">
+
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
   <meta name="description" content="Agendamento de horário na Isabele Mariana Nails">
-  <meta name="theme-color" content="#581f31">
+
+  <meta name="theme-color" content="#591c31">
+
   <title>Agendamento | Isabele Mariana Nails</title>
-  <link rel="stylesheet" href="base.css">
-  <link rel="stylesheet" href="agendamento.css">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="base.css?v=1.0.4">
+  <link rel="stylesheet" href="agendamento.css?v=2.0.0">
 </head>
 
-<body>
+<body data-page="agendamento">
+
   <div class="app-container">
+
     <header class="agendamento-header">
+
       <nav class="agendamento-nav" aria-label="Navegação do agendamento">
-        <!-- Voltar: tenta voltar na história do navegador, fallback para principal.html -->
         <a href="principal.html" data-back="history" class="agendamento-nav-link" aria-label="Voltar">
-          <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path d="M15 18L9 12L15 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
           </svg>
         </a>
 
-        <h1 class="agendamento-title">Agendamento</h1>
+        <h1 class="agendamento-title">
+          Agendamento
+        </h1>
 
-        <a href="principal.html" class="agendamento-nav-link" aria-label="Página inicial">
-          <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M4 10L12 3L20 10V20C20 20.5523 19.5523 21 19 21H5C4.44772 21 4 20.5523 4 20V10Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-            <path d="M9 21V13H15V21" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+        <a href="principal.html" class="agendamento-nav-link" aria-label="Página principal">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M4 10L12 3L20 10V20C20 20.5523 19.5523 21 19 21H5C4.44772 21 4 20.5523 4 20V10Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+
+            <path d="M9 21V13H15V21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
           </svg>
         </a>
       </nav>
+
     </header>
 
     <main class="agendamento-main">
-      <section class="agendamento-panel" aria-labelledby="agendamento-title">
-        <div class="agendamento-calendar" role="group" aria-label="Selecionar data">
-          <button type="button" class="agendamento-date">
-            <span class="agendamento-date-day">18</span>
-            <span class="agendamento-date-label">Ter</span>
-          </button>
-          <button type="button" class="agendamento-date">
-            <span class="agendamento-date-day">19</span>
-            <span class="agendamento-date-label">Qua</span>
-          </button>
-          <button type="button" class="agendamento-date agendamento-date--active" aria-pressed="true">
-            <span class="agendamento-date-day">20</span>
-            <span class="agendamento-date-label">Qui</span>
-          </button>
-          <button type="button" class="agendamento-date">
-            <span class="agendamento-date-day">21</span>
-            <span class="agendamento-date-label">Sex</span>
-          </button>
-          <button type="button" class="agendamento-date">
-            <span class="agendamento-date-day">18</span>
-            <span class="agendamento-date-label">Sab</span>
-          </button>
-        </div>
 
-        <div class="agendamento-section-title">
-          <p>Qual o seu melhor Horário?</p>
-        </div>
+      <section class="agendamento-service-card" aria-labelledby="service-name">
+        <span class="agendamento-service-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <path d="M12 3L13.2 6.2L16.5 7.5L13.2 8.8L12 12L10.8 8.8L7.5 7.5L10.8 6.2L12 3Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
 
-        <div class="agendamento-times" role="group" aria-label="Selecionar horário">
-          <!-- Horários serão gerados dinamicamente aqui pelo JavaScript -->
-        </div>
+            <path d="M18 13L18.8 15.2L21 16L18.8 16.8L18 19L17.2 16.8L15 16L17.2 15.2L18 13Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
 
-        <div class="agendamento-section-title">
-          <p>Qual é o seu nome?</p>
+            <path d="M6 13L6.7 14.8L8.5 15.5L6.7 16.2L6 18L5.3 16.2L3.5 15.5L5.3 14.8L6 13Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </span>
+
+        <div class="agendamento-service-content">
+          <span class="agendamento-eyebrow">
+            Serviço selecionado
+          </span>
+
+          <h2 id="service-name">
+            Carregando serviço...
+          </h2>
+
+          <div class="agendamento-service-meta">
+            <span id="service-duration">
+              Duração
+            </span>
+
+            <span aria-hidden="true">•</span>
+
+            <strong id="service-price">
+              Valor
+            </strong>
+          </div>
         </div>
-        <div class="agendamento-input-group">
-          <label for="nomeCliente" class="agendamento-label">Seu Nome</label>
-          <input type="text" id="nomeCliente" class="agendamento-input" placeholder="Digite seu nome completo" required>
-        </div>
-        <div class="agendamento-comments">
-          <label for="agendamento-notes" class="agendamento-label">Comentários Adicionais</label>
-          <textarea id="agendamento-notes" class="agendamento-textarea" rows="5" placeholder="Descreva se deseja algo específico..."></textarea>
-        </div>
+      </section>
+
+      <section class="agendamento-panel" aria-labelledby="agendamento-panel-title">
+        <header class="agendamento-panel-header">
+          <span class="agendamento-eyebrow">
+            Reserve seu horário
+          </span>
+
+          <h2 id="agendamento-panel-title">
+            Escolha a melhor data para você
+          </h2>
+
+          <p>
+            Selecione a data e depois escolha um dos horários disponíveis.
+          </p>
+        </header>
+
+        <section class="agendamento-step" aria-labelledby="agendamento-data-title">
+          <div class="agendamento-step-heading">
+            <span class="agendamento-step-number">
+              1
+            </span>
+
+            <div class="agendamento-step-content">
+              <span class="agendamento-step-label">
+                Data
+              </span>
+
+              <h3 id="agendamento-data-title">
+                Escolha o dia
+              </h3>
+            </div>
+
+            <span id="calendar-month-label" class="agendamento-month-label">
+              Mês
+            </span>
+          </div>
+
+          <div class="agendamento-calendar" role="group" aria-label="Selecionar data">
+            <!-- Datas criadas pelo JavaScript -->
+          </div>
+
+          <div class="agendamento-selected-date">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M6 3V6M18 3V6M4 9H20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+
+              <rect x="4" y="5" width="16" height="16" rx="3" stroke="currentColor" stroke-width="1.8" />
+            </svg>
+
+            <span id="selected-date-text">
+              Selecione uma data
+            </span>
+          </div>
+        </section>
+
+        <div class="agendamento-divider"></div>
+
+        <section class="agendamento-step" aria-labelledby="agendamento-horario-title">
+          <div class="agendamento-step-heading">
+            <span class="agendamento-step-number">
+              2
+            </span>
+
+            <div class="agendamento-step-content">
+              <span class="agendamento-step-label">
+                Horário
+              </span>
+
+              <h3 id="agendamento-horario-title">
+                Escolha um horário
+              </h3>
+            </div>
+
+            <span id="availability-status" class="agendamento-availability" aria-live="polite">
+              Buscando
+            </span>
+          </div>
+
+          <div class="agendamento-time-legend">
+            <span>
+              <i class="legend-dot legend-dot--available"></i>
+              Disponível
+            </span>
+
+            <span>
+              <i class="legend-dot legend-dot--occupied"></i>
+              Ocupado
+            </span>
+          </div>
+
+          <div class="agendamento-times" role="group" aria-label="Selecionar horário" aria-live="polite">
+            <!-- Horários criados pelo JavaScript -->
+          </div>
+        </section>
+
+        <div class="agendamento-divider"></div>
+
+        <section class="agendamento-step" aria-labelledby="agendamento-dados-title">
+          <div class="agendamento-step-heading">
+            <span class="agendamento-step-number">
+              3
+            </span>
+
+            <div class="agendamento-step-content">
+              <span class="agendamento-step-label">
+                Seus dados
+              </span>
+
+              <h3 id="agendamento-dados-title">
+                Finalize sua reserva
+              </h3>
+            </div>
+          </div>
+
+          <div class="agendamento-form">
+
+            <div class="agendamento-input-group">
+              <label for="nomeCliente" class="agendamento-label">
+                Nome completo
+              </label>
+
+              <div class="agendamento-input-wrapper">
+                <span class="agendamento-input-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.8" />
+
+                    <path d="M5 21C5 17.1 8.1 14 12 14C15.9 14 19 17.1 19 21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+                  </svg>
+                </span>
+
+                <input type="text" id="nomeCliente" class="agendamento-input" placeholder="Digite seu nome completo" autocomplete="name" required>
+              </div>
+            </div>
+
+            <div class="agendamento-comments">
+              <label for="agendamento-notes" class="agendamento-label">
+                Comentários adicionais
+                <span>Opcional</span>
+              </label>
+
+              <textarea id="agendamento-notes" class="agendamento-textarea" rows="4" maxlength="500" placeholder="Conte se deseja alguma cor, decoração ou cuidado específico..."></textarea>
+
+              <span class="agendamento-helper">
+                Você também poderá explicar os detalhes durante o atendimento.
+              </span>
+            </div>
+
+          </div>
+        </section>
 
         <footer class="agendamento-footer">
-          <button type="button" class="agendamento-button">Agendar</button>
+
+          <div class="agendamento-summary">
+            <span class="agendamento-eyebrow">
+              Resumo da reserva
+            </span>
+
+            <strong id="summary-service">
+              Serviço selecionado
+            </strong>
+
+            <p>
+              <span id="summary-date">
+                Escolha a data
+              </span>
+
+              <span aria-hidden="true">•</span>
+
+              <span id="summary-time">
+                Escolha o horário
+              </span>
+            </p>
+          </div>
+
+          <button type="button" class="agendamento-button" disabled>
+            Confirmar agendamento
+          </button>
+
         </footer>
       </section>
+
     </main>
   </div>
 
-  <script type="module" src="agendamento.js" defer></script>
-  <script src="app.js" defer></script>
+  <script type="module" src="agendamento.js?v=2.0.0"></script>
+
+  <script src="app.js?v=1.0.4" defer></script>
+
 </body>
 
 </html>

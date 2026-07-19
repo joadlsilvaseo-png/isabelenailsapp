@@ -1,50 +1,9 @@
 document.addEventListener("DOMContentLoaded", () => {
-  function slugify(name) {
-    return name
-      .toLowerCase()
-      .replace(/\s+/g, "-")
-      .replace(/[^a-z0-9\-]/g, "");
-  }
+  const searchInput = document.querySelector(".search-input");
+  const searchForm = document.querySelector(".search-form");
+  const searchButton = document.querySelector(".search-btn");
+  const serviceRows = Array.from(document.querySelectorAll(".service-row"));
 
-  function renderServiceCards() {
-    const rows = document.querySelectorAll(".service-row");
-    rows.forEach((row) => {
-      const labelEl = row.querySelector(".service-label");
-      row.querySelectorAll("img").forEach((el) => el.remove());
-      const iconContainer = row.querySelector(".service-icon");
-      if (iconContainer) iconContainer.innerHTML = "";
-      row.querySelectorAll(".placeholder").forEach((el) => el.remove());
-
-      const serviceName = labelEl
-        ? labelEl.textContent.trim()
-        : row.textContent.trim();
-
-      const img = document.createElement("img");
-      const filename = `categoria-${serviceName.toLowerCase().replace(/\s+/g, "-")}.png`;
-      const caminhoDaImagem = `./assets/${filename}`;
-
-      img.src = caminhoDaImagem;
-      img.alt = serviceName;
-      img.loading = "lazy";
-      img.className = "categoria-img";
-
-      img.onerror = () => {
-        if (!img.src.includes("placeholder")) {
-          img.onerror = null;
-          img.src = "./assets/placeholder.png";
-          console.error("Falha ao carregar:", img.src);
-        }
-      };
-
-      if (iconContainer) {
-        iconContainer.prepend(img);
-      } else {
-        row.prepend(img);
-      }
-    });
-  }
-
-  // Dicionário de busca expandido para cobrir outras páginas e serviços específicos
   const globalDictionary = [
     { name: "Meus Agendamentos", url: "meu-perfil.html" },
     { name: "Meu Perfil", url: "meu-perfil.html" },
@@ -59,69 +18,96 @@ document.addEventListener("DOMContentLoaded", () => {
     { name: "Galeria de Fotos", url: "galeria.html" },
   ];
 
-  function initSearchFilter() {
-    const searchInput = document.querySelector(".search-input");
-    const serviceRows = document.querySelectorAll(".service-row");
-    const servicesList = document.querySelector(".services-list");
+  if (!searchInput) return;
 
-    if (!searchInput || !servicesList) return;
+  function normalizeText(text) {
+    return String(text)
+      .toLowerCase()
+      .trim()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+  }
 
-    searchInput.addEventListener("input", (e) => {
-      const term = e.target.value.toLowerCase().trim();
+  function removeOldSuggestions() {
+    document
+      .querySelectorAll(".search-suggestion")
+      .forEach((element) => element.remove());
+  }
 
-      document
-        .querySelectorAll(".search-suggestion")
-        .forEach((el) => el.remove());
-      let foundCount = 0;
+  function filterVisibleServices() {
+    const term = normalizeText(searchInput.value);
 
-      serviceRows.forEach((row) => {
-        const labelEl = row.querySelector(".service-label");
-        if (!labelEl) return;
-        const serviceName = labelEl.textContent.toLowerCase();
-        const listItem = row.closest("li");
-        const iconContainer = row.querySelector(".service-icon");
+    removeOldSuggestions();
 
-        const isMatch = term === "" || serviceName.includes(term);
-        listItem.style.display = isMatch ? "" : "none";
+    serviceRows.forEach((row) => {
+      const labelElement = row.querySelector(".service-label");
+      const listItem = row.closest("li");
 
-        // Esconde o ícone se estiver em modo de busca, mostra se estiver vazio
-        if (iconContainer)
-          iconContainer.style.display = term !== "" ? "none" : "";
+      if (!labelElement || !listItem) return;
 
-        if (isMatch && term !== "") foundCount++;
-      });
+      const serviceName = normalizeText(labelElement.textContent);
 
-      if (term !== "") {
-        globalDictionary.forEach((item) => {
-          const nameLower = item.name.toLowerCase();
-          const alreadyVisible = Array.from(serviceRows).some(
-            (r) =>
-              r.closest("li").style.display !== "none" &&
-              r.querySelector(".service-label").textContent.toLowerCase() ===
-                nameLower,
-          );
+      const isVisible = term === "" || serviceName.includes(term);
 
-          if (nameLower.includes(term) && !alreadyVisible) {
-            const li = document.createElement("li");
-            li.className = "search-suggestion";
-            li.innerHTML = `
-              <a href="${item.url}" class="service-row">
-                <span class="service-label">${item.name}</span>
-                <span class="service-chevron">›</span>
-              </a>
-            `;
-            servicesList.appendChild(li);
-            foundCount++;
-          }
-        });
-      }
-
-      console.log(
-        `Termo pesquisado: "${term}" | Serviços encontrados: ${foundCount}`,
-      );
+      listItem.style.display = isVisible ? "" : "none";
     });
   }
 
-  renderServiceCards();
-  initSearchFilter();
+  function navigateToSearchResult() {
+    const term = normalizeText(searchInput.value);
+
+    if (!term) return;
+
+    const visibleService = serviceRows.find((row) => {
+      const labelElement = row.querySelector(".service-label");
+
+      if (!labelElement) return false;
+
+      const serviceName = normalizeText(labelElement.textContent);
+
+      return serviceName.includes(term);
+    });
+
+    if (visibleService) {
+      window.location.href = visibleService.href;
+      return;
+    }
+
+    const dictionaryResult = globalDictionary.find((item) =>
+      normalizeText(item.name).includes(term),
+    );
+
+    if (dictionaryResult) {
+      window.location.href = dictionaryResult.url;
+      return;
+    }
+
+    console.log(`Nenhum resultado encontrado para: "${term}"`);
+  }
+
+  searchInput.addEventListener("input", filterVisibleServices);
+
+  searchInput.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") return;
+
+    event.preventDefault();
+    navigateToSearchResult();
+  });
+
+  if (searchForm) {
+    searchForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      navigateToSearchResult();
+    });
+  }
+
+  if (searchButton) {
+    searchButton.addEventListener("click", (event) => {
+      event.preventDefault();
+      navigateToSearchResult();
+    });
+  }
+
+  removeOldSuggestions();
+  filterVisibleServices();
 });

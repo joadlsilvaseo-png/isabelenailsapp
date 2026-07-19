@@ -3,72 +3,191 @@
 
 <head>
   <meta charset="UTF-8">
+
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Meu Perfil | Isabele Mariana Nails">
+
+  <meta name="description" content="Perfil, agendamentos e histórico da cliente Isabele Mariana Nails">
+
   <meta name="theme-color" content="#591c31">
+
   <title>Meu Perfil | Isabele Mariana Nails</title>
-  <link rel="stylesheet" href="base.css">
-  <link rel="stylesheet" href="meu-perfil.css">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="base.css?v=1.0.4">
+  <link rel="stylesheet" href="meu-perfil.css?v=2.0.0">
 </head>
 
 <body data-page="meu-perfil">
+
   <div class="app-container">
+
     <header class="perfil-header">
       <nav class="perfil-nav" aria-label="Navegação do perfil">
-        <!-- Voltar: history-aware, fallback para principal.html -->
         <a href="principal.html" data-back="history" class="perfil-nav-link" aria-label="Voltar">
-          <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path d="M15 18L9 12L15 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
           </svg>
         </a>
-        <h1 class="perfil-title">Meu Perfil</h1>
-        <a href="principal.html" class="perfil-nav-link" aria-label="Página inicial">
-          <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M4 10L12 3L20 10V20C20 20.5523 19.5523 21 19 21H5C4.44772 21 4 20.5523 4 20V10Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-            <path d="M9 21V13H15V21" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+
+        <h1 class="perfil-title">
+          Meu Perfil
+        </h1>
+
+        <a href="principal.html" class="perfil-nav-link" aria-label="Página principal">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M4 10L12 3L20 10V20C20 20.5523 19.5523 21 19 21H5C4.44772 21 4 20.5523 4 20V10Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+
+            <path d="M9 21V13H15V21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
           </svg>
         </a>
       </nav>
     </header>
 
     <main class="perfil-main">
-      <section class="perfil-summary" aria-labelledby="perfil-nome">
+
+      <section class="perfil-summary" aria-labelledby="nome-cliente">
         <div class="perfil-info">
+
           <div class="perfil-details">
-            <p class="perfil-greeting">Seja Bem-vinda</p>
-            <p id="nome-cliente" class="perfil-name">Nome da Cliente</p>
+            <span class="perfil-eyebrow">
+              Minha conta
+            </span>
+
+            <p class="perfil-greeting">
+              Seja bem-vinda
+            </p>
+
+            <h2 id="nome-cliente" class="perfil-name">
+              Nome da Cliente
+            </h2>
           </div>
+
           <div class="perfil-avatar">
-            <img id="foto-cliente" src="https://www.w3schools.com/howto/img_avatar2.png" alt="Avatar feminino do perfil da cliente" loading="lazy">
+            <img id="foto-cliente" src="https://www.w3schools.com/howto/img_avatar2.png" alt="Foto do perfil da cliente" loading="lazy">
           </div>
+
         </div>
 
-        <div class="perfil-field">
-          <label for="celular-cliente" class="perfil-label">Celular</label>
-          <input id="celular-cliente" class="perfil-input" type="tel" placeholder="(11) 99999-9999" aria-label="Celular" readonly>
-        </div>
+        <div class="perfil-contact-grid">
 
-        <div class="perfil-field">
-          <label for="email-cliente" class="perfil-label">Email</label>
-          <input id="email-cliente" class="perfil-input" type="email" placeholder="seu@email.com" aria-label="Email" readonly>
+          <div class="perfil-field">
+            <label for="celular-cliente" class="perfil-label">
+              Celular
+            </label>
+
+            <div class="perfil-input-wrapper">
+              <span class="perfil-input-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M7 3H17C18.1 3 19 3.9 19 5V19C19 20.1 18.1 21 17 21H7C5.9 21 5 20.1 5 19V5C5 3.9 5.9 3 7 3Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+
+                  <path d="M10 18H14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+                </svg>
+              </span>
+
+              <input id="celular-cliente" class="perfil-input" type="tel" placeholder="Celular não informado" aria-label="Celular" readonly>
+            </div>
+          </div>
+
+          <div class="perfil-field">
+            <label for="email-cliente" class="perfil-label">
+              E-mail
+            </label>
+
+            <div class="perfil-input-wrapper">
+              <span class="perfil-input-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M4 6H20V18H4V6Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+
+                  <path d="M4 7L12 13L20 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </span>
+
+              <input id="email-cliente" class="perfil-input" type="email" placeholder="E-mail não informado" aria-label="E-mail" readonly>
+            </div>
+          </div>
+
         </div>
       </section>
 
-      <section id="container-agendamentos" class="perfil-agendamentos" aria-labelledby="perfil-agendamentos-title">
-        <h2 id="perfil-agendamentos-title" class="perfil-section-title">Meus Agendamentos</h2>
-      </section>
+      <section class="perfil-atendimentos" aria-labelledby="perfil-atendimentos-title">
+        <div class="perfil-section-header">
 
-      <section id="container-historico" class="perfil-historico" aria-labelledby="perfil-historico-title">
-        <h2 id="perfil-historico-title" class="perfil-section-title">Histórico</h2>
+          <div>
+            <span class="perfil-section-eyebrow">
+              Agenda
+            </span>
+
+            <h2 id="perfil-atendimentos-title" class="perfil-section-title">
+              Meus atendimentos
+            </h2>
+
+            <p class="perfil-section-description">
+              Acompanhe seus agendamentos e consulte seu histórico.
+            </p>
+          </div>
+
+          <span id="perfil-total-atendimentos" class="perfil-total-badge" aria-live="polite">
+            0
+          </span>
+
+        </div>
+
+        <div class="perfil-filters" role="group" aria-label="Filtrar atendimentos">
+          <button type="button" class="perfil-filter is-active" data-filter="agendados" aria-pressed="true">
+            <span>Agendados</span>
+            <strong data-filter-count="agendados">0</strong>
+          </button>
+
+          <button type="button" class="perfil-filter" data-filter="realizados" aria-pressed="false">
+            <span>Realizados</span>
+            <strong data-filter-count="realizados">0</strong>
+          </button>
+
+          <button type="button" class="perfil-filter" data-filter="cancelados" aria-pressed="false">
+            <span>Cancelados</span>
+            <strong data-filter-count="cancelados">0</strong>
+          </button>
+
+          <button type="button" class="perfil-filter" data-filter="todos" aria-pressed="false">
+            <span>Todos</span>
+            <strong data-filter-count="todos">0</strong>
+          </button>
+        </div>
+
+        <div id="container-atendimentos" class="perfil-cards" aria-live="polite"></div>
+
+        <p id="perfil-filter-empty" class="perfil-filter-empty" hidden>
+          Nenhum atendimento nesta categoria.
+        </p>
       </section>
 
       <footer class="perfil-footer">
-        <!-- Sair: retorna para a tela de login conforme fluxo -->
-        <a id="logout-button" href="#" class="perfil-exit-button">Sair</a>
+        <button id="logout-button" type="button" class="perfil-exit-button">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M10 5H6C4.9 5 4 5.9 4 7V17C4 18.1 4.9 19 6 19H10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+
+            <path d="M14 8L18 12L14 16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+
+            <path d="M18 12H9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+          </svg>
+
+          <span>Sair da conta</span>
+        </button>
       </footer>
+
     </main>
+
   </div>
-  <script type="module" src="meu-perfil.js"></script>
+
+  <script type="module" src="meu-perfil.js?v=2.0.0"></script>
+
+  <script src="app.js?v=1.0.4" defer></script>
+
 </body>
 
 </html>

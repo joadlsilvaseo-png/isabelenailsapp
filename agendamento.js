@@ -30,12 +30,9 @@ function obterSelecionado(grupo, classeAtiva) {
 }
 
 function formatarData(botaoData) {
-  const dia =
-    botaoData.querySelector(".agendamento-date-day")?.textContent.trim() || "";
-  const semana =
-    botaoData.querySelector(".agendamento-date-label")?.textContent.trim() ||
-    "";
-  return `${dia} ${semana}`.trim();
+  if (!botaoData) return "";
+
+  return botaoData.dataset.dateLabel || botaoData.dataset.dateIso || "";
 }
 
 function obterDataIso(botaoData) {
@@ -66,47 +63,204 @@ function validarAgendamento(data, hora) {
   const horaOk = /^([01]\d|2[0-3]):[0-5]\d$/.test(hora);
   return dataOk && horaOk;
 }
+function formatarDataIsoLocal(data) {
+  const ano = data.getFullYear();
+  const mes = String(data.getMonth() + 1).padStart(2, "0");
+  const dia = String(data.getDate()).padStart(2, "0");
 
+  return `${ano}-${mes}-${dia}`;
+}
+
+function formatarDataLonga(data) {
+  const texto = new Intl.DateTimeFormat("pt-BR", {
+    weekday: "long",
+    day: "2-digit",
+    month: "long",
+  }).format(data);
+
+  return texto.charAt(0).toUpperCase() + texto.slice(1);
+}
+
+function formatarMesAno(data) {
+  const texto = new Intl.DateTimeFormat("pt-BR", {
+    month: "long",
+    year: "numeric",
+  }).format(data);
+
+  return texto.charAt(0).toUpperCase() + texto.slice(1);
+}
+
+function formatarPrecoServico(valor) {
+  if (valor === undefined || valor === null || valor === "") {
+    return "Valor a consultar";
+  }
+
+  const valorLimpo = String(valor)
+    .replace(/R\$/gi, "")
+    .replace(/\s/g, "")
+    .replace(/\./g, "")
+    .replace(",", ".");
+
+  const valorNumerico = Number(valorLimpo);
+
+  if (!Number.isFinite(valorNumerico)) {
+    return String(valor);
+  }
+
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(valorNumerico);
+}
+
+function atualizarCabecalhoData(botaoData) {
+  if (!botaoData) return;
+
+  const monthElement = document.getElementById("calendar-month-label");
+
+  const selectedDateElement = document.getElementById("selected-date-text");
+
+  if (monthElement) {
+    monthElement.textContent = botaoData.dataset.monthLabel || "Data";
+  }
+
+  if (selectedDateElement) {
+    selectedDateElement.textContent =
+      botaoData.dataset.dateLabel || "Data selecionada";
+  }
+}
+
+function atualizarResumoAgendamento() {
+  const dataSelecionada = document.querySelector(".agendamento-date--active");
+
+  const horarioSelecionado = document.querySelector(
+    ".agendamento-time--active",
+  );
+
+  const nomeInput = document.getElementById("nomeCliente");
+
+  const resumoData = document.getElementById("summary-date");
+
+  const resumoHorario = document.getElementById("summary-time");
+
+  const botaoAgendar = document.querySelector(".agendamento-button");
+
+  if (resumoData) {
+    resumoData.textContent = dataSelecionada
+      ? dataSelecionada.dataset.dateLabel
+      : "Escolha a data";
+  }
+
+  if (resumoHorario) {
+    resumoHorario.textContent = horarioSelecionado
+      ? horarioSelecionado.dataset.time || horarioSelecionado.textContent.trim()
+      : "Escolha o horário";
+  }
+
+  const nomePreenchido = Boolean(nomeInput?.value?.trim());
+
+  const prontoParaAgendar = Boolean(
+    dataSelecionada && horarioSelecionado && nomePreenchido,
+  );
+
+  if (botaoAgendar) {
+    botaoAgendar.disabled = !prontoParaAgendar;
+    botaoAgendar.classList.toggle("is-ready", prontoParaAgendar);
+  }
+}
 function gerarCalendarioDias(container) {
   if (!container) return;
+
   container.innerHTML = "";
-  const weekNames = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sab"];
+
+  const weekNames = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+
+  const monthNames = [
+    "Jan",
+    "Fev",
+    "Mar",
+    "Abr",
+    "Mai",
+    "Jun",
+    "Jul",
+    "Ago",
+    "Set",
+    "Out",
+    "Nov",
+    "Dez",
+  ];
+
+  const diasAtendimento = new Set([2, 3, 4, 5, 6]);
+
   const dias = [];
+
   const hoje = new Date();
-  let cursor = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
-  while (cursor.getDay() < 2 || cursor.getDay() > 6) {
+  hoje.setHours(12, 0, 0, 0);
+
+  const hojeIso = formatarDataIsoLocal(hoje);
+
+  const cursor = new Date(hoje);
+
+  while (dias.length < 8) {
+    if (diasAtendimento.has(cursor.getDay())) {
+      const dataAtual = new Date(cursor);
+
+      const dataIso = formatarDataIsoLocal(dataAtual);
+
+      const botao = document.createElement("button");
+
+      botao.type = "button";
+      botao.className = "agendamento-date";
+
+      botao.dataset.dateIso = dataIso;
+      botao.dataset.dateLabel = formatarDataLonga(dataAtual);
+
+      botao.dataset.monthLabel = formatarMesAno(dataAtual);
+
+      botao.setAttribute("aria-pressed", "false");
+
+      botao.setAttribute(
+        "aria-label",
+        `Selecionar ${formatarDataLonga(dataAtual)}`,
+      );
+
+      if (dataIso === hojeIso) {
+        botao.classList.add("agendamento-date--today");
+      }
+
+      botao.innerHTML = `
+        <span class="agendamento-date-label">
+          ${weekNames[dataAtual.getDay()]}
+        </span>
+
+        <span class="agendamento-date-day">
+          ${String(dataAtual.getDate()).padStart(2, "0")}
+        </span>
+
+        <span class="agendamento-date-month">
+          ${monthNames[dataAtual.getMonth()]}
+        </span>
+      `;
+
+      container.appendChild(botao);
+      dias.push(botao);
+    }
+
     cursor.setDate(cursor.getDate() + 1);
   }
-  while (dias.length < 5) {
-    const dayNum = cursor.getDate();
-    const dayLabel = weekNames[cursor.getDay()];
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "agendamento-date";
-    btn.innerHTML = `\n      <span class="agendamento-date-day">${dayNum}</span>\n      <span class="agendamento-date-label">${dayLabel}</span>\n    `;
-    container.appendChild(btn);
-    try {
-      btn.dataset.dateIso = cursor.toISOString().slice(0, 10);
-    } catch (e) {
-      const isoFallback = new Date(
-        cursor.getFullYear(),
-        cursor.getMonth(),
-        cursor.getDate(),
-      )
-        .toISOString()
-        .slice(0, 10);
-      btn.dataset.dateIso = isoFallback;
-    }
-    dias.push(btn);
-    cursor.setDate(cursor.getDate() + 1);
-    while (cursor.getDay() < 2 || cursor.getDay() > 6) {
-      cursor.setDate(cursor.getDate() + 1);
-    }
-  }
-  if (dias[0]) {
-    dias[0].classList.add("agendamento-date--active");
-    dias[0].setAttribute("aria-pressed", "true");
-    localStorage.setItem("dataAgendamento", formatarData(dias[0]));
+
+  const primeiraData = dias[0];
+
+  if (primeiraData) {
+    primeiraData.classList.add("agendamento-date--active");
+
+    primeiraData.setAttribute("aria-pressed", "true");
+
+    localStorage.setItem("dataAgendamento", formatarData(primeiraData));
+
+    localStorage.setItem("dataAgendamentoISO", obterDataIso(primeiraData));
+
+    atualizarCabecalhoData(primeiraData);
   }
 }
 
@@ -117,153 +271,286 @@ function aguardarRedirecionamento(botao) {
 }
 
 async function carregarServicoSelecionado(serviceId) {
-  const titleElement = document.querySelector(".agendamento-title");
-  if (!titleElement) return null;
-  document.getElementById("service-name")?.remove();
-  const detailElement = document.createElement("p");
-  detailElement.id = "service-name";
-  detailElement.className = "agendamento-service-name";
-  detailElement.textContent = "Carregando serviço...";
-  titleElement.insertAdjacentElement("afterend", detailElement);
+  const nameElement = document.getElementById("service-name");
+
+  const durationElement = document.getElementById("service-duration");
+
+  const priceElement = document.getElementById("service-price");
+
+  const summaryServiceElement = document.getElementById("summary-service");
+
   if (!serviceId) {
-    detailElement.textContent = "Serviço não especificado.";
+    if (nameElement) {
+      nameElement.textContent = "Serviço não especificado";
+    }
+
+    if (durationElement) {
+      durationElement.textContent = "Duração não informada";
+    }
+
+    if (priceElement) {
+      priceElement.textContent = "Valor a consultar";
+    }
+
     return null;
   }
+
   try {
     const servicoRef = doc(db, "servicos", serviceId);
+
     const servicoSnap = await getDoc(servicoRef);
-    if (!servicoSnap.exists) {
-      detailElement.textContent = "Serviço não encontrado no sistema.";
+
+    if (!servicoSnap.exists()) {
+      if (nameElement) {
+        nameElement.textContent = "Serviço não encontrado";
+      }
+
       return null;
     }
+
     const serviceData = servicoSnap.data();
+
     const nomeServico = serviceData.nome || "Serviço selecionado";
-    const duracao = serviceData.duracao || 60;
-    detailElement.textContent = nomeServico;
-    return { nome: nomeServico, duracao };
+
+    const duracao = Number(serviceData.duracao) || 60;
+
+    const precoFormatado = formatarPrecoServico(serviceData.preco);
+
+    if (nameElement) {
+      nameElement.textContent = nomeServico;
+    }
+
+    if (durationElement) {
+      durationElement.textContent = `${duracao} min`;
+    }
+
+    if (priceElement) {
+      priceElement.textContent = precoFormatado;
+    }
+
+    if (summaryServiceElement) {
+      summaryServiceElement.textContent = nomeServico;
+    }
+
+    return {
+      nome: nomeServico,
+      duracao,
+      preco: serviceData.preco,
+    };
   } catch (error) {
     console.error("Erro ao carregar serviço:", error);
-    detailElement.textContent = "Erro ao carregar o serviço.";
+
+    if (nameElement) {
+      nameElement.textContent = "Erro ao carregar o serviço";
+    }
+
     return null;
   }
 }
 
 async function renderizarHorarios(dataIso, servicoDuracao) {
   const container = document.querySelector(".agendamento-times");
+
+  const availabilityElement = document.getElementById("availability-status");
+
   if (!container || !dataIso) {
-    console.error("Erro: Contêiner de horários ou DataISO não encontrados.");
+    console.error("Contêiner de horários ou data não encontrados.");
+
     return;
   }
 
-  container.innerHTML = `<div class="loading">Buscando vagas...</div>`;
+  container.innerHTML = `
+    <div class="agendamento-loading">
+      Buscando horários disponíveis...
+    </div>
+  `;
+
+  if (availabilityElement) {
+    availabilityElement.textContent = "Buscando";
+  }
 
   try {
-    const q = query(
+    const consulta = query(
       collection(db, "agendamentos"),
       where("data", "==", String(dataIso).trim()),
     );
-    const querySnapshot = await getDocs(q);
-    // ADICIONE ISSO PARA DEBUGAR:
-    console.log(
-      "Data que estamos buscando no Firebase:",
-      String(dataIso).trim(),
-    );
-    console.log("Quantos documentos foram encontrados:", querySnapshot.size);
 
-    querySnapshot.forEach((doc) => {
-      console.log("Documento encontrado:", doc.data());
-    });
+    const querySnapshot = await getDocs(consulta);
 
     const intervalosOcupados = [];
-    querySnapshot.forEach((doc) => {
-      const data = doc.data();
 
-      // Defina os status que realmente ocupam a agenda
-      const statusValidos = ["agendado", "reagendado", "confirmado"];
+    const statusValidos = ["agendado", "reagendado", "confirmado"];
 
-      // Verifica se tem horário e se o status está na lista de válidos
-      if (data.horario && statusValidos.includes(data.status)) {
-        const start = timeToMins(data.horario);
+    querySnapshot.forEach((documento) => {
+      const dados = documento.data();
 
-        // Se existir data.duracao, usamos. Caso contrário, usamos 90 apenas como fallback para legados.
-        const duracaoDoAgendamento = data.duracao ? Number(data.duracao) : 90;
-
-        intervalosOcupados.push({ start, end: start + duracaoDoAgendamento });
-        console.log(
-          `[DEBUG] Bloqueando horário ${data.horario} (Duração: ${duracaoDoAgendamento} min).`,
-        );
-      } else {
-        console.log(
-          `[DEBUG] Ignorando agendamento ${data.horario} (Status: ${data.status})`,
-        );
+      if (!dados.horario || !statusValidos.includes(dados.status)) {
+        return;
       }
+
+      const inicio = timeToMins(dados.horario);
+
+      const duracaoAgendada = Number(dados.duracao) || 90;
+
+      intervalosOcupados.push({
+        start: inicio,
+        end: inicio + duracaoAgendada,
+      });
     });
 
-    const estaLivre = querySnapshot.size === 0;
+    const duracaoServico = Number(servicoDuracao) || 60;
+
     const minAbertura = timeToMins("09:00");
+
     const minFechamento = timeToMins("18:00");
 
-    container.innerHTML = "";
-    const fragment = document.createDocumentFragment();
+    const horariosManha = [];
+    const horariosTarde = [];
 
-    // Loop de 30 em 30 min para melhor granularidade, usando a duração do serviço
+    let quantidadeDisponivel = 0;
+
     for (let atual = minAbertura; atual < minFechamento; atual += 30) {
-      const horarioTexto = minsToTime(atual);
-      const fimBloco = atual + servicoDuracao;
+      const fimServico = atual + duracaoServico;
 
-      // Se o serviço terminar após o horário de fechamento, para o loop
-      if (fimBloco > minFechamento) break;
-
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "agendamento-time";
-      btn.textContent = horarioTexto;
-
-      // A lógica agora é: ocupado se conflita com agendamento OU se termina após o horário limite
-      // Corrigimos para garantir que o conflito seja detectado corretamente
-      let indisponivel = intervalosOcupados.some((appt) => {
-        const conflito =
-          atual < appt.end && atual + servicoDuracao > appt.start;
-        return conflito;
-      });
-
-      // Se o bloco ultrapassa o limite de funcionamento (ex: 18:00)
-      if (atual + servicoDuracao > minFechamento) {
-        indisponivel = true;
+      if (fimServico > minFechamento) {
+        break;
       }
+
+      const horarioTexto = minsToTime(atual);
+
+      const indisponivel = intervalosOcupados.some(
+        (agendamento) =>
+          atual < agendamento.end && fimServico > agendamento.start,
+      );
+
+      const botao = document.createElement("button");
+
+      botao.type = "button";
+      botao.className = "agendamento-time";
+      botao.textContent = horarioTexto;
+      botao.dataset.time = horarioTexto;
+
+      botao.setAttribute("aria-pressed", "false");
 
       if (indisponivel) {
-        btn.classList.add("horario-ocupado");
-        btn.disabled = true;
-        btn.setAttribute("aria-disabled", "true");
-      } else {
-        btn.style.cursor = "pointer";
-        btn.onclick = function () {
-          console.log("Horário selecionado: " + horarioTexto);
-          const todos = Array.from(
-            container.querySelectorAll(".agendamento-time"),
-          );
-          selecionarUnico(btn, todos, "agendamento-time--active");
-          localStorage.setItem("horarioAgendamento", horarioTexto);
-          localStorage.setItem("horaAgendamento", horarioTexto);
-        };
-      }
-      fragment.appendChild(btn);
-    }
-    container.appendChild(fragment);
-    console.log("Horários renderizados com sucesso!");
+        botao.classList.add("horario-ocupado");
 
-    const salvo = localStorage.getItem("horarioAgendamento");
-    if (salvo) {
-      const slotValido = Array.from(
-        container.querySelectorAll(".agendamento-time:not([disabled])"),
-      ).find((b) => b.textContent === salvo);
-      if (!slotValido) localStorage.removeItem("horarioAgendamento");
-      else slotValido.classList.add("agendamento-time--active");
+        botao.disabled = true;
+
+        botao.setAttribute("aria-disabled", "true");
+
+        botao.setAttribute("aria-label", `${horarioTexto}, indisponível`);
+      } else {
+        quantidadeDisponivel += 1;
+
+        botao.setAttribute("aria-label", `Selecionar ${horarioTexto}`);
+      }
+
+      if (atual < timeToMins("12:00")) {
+        horariosManha.push(botao);
+      } else {
+        horariosTarde.push(botao);
+      }
     }
+
+    container.innerHTML = "";
+
+    function criarGrupoHorario(titulo, subtitulo, horarios) {
+      if (!horarios.length) return;
+
+      const periodo = document.createElement("section");
+
+      periodo.className = "agendamento-period";
+
+      const heading = document.createElement("div");
+
+      heading.className = "agendamento-period-heading";
+
+      const title = document.createElement("strong");
+
+      title.textContent = titulo;
+
+      const description = document.createElement("span");
+
+      description.textContent = subtitulo;
+
+      const grid = document.createElement("div");
+
+      grid.className = "agendamento-time-grid";
+
+      horarios.forEach((horario) => {
+        grid.appendChild(horario);
+      });
+
+      heading.appendChild(title);
+      heading.appendChild(description);
+
+      periodo.appendChild(heading);
+      periodo.appendChild(grid);
+
+      container.appendChild(periodo);
+    }
+
+    criarGrupoHorario("Manhã", "Das 9h às 12h", horariosManha);
+
+    criarGrupoHorario("Tarde", "Das 12h às 18h", horariosTarde);
+
+    if (availabilityElement) {
+      availabilityElement.textContent =
+        quantidadeDisponivel === 1
+          ? "1 horário"
+          : `${quantidadeDisponivel} horários`;
+    }
+
+    if (quantidadeDisponivel === 0) {
+      container.innerHTML = `
+        <div class="agendamento-time-state">
+          Não há horários disponíveis nesta data.
+          Escolha outro dia para continuar.
+        </div>
+      `;
+    }
+
+    const horarioSalvo = localStorage.getItem("horarioAgendamento");
+
+    if (horarioSalvo) {
+      const horarioValido = Array.from(
+        container.querySelectorAll(".agendamento-time:not([disabled])"),
+      ).find((botao) => botao.dataset.time === horarioSalvo);
+
+      if (horarioValido) {
+        const todosHorarios = Array.from(
+          container.querySelectorAll(".agendamento-time"),
+        );
+
+        selecionarUnico(
+          horarioValido,
+          todosHorarios,
+          "agendamento-time--active",
+        );
+      } else {
+        localStorage.removeItem("horarioAgendamento");
+
+        localStorage.removeItem("horaAgendamento");
+      }
+    }
+
+    atualizarResumoAgendamento();
   } catch (error) {
-    console.error("Erro no renderizarHorarios:", error);
-    container.innerHTML = `<p>Erro ao carregar horários.</p>`;
+    console.error("Erro ao carregar horários:", error);
+
+    container.innerHTML = `
+      <div class="agendamento-time-state">
+        Não foi possível carregar os horários.
+        Verifique sua conexão e tente novamente.
+      </div>
+    `;
+
+    if (availabilityElement) {
+      availabilityElement.textContent = "Indisponível";
+    }
+
+    atualizarResumoAgendamento();
   }
 }
 
@@ -284,32 +571,70 @@ async function inicializarAgendamento() {
   if (!botaoAgendar || datas.length === 0 || !textareaComentarios) return;
 
   localStorage.removeItem("horarioAgendamento");
+  localStorage.removeItem("horaAgendamento");
   const serviceInfo = await carregarServicoSelecionado(serviceId);
   const serviceName = serviceInfo?.nome || "Manicure Simples";
   const serviceDuration = serviceInfo?.duracao || 60;
 
   preencherNomeClienteDoLocalStorage();
+  const nomeClienteInput = document.getElementById("nomeCliente");
+
+  if (nomeClienteInput) {
+    nomeClienteInput.addEventListener("input", atualizarResumoAgendamento);
+  }
+
+  atualizarResumoAgendamento();
 
   datas.forEach((botao) => {
     botao.addEventListener("click", () => {
       selecionarUnico(botao, datas, "agendamento-date--active");
+
       localStorage.setItem("dataAgendamento", formatarData(botao));
+
       const dataIso = obterDataIso(botao);
-      if (dataIso) localStorage.setItem("dataAgendamentoISO", dataIso);
+
+      if (dataIso) {
+        localStorage.setItem("dataAgendamentoISO", dataIso);
+      }
+
+      localStorage.removeItem("horarioAgendamento");
+
+      localStorage.removeItem("horaAgendamento");
+
+      atualizarCabecalhoData(botao);
+      atualizarResumoAgendamento();
+
       renderizarHorarios(dataIso, serviceDuration);
     });
   });
 
   const horariosContainer = document.querySelector(".agendamento-times");
+
   if (horariosContainer) {
     horariosContainer.addEventListener("click", (event) => {
       const botao = event.target.closest(".agendamento-time");
-      if (!botao || botao.classList.contains("horario-ocupado")) return;
+
+      if (
+        !botao ||
+        botao.disabled ||
+        botao.classList.contains("horario-ocupado")
+      ) {
+        return;
+      }
+
       const todosHorarios = Array.from(
         horariosContainer.querySelectorAll(".agendamento-time"),
       );
+
       selecionarUnico(botao, todosHorarios, "agendamento-time--active");
-      localStorage.setItem("horarioAgendamento", botao.textContent.trim());
+
+      const horarioSelecionado = botao.dataset.time || botao.textContent.trim();
+
+      localStorage.setItem("horarioAgendamento", horarioSelecionado);
+
+      localStorage.setItem("horaAgendamento", horarioSelecionado);
+
+      atualizarResumoAgendamento();
     });
   }
 
@@ -334,7 +659,10 @@ async function inicializarAgendamento() {
         nomeUsuarioSalvo || user.displayName || user.email || "";
       if (nomePerfil) {
         nomeInput.value = nomePerfil;
+
         console.log("[agendamento] ✅ Nome carregado no campo:", nomePerfil);
+
+        atualizarResumoAgendamento();
       }
     }
 
@@ -519,7 +847,20 @@ async function inicializarAgendamento() {
 
   const diaAtivo =
     obterSelecionado(datas, "agendamento-date--active") || datas[0];
-  if (diaAtivo) renderizarHorarios(obterDataIso(diaAtivo), serviceDuration);
+
+  if (diaAtivo) {
+    const dataIso = obterDataIso(diaAtivo);
+
+    atualizarCabecalhoData(diaAtivo);
+
+    if (dataIso) {
+      localStorage.setItem("dataAgendamentoISO", dataIso);
+
+      await renderizarHorarios(dataIso, serviceDuration);
+    }
+  }
+
+  atualizarResumoAgendamento();
 }
 
 document.addEventListener("DOMContentLoaded", inicializarAgendamento);

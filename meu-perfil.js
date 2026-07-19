@@ -14,24 +14,130 @@ import {
   addDoc,
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
 
-let containerAgendamentos = null;
-let containerHistorico = null;
+let containerAtendimentos = null;
+let filtroAtivo = "agendados";
 
 function limparContainers() {
-  if (containerAgendamentos) {
-    const items = Array.from(
-      containerAgendamentos.querySelectorAll(".perfil-card"),
-    );
-    items.forEach((item) => item.remove());
+  if (!containerAtendimentos) return;
+
+  const cards = Array.from(
+    containerAtendimentos.querySelectorAll(".perfil-card"),
+  );
+
+  cards.forEach((card) => card.remove());
+}
+function obterGrupoStatus(status) {
+  const statusNormalizado = String(status || "")
+    .trim()
+    .toLowerCase();
+
+  if (
+    statusNormalizado === "agendado" ||
+    statusNormalizado === "confirmado" ||
+    statusNormalizado === "reagendado"
+  ) {
+    return "agendados";
   }
-  if (containerHistorico) {
-    const items = Array.from(
-      containerHistorico.querySelectorAll(".perfil-card"),
-    );
-    items.forEach((item) => item.remove());
+
+  if (statusNormalizado === "realizado" || statusNormalizado === "concluido") {
+    return "realizados";
+  }
+
+  if (statusNormalizado.startsWith("cancelado")) {
+    return "cancelados";
+  }
+
+  return "outros";
+}
+
+function atualizarContadoresAtendimentos() {
+  if (!containerAtendimentos) return;
+
+  const cards = Array.from(
+    containerAtendimentos.querySelectorAll(".perfil-card[data-grupo-status]"),
+  );
+
+  const contadores = {
+    todos: cards.length,
+    agendados: 0,
+    realizados: 0,
+    cancelados: 0,
+  };
+
+  cards.forEach((card) => {
+    const grupo = card.dataset.grupoStatus;
+
+    if (grupo && grupo in contadores) {
+      contadores[grupo] += 1;
+    }
+  });
+
+  document.querySelectorAll("[data-filter-count]").forEach((element) => {
+    const filtro = element.dataset.filterCount;
+
+    element.textContent = contadores[filtro] || 0;
+  });
+
+  const totalElement = document.getElementById("perfil-total-atendimentos");
+
+  if (totalElement) {
+    totalElement.textContent = contadores.todos;
   }
 }
 
+function aplicarFiltroAtendimentos(filtro = filtroAtivo) {
+  if (!containerAtendimentos) return;
+
+  filtroAtivo = filtro;
+
+  const cards = Array.from(
+    containerAtendimentos.querySelectorAll(".perfil-card[data-grupo-status]"),
+  );
+
+  let quantidadeVisivel = 0;
+
+  cards.forEach((card) => {
+    const deveExibir =
+      filtro === "todos" || card.dataset.grupoStatus === filtro;
+
+    card.hidden = !deveExibir;
+
+    if (deveExibir) {
+      quantidadeVisivel += 1;
+    }
+  });
+
+  document.querySelectorAll(".perfil-filter").forEach((button) => {
+    const ativo = button.dataset.filter === filtro;
+
+    button.classList.toggle("is-active", ativo);
+    button.setAttribute("aria-pressed", String(ativo));
+  });
+
+  const emptyElement = document.getElementById("perfil-filter-empty");
+
+  if (emptyElement) {
+    const mensagens = {
+      agendados: "Você não possui agendamentos ativos.",
+      realizados: "Nenhum atendimento realizado até o momento.",
+      cancelados: "Nenhum atendimento cancelado.",
+      todos: "Nenhum atendimento encontrado.",
+    };
+
+    emptyElement.textContent =
+      mensagens[filtro] || "Nenhum atendimento nesta categoria.";
+
+    emptyElement.hidden = quantidadeVisivel > 0;
+  }
+}
+
+function configurarFiltrosAtendimentos() {
+  document.querySelectorAll(".perfil-filter").forEach((button) => {
+    button.addEventListener("click", () => {
+      aplicarFiltroAtendimentos(button.dataset.filter || "agendados");
+    });
+  });
+}
 function parseDataString(dataString) {
   if (!dataString) return null;
 
@@ -122,6 +228,8 @@ function criarCardAtivo({
 }) {
   const card = document.createElement("article");
   card.className = "perfil-card perfil-card--confirmed";
+  card.dataset.grupoStatus = "agendados";
+  card.dataset.status = statusAgendamento || "agendado";
 
   const content = document.createElement("div");
   const title = document.createElement("p");
@@ -272,6 +380,9 @@ function criarCardHistorico({
 }) {
   const card = document.createElement("article");
   card.className = "perfil-card perfil-card--history";
+  card.dataset.grupoStatus = obterGrupoStatus(statusAgendamento);
+
+  card.dataset.status = statusAgendamento || "";
 
   let labelStatus = "Realizado";
   let corStatus = "#2a7a4a";
@@ -342,7 +453,7 @@ function criarCardVazio(mensagem, historico = false) {
 }
 
 async function carregarAgendamentos(uid) {
-  if (!containerAgendamentos || !containerHistorico) return;
+  if (!containerAtendimentos) return;
 
   limparContainers();
 
@@ -483,7 +594,7 @@ async function carregarAgendamentos(uid) {
           "[meu-perfil] Agendamento adicionado à seção ATIVA:",
           agendamentoData,
         );
-        containerAgendamentos.appendChild(criarCardAtivo(agendamentoData));
+        containerAtendimentos.appendChild(criarCardAtivo(agendamentoData));
       } else if (
         agendamentoData.status === "realizado" ||
         agendamentoData.status === "cancelado_cliente" ||
@@ -494,7 +605,7 @@ async function carregarAgendamentos(uid) {
           "[meu-perfil] Agendamento adicionado ao HISTÓRICO:",
           agendamentoData,
         );
-        containerHistorico.appendChild(criarCardHistorico(agendamentoData));
+        containerAtendimentos.appendChild(criarCardHistorico(agendamentoData));
       } else {
         console.warn(
           "[DEBUG] Agendamento não foi exibido - status desconhecido:",
@@ -502,6 +613,9 @@ async function carregarAgendamentos(uid) {
         );
       }
     }
+
+    atualizarContadoresAtendimentos();
+    aplicarFiltroAtendimentos(filtroAtivo);
   } catch (error) {
     console.error("Erro ao carregar agendamentos do Firestore:", error);
   }
@@ -512,8 +626,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const emailCliente = document.getElementById("email-cliente");
   const fotoCliente = document.getElementById("foto-cliente");
   const celularCliente = document.getElementById("celular-cliente");
-  containerAgendamentos = document.getElementById("container-agendamentos");
-  containerHistorico = document.getElementById("container-historico");
+  containerAtendimentos = document.getElementById("container-atendimentos");
+
+  configurarFiltrosAtendimentos();
 
   const logoutButton = document.getElementById("logout-button");
 
