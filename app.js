@@ -9,14 +9,25 @@
     },
 
     registerServiceWorker() {
-      if ("serviceWorker" in navigator) {
-        window.addEventListener("load", () => {
-          navigator.serviceWorker
-            .register("./service-worker.js")
-            .then((reg) => console.log("SW registrado com sucesso!", reg.scope))
-            .catch((err) => console.warn("Falha ao registrar SW:", err));
-        });
+      if (!("serviceWorker" in navigator)) {
+        return;
       }
+
+      window.addEventListener("load", async () => {
+        try {
+          const registration = await navigator.serviceWorker.register(
+            "./service-worker.js",
+            {
+              scope: "./",
+              updateViaCache: "none",
+            },
+          );
+
+          console.log("Service Worker registrado:", registration.scope);
+        } catch (error) {
+          console.warn("Falha ao registrar Service Worker:", error);
+        }
+      });
     },
 
     initHistoryBackLinks() {
