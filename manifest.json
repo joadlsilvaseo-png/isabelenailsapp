@@ -1,13 +1,17 @@
 {
-  "id": "/index.html",
+  "id": "./",
   "name": "Isabele Mariana Nails",
   "short_name": "IM Nails",
   "description": "Criando Tendências & Realizando Sonhos",
   "start_url": "./index.html",
+  "scope": "./",
   "display": "standalone",
-  "background_color": "#ffd9e7",
+  "display_override": ["standalone", "minimal-ui"],
+  "background_color": "#591c31",
   "theme_color": "#591c31",
-  "orientation": "portrait",
+  "orientation": "portrait-primary",
+  "lang": "pt-BR",
+  "dir": "ltr",
   "icons": [
     {
       "src": "./assets/icon-192.png",
@@ -20,15 +24,35 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
+    },
+    {
+      "src": "./assets/icon-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "./assets/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ],
   "categories": ["beauty", "lifestyle"],
   "shortcuts": [
     {
-      "name": "Agendar Horário",
+      "name": "Agendar horário",
       "short_name": "Agendar",
+      "description": "Acessar os serviços e agendar um horário",
       "url": "./principal.html",
-      "icons": [{ "src": "./assets/icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "./assets/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
     }
-  ]
+  ],
+  "prefer_related_applications": false
 }
