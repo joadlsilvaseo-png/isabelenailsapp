@@ -416,8 +416,8 @@ a {
 
 .landing-nav {
   width: 100%;
-  margin-top: auto;
-  padding-top: 29px;
+  margin-top: 34px;
+  padding-top: 0;
 
   display: grid;
   gap: 10px;
@@ -598,7 +598,8 @@ a {
   }
 
   .landing-nav {
-    padding-top: 19px;
+    margin-top: 24px;
+    padding-top: 0;
   }
 
   .landing-footer {
