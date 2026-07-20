@@ -7,23 +7,55 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
 
 import {
+  browserLocalPersistence,
+  onAuthStateChanged,
+  setPersistence,
   signInWithEmailAndPassword,
   signInWithPopup,
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
-
+let redirecionamentoEmAndamento = false;
 // ============================================================
 // JAVASCRIPT - Página Login (login.html)
 // ============================================================
 
-document.addEventListener("DOMContentLoaded", function () {
-  initializeLogin();
+document.addEventListener("DOMContentLoaded", async function () {
+  await initializeLogin();
 });
 
 /**
  * Função de inicialização da página de login
  */
-function initializeLogin() {
+async function initializeLogin() {
   console.log("Login page carregada");
+
+  try {
+    /*
+     * Mantém a autenticação salva mesmo após
+     * fechar e abrir novamente o navegador ou PWA.
+     */
+    await setPersistence(auth, browserLocalPersistence);
+
+    console.log("[Login] Persistência local configurada.");
+  } catch (error) {
+    console.error("[Login] Erro ao configurar persistência:", error);
+  }
+
+  /*
+   * Verifica se o Firebase restaurou uma sessão existente.
+   * Nesse caso, o formulário não precisa ser preenchido novamente.
+   */
+  onAuthStateChanged(auth, async (user) => {
+    if (!user) {
+      console.log("[Login] Nenhuma sessão existente.");
+
+      return;
+    }
+
+    console.log("[Login] Sessão existente encontrada:", user.uid);
+
+    await redirectByRole(user);
+  });
+
   setupFormValidation();
   setupGoogleLogin();
   setupPasswordToggle();
@@ -219,18 +251,30 @@ async function performLogin(email, password) {
 }
 
 async function redirectByRole(user) {
-  if (!user) return;
+  if (!user || redirecionamentoEmAndamento) {
+    return;
+  }
+
+  redirecionamentoEmAndamento = true;
+
   try {
     const userRef = doc(db, "clientes", user.uid);
+
     const userSnap = await getDoc(userRef);
 
-    if (userSnap.exists() && userSnap.data().role === "admin") {
-      window.location.href = "dashboard.html";
-    } else {
-      window.location.href = "principal.html";
+    const role = userSnap.exists() ? userSnap.data().role : "cliente";
+
+    if (role === "admin") {
+      window.location.replace("dashboard.html");
+
+      return;
     }
+
+    window.location.replace("principal.html");
   } catch (error) {
-    window.location.href = "principal.html";
+    console.error("[Login] Erro ao verificar perfil:", error);
+
+    window.location.replace("principal.html");
   }
 }
 
