@@ -1,21 +1,25 @@
 import { setupPushNotifications } from "./notificationService.js";
 import { auth, db } from "./firebase-config.js";
 
-import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
+import {
+  onAuthStateChanged,
+  signOut,
+} from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
 
 import {
   doc,
   getDoc,
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
 
-const fallbackName = "Cliente";
-
+const fallbackClientName = "Cliente";
+const fallbackAdminName = "Isabele";
 const fallbackAvatar = "https://www.w3schools.com/howto/img_avatar2.png";
+let principalSearchInitialized = false;
 
 /*
  * Palavras relacionadas a cada categoria.
- * Isso permite pesquisar tanto pela categoria quanto
- * pelos procedimentos encontrados dentro dela.
+ * Permite pesquisar pela categoria ou pelos
+ * procedimentos encontrados dentro dela.
  */
 const categorySearchTerms = {
   "unhas-em-gel.html": [
@@ -65,12 +69,18 @@ function normalizeSearchText(value) {
     .replace(/\s+/g, " ");
 }
 
+/* ============================================================
+   PESQUISA DA ÁREA DA CLIENTE
+   ============================================================ */
+
 function setupPrincipalSearch() {
+  if (principalSearchInitialized) {
+    return;
+  }
+
   const searchForm = document.getElementById("principal-search-form");
 
   const searchInput = document.getElementById("principal-search-input");
-
-  const searchFeedback = document.getElementById("principal-search-feedback");
 
   const servicesSection = document.querySelector(".principal-services");
 
@@ -81,6 +91,8 @@ function setupPrincipalSearch() {
   if (!searchForm || !searchInput || serviceItems.length === 0) {
     return;
   }
+
+  principalSearchInitialized = true;
 
   const searchableItems = serviceItems.map((item) => {
     const serviceLink = item.querySelector(".service-row");
@@ -129,10 +141,6 @@ function setupPrincipalSearch() {
     };
   });
 
-  function updateSearchFeedback() {
-    return;
-  }
-
   function filterServices(query) {
     const normalizedQuery = normalizeSearchText(query);
 
@@ -170,8 +178,6 @@ function setupPrincipalSearch() {
         visibleItems.push(searchableItem);
       }
     });
-
-    updateSearchFeedback(query, visibleItems);
 
     return visibleItems;
   }
@@ -228,45 +234,360 @@ function setupPrincipalSearch() {
   });
 }
 
-function initPrincipalPage() {
-  const nameElement = document.getElementById("nome-cliente");
+/* ============================================================
+   ELEMENTOS DA PÁGINA
+   ============================================================ */
 
-  const photoElement = document.getElementById("foto-perfil");
+function getPrincipalElements() {
+  return {
+    body: document.body,
 
+    loadingSection: document.getElementById("principal-access-loading"),
+
+    pageTitle: document.getElementById("principal-page-title"),
+
+    greeting: document.getElementById("principal-greeting"),
+
+    name: document.getElementById("nome-cliente"),
+
+    description: document.getElementById("principal-profile-description"),
+
+    photo: document.getElementById("foto-perfil"),
+
+    roleBadge: document.getElementById("principal-role-badge"),
+
+    profileLink: document.getElementById("principal-profile-link"),
+
+    navPlaceholder: document.getElementById("principal-nav-placeholder"),
+  };
+}
+
+function hideAllRoleSections() {
+  document.querySelectorAll("[data-role-section]").forEach((section) => {
+    section.hidden = true;
+  });
+}
+
+function showRoleSections(role) {
+  hideAllRoleSections();
+
+  document
+    .querySelectorAll(`[data-role-section="${role}"]`)
+    .forEach((section) => {
+      section.hidden = false;
+    });
+}
+
+function finishLoading(elements) {
+  if (elements.loadingSection) {
+    elements.loadingSection.hidden = true;
+  }
+}
+
+function showAccessError(elements, title, message) {
+  hideAllRoleSections();
+
+  if (!elements.loadingSection) {
+    window.alert(message);
+    return;
+  }
+
+  elements.loadingSection.hidden = false;
+  elements.loadingSection.classList.add("principal-access-loading--error");
+
+  const spinner = elements.loadingSection.querySelector(
+    ".principal-loading-spinner",
+  );
+
+  const titleElement = elements.loadingSection.querySelector("strong");
+
+  const messageElement = elements.loadingSection.querySelector("p");
+
+  if (spinner) {
+    spinner.hidden = true;
+  }
+
+  if (titleElement) {
+    titleElement.textContent = title;
+  }
+
+  if (messageElement) {
+    messageElement.textContent = message;
+  }
+}
+
+/* ============================================================
+   LEITURA DO PERFIL
+   ============================================================ */
+
+async function loadUserAccessProfile(user) {
+  const usuarioRef = doc(db, "usuarios", user.uid);
+
+  const clienteRef = doc(db, "clientes", user.uid);
+
+  const [usuarioSnapshot, clienteSnapshot] = await Promise.all([
+    getDoc(usuarioRef),
+    getDoc(clienteRef),
+  ]);
+
+  const usuarioData = usuarioSnapshot.exists() ? usuarioSnapshot.data() : null;
+
+  const clienteData = clienteSnapshot.exists() ? clienteSnapshot.data() : null;
+
+  /*
+   * A coleção usuarios é a fonte principal
+   * para permissão administrativa.
+   */
+  if (usuarioData) {
+    const role = String(usuarioData.role || "")
+      .trim()
+      .toLowerCase();
+
+    if (usuarioData.ativo !== true) {
+      return {
+        allowed: false,
+        reason: "inactive",
+        role,
+        usuarioData,
+        clienteData,
+      };
+    }
+
+    if (role !== "admin" && role !== "cliente") {
+      return {
+        allowed: false,
+        reason: "invalid-role",
+        role,
+        usuarioData,
+        clienteData,
+      };
+    }
+
+    return {
+      allowed: true,
+      role,
+      usuarioData,
+      clienteData,
+    };
+  }
+
+  /*
+   * Compatibilidade temporária:
+   * clientes cadastradas antes da criação
+   * da coleção usuarios continuam acessando.
+   *
+   * A ausência em usuarios nunca concede
+   * acesso administrativo.
+   */
+  if (clienteData) {
+    return {
+      allowed: true,
+      role: "cliente",
+      usuarioData: null,
+      clienteData,
+    };
+  }
+
+  /*
+   * Conta autenticada sem perfil no Firestore.
+   * Mantemos como cliente para não bloquear
+   * o fluxo atual de login.
+   */
+  return {
+    allowed: true,
+    role: "cliente",
+    usuarioData: null,
+    clienteData: null,
+  };
+}
+
+/* ============================================================
+   INTERFACE DA CLIENTE
+   ============================================================ */
+
+function configureClientInterface(user, accessProfile, elements) {
+  const userData = accessProfile.usuarioData || {};
+
+  const clientData = accessProfile.clienteData || {};
+
+  const clientName =
+    clientData.nome || userData.nome || user.displayName || fallbackClientName;
+
+  const clientPhoto =
+    clientData.foto || userData.foto || user.photoURL || fallbackAvatar;
+
+  elements.body.dataset.userRole = "cliente";
+
+  if (elements.pageTitle) {
+    elements.pageTitle.textContent = "Principal";
+  }
+
+  if (elements.greeting) {
+    elements.greeting.textContent = "Seja bem-vinda";
+  }
+
+  if (elements.name) {
+    elements.name.textContent = clientName;
+  }
+
+  if (elements.description) {
+    elements.description.textContent =
+      "Escolha seu próximo cuidado e acompanhe seus agendamentos.";
+  }
+
+  if (elements.photo) {
+    elements.photo.src = clientPhoto;
+    elements.photo.alt = `Foto de perfil de ${clientName}`;
+  }
+
+  if (elements.roleBadge) {
+    elements.roleBadge.textContent = "Cliente";
+
+    elements.roleBadge.hidden = false;
+  }
+
+  if (elements.profileLink) {
+    elements.profileLink.href = "meu-perfil.html";
+
+    elements.profileLink.setAttribute("aria-label", "Meu perfil");
+
+    elements.profileLink.hidden = false;
+  }
+
+  if (elements.navPlaceholder) {
+    elements.navPlaceholder.hidden = true;
+  }
+
+  showRoleSections("cliente");
   setupPrincipalSearch();
+  finishLoading(elements);
+}
 
-  onAuthStateChanged(auth, async (user) => {
-    if (!user) {
-      window.location.href = "login.html";
+/* ============================================================
+   INTERFACE ADMINISTRATIVA
+   ============================================================ */
+
+function configureAdminInterface(user, accessProfile, elements) {
+  const userData = accessProfile.usuarioData || {};
+
+  const clientData = accessProfile.clienteData || {};
+
+  const adminName =
+    userData.nome || clientData.nome || user.displayName || fallbackAdminName;
+
+  const adminPhoto =
+    userData.foto || clientData.foto || user.photoURL || fallbackAvatar;
+
+  elements.body.dataset.userRole = "admin";
+
+  if (elements.pageTitle) {
+    elements.pageTitle.textContent = "Gestão";
+  }
+
+  if (elements.greeting) {
+    elements.greeting.textContent = "Bem-vinda à sua gestão";
+  }
+
+  if (elements.name) {
+    elements.name.textContent = adminName;
+  }
+
+  if (elements.description) {
+    elements.description.textContent =
+      "Gerencie seus atendimentos, serviços e resultados.";
+  }
+
+  if (elements.photo) {
+    elements.photo.src = adminPhoto;
+    elements.photo.alt = `Foto de perfil de ${adminName}`;
+  }
+
+  if (elements.roleBadge) {
+    elements.roleBadge.textContent = "Administradora";
+
+    elements.roleBadge.hidden = false;
+  }
+
+  /*
+   * Ainda não existe uma página exclusiva
+   * de perfil administrativo.
+   */
+  if (elements.profileLink) {
+    elements.profileLink.hidden = true;
+  }
+
+  if (elements.navPlaceholder) {
+    elements.navPlaceholder.hidden = false;
+  }
+
+  showRoleSections("admin");
+  finishLoading(elements);
+}
+
+/* ============================================================
+   AUTENTICAÇÃO E PERMISSÃO
+   ============================================================ */
+
+async function handleAuthenticatedUser(user, elements) {
+  try {
+    const accessProfile = await loadUserAccessProfile(user);
+
+    if (!accessProfile.allowed) {
+      if (accessProfile.reason === "inactive") {
+        showAccessError(
+          elements,
+          "Acesso desativado",
+          "Esta conta está desativada. Entre em contato com a responsável pelo aplicativo.",
+        );
+      } else {
+        showAccessError(
+          elements,
+          "Perfil inválido",
+          "Não foi possível identificar uma permissão válida para esta conta.",
+        );
+      }
+
+      await signOut(auth);
       return;
     }
 
+    if (accessProfile.role === "admin") {
+      configureAdminInterface(user, accessProfile, elements);
+    } else {
+      configureClientInterface(user, accessProfile, elements);
+    }
+
     /*
-     * Impede administradores de acessarem
-     * a visualização destinada aos clientes.
+     * Mantém o token de notificação associado
+     * ao UID autenticado.
      */
-    try {
-      const userRef = doc(db, "clientes", user.uid);
+    setupPushNotifications(user.uid).catch((error) => {
+      console.warn("Não foi possível configurar as notificações:", error);
+    });
+  } catch (error) {
+    console.error("Erro ao carregar o perfil da Principal:", error);
 
-      const userSnap = await getDoc(userRef);
+    showAccessError(
+      elements,
+      "Não foi possível carregar",
+      "Verifique sua conexão e tente abrir o aplicativo novamente.",
+    );
+  }
+}
 
-      if (userSnap.exists() && userSnap.data().role === "admin") {
-        window.location.href = "dashboard.html";
-        return;
-      }
-    } catch (error) {
-      console.error("Erro ao verificar restrição de admin:", error);
+function initPrincipalPage() {
+  const elements = getPrincipalElements();
+
+  hideAllRoleSections();
+
+  onAuthStateChanged(auth, async (user) => {
+    if (!user) {
+      window.location.replace("login.html");
+
+      return;
     }
 
-    if (nameElement) {
-      nameElement.textContent = user.displayName || fallbackName;
-    }
-
-    if (photoElement) {
-      photoElement.src = user.photoURL || fallbackAvatar;
-    }
-
-    setupPushNotifications(user.uid);
+    await handleAuthenticatedUser(user, elements);
   });
 }
 

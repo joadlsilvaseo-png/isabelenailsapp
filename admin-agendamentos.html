@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <meta name="description" content="Gestão de agendamentos da Isabele Mariana Nails.">
+
+  <meta name="theme-color" content="#591c31">
+
+  <meta name="mobile-web-app-capable" content="yes">
+
+  <meta name="apple-mobile-web-app-capable" content="yes">
+
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+  <meta name="apple-mobile-web-app-title" content="IM Nails">
+
+  <title>Agendamentos | Isabele Mariana Nails</title>
+
+  <link rel="manifest" href="./manifest.json">
+
+  <link rel="icon" type="image/png" href="./assets/favicon.png">
+
+  <link rel="apple-touch-icon" href="./assets/apple-touch-icon.png">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="base.css?v=1.0.4">
+
+  <link rel="stylesheet" href="admin-agendamentos.css?v=1.0.2">
+</head>
+
+<body data-page="admin-agendamentos" data-access-state="loading">
+
+  <div class="app-container">
+
+    <header class="admin-page-header">
+
+      <nav class="admin-page-nav" aria-label="Navegação administrativa">
+        <a href="principal.html" class="admin-nav-button" aria-label="Voltar para a gestão">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M15 18L9 12L15 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </a>
+
+        <div class="admin-page-title">
+          <span>Gestão</span>
+
+          <h1>Agendamentos</h1>
+        </div>
+
+        <button id="admin-refresh-button" type="button" class="admin-nav-button" aria-label="Atualizar agendamentos">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M20 11A8 8 0 1 0 18.2 16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+
+            <path d="M20 5V11H14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </button>
+      </nav>
+
+      <section class="admin-page-intro">
+
+        <div>
+          <span class="admin-page-eyebrow">
+            Central de atendimentos
+          </span>
+
+          <h2>
+            Organize sua agenda
+          </h2>
+
+          <p>
+            Confirme, reagende, conclua e acompanhe os
+            atendimentos das suas clientes.
+          </p>
+        </div>
+
+        <span class="admin-page-intro-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <rect x="4" y="5" width="16" height="15" rx="3" stroke="currentColor" stroke-width="1.8" />
+
+            <path d="M8 3V7M16 3V7M4 10H20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+
+            <path d="M8 14H11M14 14H17M8 17H11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+          </svg>
+        </span>
+
+      </section>
+
+    </header>
+
+    <main class="admin-page-main">
+
+      <!-- ==============================================
+           CARREGAMENTO DA PERMISSÃO
+      =============================================== -->
+
+      <section id="admin-access-loading" class="admin-state-card" aria-live="polite">
+        <span class="admin-loading-spinner" aria-hidden="true"></span>
+
+        <div>
+          <strong>
+            Verificando acesso
+          </strong>
+
+          <p>
+            Aguarde enquanto carregamos a área administrativa.
+          </p>
+        </div>
+      </section>
+
+      <!-- ==============================================
+           ERRO DE ACESSO
+      =============================================== -->
+
+      <section id="admin-access-error" class="admin-state-card admin-state-card--error" aria-live="assertive" hidden>
+        <span class="admin-state-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8" />
+
+            <path d="M12 7V13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+
+            <circle cx="12" cy="17" r="1" fill="currentColor" />
+          </svg>
+        </span>
+
+        <div>
+          <strong id="admin-access-error-title">
+            Acesso não autorizado
+          </strong>
+
+          <p id="admin-access-error-message">
+            Esta conta não possui permissão administrativa.
+          </p>
+
+          <a href="principal.html" class="admin-state-link">
+            Voltar para a página principal
+          </a>
+        </div>
+      </section>
+
+      <!-- ==============================================
+           CONTEÚDO ADMINISTRATIVO
+      =============================================== -->
+
+      <div id="admin-agendamentos-content" class="admin-agendamentos-content" hidden>
+
+        <!-- RESUMO -->
+
+        <section class="admin-summary" aria-labelledby="admin-summary-title">
+          <header class="admin-section-heading">
+            <div>
+              <span class="admin-section-eyebrow">
+                Visão rápida
+              </span>
+
+              <h2 id="admin-summary-title">
+                Resumo da agenda
+              </h2>
+            </div>
+
+            <span id="admin-current-date" class="admin-current-date">
+              Hoje
+            </span>
+          </header>
+
+          <div class="admin-summary-grid">
+
+            <article class="admin-summary-card is-active" data-summary-filter="hoje" role="button" tabindex="0" aria-pressed="true">
+              <span class="admin-summary-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <rect x="4" y="5" width="16" height="15" rx="3" stroke="currentColor" stroke-width="1.8" />
+
+                  <path d="M8 3V7M16 3V7M4 10H20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+                </svg>
+              </span>
+
+              <div>
+                <strong id="admin-total-hoje">
+                  0
+                </strong>
+
+                <span>
+                  Agendamentos hoje
+                </span>
+              </div>
+            </article>
+
+            <article class="admin-summary-card" data-summary-filter="agendados" role="button" tabindex="0" aria-pressed="false">
+              <span class="admin-summary-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8" />
+
+                  <path d="M12 7V12L15 14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </span>
+
+              <div>
+                <strong id="admin-total-pendentes">
+                  0
+                </strong>
+
+                <span>
+                  Aguardando ação
+                </span>
+              </div>
+            </article>
+
+            <article class="admin-summary-card" data-summary-filter="confirmados" role="button" tabindex="0" aria-pressed="false">
+              <span class="admin-summary-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8" />
+
+                  <path d="M8 12L11 15L16 9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </span>
+
+              <div>
+                <strong id="admin-total-confirmados">
+                  0
+                </strong>
+
+                <span>
+                  Confirmados
+                </span>
+              </div>
+            </article>
+
+            <article class="admin-summary-card" data-summary-filter="concluidos" role="button" tabindex="0" aria-pressed="false">
+              <span class="admin-summary-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M5 12L10 17L19 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </span>
+
+              <div>
+                <strong id="admin-total-concluidos">
+                  0
+                </strong>
+
+                <span>
+                  Concluídos
+                </span>
+              </div>
+            </article>
+
+          </div>
+        </section>
+
+        <!-- PESQUISA E FILTROS -->
+
+        <section class="admin-controls" aria-labelledby="admin-list-title">
+          <header class="admin-section-heading">
+            <div>
+              <span class="admin-section-eyebrow">
+                Atendimentos
+              </span>
+
+              <h2 id="admin-list-title">
+                Todos os agendamentos
+              </h2>
+            </div>
+
+            <span id="admin-results-count" class="admin-results-count">
+              0 registros
+            </span>
+          </header>
+
+          <form id="admin-agendamentos-search-form" class="admin-search-form" role="search">
+            <label class="admin-search-box" for="admin-agendamentos-search-input">
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <circle cx="11" cy="11" r="6" stroke="currentColor" stroke-width="2" />
+
+                <path d="M16 16L21 21" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+              </svg>
+
+              <input id="admin-agendamentos-search-input" type="search" placeholder="Buscar cliente ou serviço" autocomplete="off">
+            </label>
+
+            <label class="admin-date-filter" for="admin-agendamentos-date-filter">
+              <span>Data</span>
+
+              <input id="admin-agendamentos-date-filter" type="date">
+            </label>
+          </form>
+
+          <div id="admin-status-filters" class="admin-filter-list" aria-label="Filtrar agendamentos por situação">
+            <button type="button" class="admin-filter-button is-active" data-status-filter="todos" aria-pressed="true">
+              Todos
+
+              <span data-filter-count="todos">
+                0
+              </span>
+            </button>
+
+            <button type="button" class="admin-filter-button" data-status-filter="agendados" aria-pressed="false">
+              Agendados
+
+              <span data-filter-count="agendados">
+                0
+              </span>
+            </button>
+
+            <button type="button" class="admin-filter-button" data-status-filter="confirmados" aria-pressed="false">
+              Confirmados
+
+              <span data-filter-count="confirmados">
+                0
+              </span>
+            </button>
+
+            <button type="button" class="admin-filter-button" data-status-filter="concluidos" aria-pressed="false">
+              Concluídos
+
+              <span data-filter-count="concluidos">
+                0
+              </span>
+            </button>
+
+            <button type="button" class="admin-filter-button" data-status-filter="cancelados" aria-pressed="false">
+              Cancelados
+
+              <span data-filter-count="cancelados">
+                0
+              </span>
+            </button>
+          </div>
+        </section>
+
+        <!-- CARREGAMENTO DOS AGENDAMENTOS -->
+
+        <section id="admin-list-loading" class="admin-state-card" aria-live="polite">
+          <span class="admin-loading-spinner" aria-hidden="true"></span>
+
+          <div>
+            <strong>
+              Carregando agendamentos
+            </strong>
+
+            <p>
+              Buscando os atendimentos cadastrados.
+            </p>
+          </div>
+        </section>
+
+        <!-- LISTA DINÂMICA -->
+
+        <section id="admin-agendamentos-list" class="admin-agendamentos-list" aria-live="polite" hidden>
+          <!-- Cards criados pelo admin-agendamentos.js -->
+        </section>
+
+        <!-- LISTA VAZIA -->
+
+        <section id="admin-list-empty" class="admin-empty-state" hidden>
+          <span class="admin-empty-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <rect x="4" y="5" width="16" height="15" rx="3" stroke="currentColor" stroke-width="1.8" />
+
+              <path d="M8 3V7M16 3V7M4 10H20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+
+              <path d="M9 15H15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+            </svg>
+          </span>
+
+          <strong id="admin-empty-title">
+            Nenhum agendamento encontrado
+          </strong>
+
+          <p id="admin-empty-message">
+            Não existem registros para os filtros selecionados.
+          </p>
+
+          <button id="admin-clear-filters-button" type="button" class="admin-clear-filters-button">
+            Limpar filtros
+          </button>
+        </section>
+
+        <!-- ERRO DA LISTA -->
+
+        <section id="admin-list-error" class="admin-state-card admin-state-card--error" hidden>
+          <span class="admin-state-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8" />
+
+              <path d="M12 7V13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+
+              <circle cx="12" cy="17" r="1" fill="currentColor" />
+            </svg>
+          </span>
+
+          <div>
+            <strong>
+              Não foi possível carregar
+            </strong>
+
+            <p>
+              Verifique sua conexão e tente novamente.
+            </p>
+
+            <button id="admin-list-retry-button" type="button" class="admin-state-link">
+              Tentar novamente
+            </button>
+          </div>
+        </section>
+
+      </div>
+
+    </main>
+
+    <!-- ==============================================
+         MODAL DE DETALHES
+    =============================================== -->
+
+    <div id="admin-agendamento-modal" class="admin-modal" role="dialog" aria-modal="true" aria-labelledby="admin-modal-title" hidden>
+      <button type="button" class="admin-modal-backdrop" data-close-modal aria-label="Fechar detalhes"></button>
+
+      <section class="admin-modal-panel">
+
+        <header class="admin-modal-header">
+          <div>
+            <span class="admin-modal-eyebrow">
+              Atendimento
+            </span>
+
+            <h2 id="admin-modal-title">
+              Detalhes do agendamento
+            </h2>
+          </div>
+
+          <button type="button" class="admin-modal-close" data-close-modal aria-label="Fechar">
+            &times;
+          </button>
+        </header>
+
+        <div id="admin-modal-content" class="admin-modal-content">
+          <!-- Conteúdo criado pelo JavaScript -->
+        </div>
+
+        <footer id="admin-modal-actions" class="admin-modal-actions">
+          <!-- Botões criados pelo JavaScript -->
+        </footer>
+
+      </section>
+    </div>
+
+  </div>
+
+  <script type="module" src="analytics.js?v=1.0.1"></script>
+
+  <script type="module" src="admin-agendamentos.js?v=1.0.0"></script>
+
+  <script src="app.js?v=2.0.0" defer></script>
+
+</body>
+
+</html>
