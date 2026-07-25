@@ -504,15 +504,36 @@ button {
 }
 
 .checkbox-label {
+  min-width: 0;
+  flex: 1;
+  margin: 0;
+
   cursor: pointer;
 
   font-size: 8.8px;
   font-weight: 500;
-  line-height: 1.5;
+  line-height: 1.55;
 
   color: var(--signup-text-muted);
 }
+.signup-terms-link {
+  margin-left: 0;
 
+  display: inline;
+
+  font-size: inherit;
+  font-weight: 700;
+  line-height: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+
+  color: var(--signup-primary);
+}
+
+.signup-terms-link:hover,
+.signup-terms-link:focus-visible {
+  color: var(--signup-dark);
+}
 /* Botões */
 
 .signup-button {
@@ -553,8 +574,12 @@ button {
 
 .signup-button:disabled {
   cursor: not-allowed;
-  opacity: 0.58;
+  pointer-events: none;
+
+  opacity: 0.52;
   transform: none;
+
+  box-shadow: none;
 }
 
 .signup-button--primary {

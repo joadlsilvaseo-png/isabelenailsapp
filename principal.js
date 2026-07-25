@@ -523,7 +523,39 @@ function configureAdminInterface(user, accessProfile, elements) {
   showRoleSections("admin");
   finishLoading(elements);
 }
+/* ============================================================
+   LOGOUT ADMINISTRATIVO
+   ============================================================ */
 
+function setupPrincipalLogout(elements) {
+  const logoutButton = elements.navPlaceholder;
+
+  if (!logoutButton) {
+    return;
+  }
+
+  logoutButton.addEventListener("click", async () => {
+    const confirmou = window.confirm("Deseja sair da sua conta?");
+
+    if (!confirmou) {
+      return;
+    }
+
+    logoutButton.disabled = true;
+
+    try {
+      await signOut(auth);
+
+      window.location.replace("login.html");
+    } catch (error) {
+      console.error("Erro ao sair da conta:", error);
+
+      window.alert("Não foi possível sair da conta. Tente novamente.");
+
+      logoutButton.disabled = false;
+    }
+  });
+}
 /* ============================================================
    AUTENTICAÇÃO E PERMISSÃO
    ============================================================ */
@@ -578,6 +610,7 @@ async function handleAuthenticatedUser(user, elements) {
 function initPrincipalPage() {
   const elements = getPrincipalElements();
 
+  setupPrincipalLogout(elements);
   hideAllRoleSections();
 
   onAuthStateChanged(auth, async (user) => {

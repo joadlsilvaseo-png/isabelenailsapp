@@ -133,14 +133,14 @@ document.addEventListener("DOMContentLoaded", () => {
       const linhasMensagem = [
         "Olá, Isabele! Gostaria de enviar os dados do meu agendamento:",
         "",
-        `👤 Cliente: ${nomeClienteTexto || "Não informado"}`,
-        `💅 Serviço: ${nomeServico || "Não informado"}`,
-        `📅 Data: ${dataTexto || "Não informada"}`,
-        `⏰ Horário: ${horarioTexto || "Não informado"}`,
+        `Cliente: ${nomeClienteTexto || "Não informado"}`,
+        `Serviço: ${nomeServico || "Não informado"}`,
+        `Data: ${dataTexto || "Não informada"}`,
+        `Horário: ${horarioTexto || "Não informado"}`,
       ];
 
       if (observacoesValidas) {
-        linhasMensagem.push(`📝 Observações: ${observacoesTexto.trim()}`);
+        linhasMensagem.push(`Observações: ${observacoesTexto.trim()}`);
       }
 
       linhasMensagem.push("", "Obrigada!");

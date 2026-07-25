@@ -637,14 +637,54 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    const userName = user.displayName?.trim() || "Heitor Vieira";
+    let dadosCliente = {};
+
+    try {
+      const clienteRef = doc(db, "clientes", user.uid);
+
+      const clienteSnapshot = await getDoc(clienteRef);
+
+      if (clienteSnapshot.exists()) {
+        dadosCliente = clienteSnapshot.data();
+      }
+    } catch (error) {
+      console.error("Erro ao carregar os dados da cliente:", error);
+    }
+
+    const userName = String(
+      dadosCliente.nome || user.displayName || "Cliente",
+    ).trim();
+
+    const userEmail = dadosCliente.email || user.email || "";
+
+    const userPhone =
+      dadosCliente.telefone ||
+      dadosCliente.celular ||
+      dadosCliente.whatsapp ||
+      "";
+
+    const userPhoto =
+      dadosCliente.foto ||
+      user.photoURL ||
+      "https://www.w3schools.com/howto/img_avatar2.png";
+
     localStorage.setItem("nomeUsuario", userName);
-    if (nomeCliente) nomeCliente.textContent = userName;
-    if (emailCliente) emailCliente.value = user.email || "";
-    if (fotoCliente)
-      fotoCliente.src =
-        user.photoURL || "https://www.w3schools.com/howto/img_avatar2.png";
-    if (celularCliente) celularCliente.value = "";
+
+    if (nomeCliente) {
+      nomeCliente.textContent = userName;
+    }
+
+    if (emailCliente) {
+      emailCliente.value = userEmail;
+    }
+
+    if (celularCliente) {
+      celularCliente.value = userPhone;
+    }
+
+    if (fotoCliente) {
+      fotoCliente.src = userPhoto;
+    }
 
     if (logoutButton) {
       logoutButton.addEventListener("click", (event) => {

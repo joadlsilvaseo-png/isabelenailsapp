@@ -1,509 +1,2426 @@
-console.log("O script do Dashboard começou a rodar!"); // Teste 1
-
 import { auth, db } from "./firebase-config.js";
+
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
+
 import {
   collection,
-  getDocs,
   doc,
   getDoc,
+  getDocs,
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
 
-let myChart = null;
-let cancelChart = null;
-let topClientesChart = null;
-let todasAsAnos = new Set();
+/* ============================================================
+   ESTADO
+   ============================================================ */
 
-// Proteção de Rota e Verificação de Admin
-onAuthStateChanged(auth, async (user) => {
-  console.log("Estado de autenticação mudou:", user); // Teste 2
+let todosAgendamentos = [];
 
-  if (user) {
-    console.log("Usuário logado com sucesso:", user.uid);
+let evolutionChart = null;
+let servicesChart = null;
+let statusChart = null;
+let clientsChart = null;
 
-    try {
-      // Busca o documento na coleção 'clientes' conforme solicitado
-      const userRef = doc(db, "clientes", user.uid);
-      const userSnap = await getDoc(userRef);
+let carregamentoEmAndamento = false;
 
-      if (userSnap.exists()) {
-        const userData = userSnap.data();
-        console.log("Dados do usuário:", userData);
+/* ============================================================
+   ELEMENTOS
+   ============================================================ */
 
-        if (userData.role === "admin") {
-          console.log("Acesso autorizado!");
+const elements = {};
 
-          // Ocultar link para visão de cliente (Navegação Restrita)
-          const backBtn = document.querySelector('a[href="principal.html"]');
-          if (backBtn) backBtn.style.display = "none";
+function carregarElementos() {
+  elements.body = document.body;
 
-          // Se for admin, remove a tela de loading e carrega os dados
-          const loadingScreen = document.getElementById("loading-screen");
-          if (loadingScreen) loadingScreen.style.display = "none";
+  elements.accessLoading = document.getElementById(
+    "dashboard-access-loading",
+  );
 
-          initFilters();
-          carregarDashboard();
-        } else {
-          console.error(
-            "Acesso negado: O campo 'role' não é 'admin' ou não existe.",
-          );
-          window.location.href = "login.html";
-        }
-      } else {
-        console.error(
-          "Erro: Documento do usuário não encontrado na coleção 'clientes'.",
+  elements.accessError = document.getElementById(
+    "dashboard-access-error",
+  );
+
+  elements.accessErrorTitle = document.getElementById(
+    "dashboard-access-error-title",
+  );
+
+  elements.accessErrorMessage = document.getElementById(
+    "dashboard-access-error-message",
+  );
+
+  elements.content = document.getElementById(
+    "dashboard-content",
+  );
+
+  elements.refreshButton = document.getElementById(
+    "dashboard-refresh-button",
+  );
+
+  elements.periodFilter = document.getElementById(
+    "dashboard-period-filter",
+  );
+
+  elements.periodLabel = document.getElementById(
+    "dashboard-period-label",
+  );
+
+  elements.updateLabel = document.getElementById(
+    "dashboard-update-label",
+  );
+
+  elements.revenue = document.getElementById(
+    "dashboard-revenue",
+  );
+
+  elements.completed = document.getElementById(
+    "dashboard-completed",
+  );
+
+  elements.averageTicket = document.getElementById(
+    "dashboard-average-ticket",
+  );
+
+  elements.cancellationRate = document.getElementById(
+    "dashboard-cancellation-rate",
+  );
+
+  elements.dataLoading = document.getElementById(
+    "dashboard-data-loading",
+  );
+
+  elements.dataError = document.getElementById(
+    "dashboard-data-error",
+  );
+
+  elements.retryButton = document.getElementById(
+    "dashboard-retry-button",
+  );
+
+  elements.dataSections = document.getElementById(
+    "dashboard-data-sections",
+  );
+
+  elements.topClients = document.getElementById(
+    "dashboard-top-clients",
+  );
+
+  elements.topClientsEmpty = document.getElementById(
+    "dashboard-top-clients-empty",
+  );
+
+  elements.busiestDay = document.getElementById(
+    "dashboard-busiest-day",
+  );
+
+  elements.busiestTime = document.getElementById(
+    "dashboard-busiest-time",
+  );
+
+  elements.topService = document.getElementById(
+    "dashboard-top-service",
+  );
+}
+
+/* ============================================================
+   UTILITÁRIOS
+   ============================================================ */
+
+function escaparHTML(valor) {
+  return String(valor ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function normalizarTexto(valor) {
+  return String(valor || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ");
+}
+
+function obterPrimeiroValor(
+  dados,
+  campos,
+  fallback = "",
+) {
+  for (const campo of campos) {
+    const valor = dados?.[campo];
+
+    if (
+      valor !== undefined &&
+      valor !== null &&
+      String(valor).trim() !== ""
+    ) {
+      return valor;
+    }
+  }
+
+  return fallback;
+}
+
+function normalizarStatus(status) {
+  return normalizarTexto(
+    status || "agendado",
+  )
+    .replace("concluído", "concluido")
+    .replace(
+      "cancelado pela cliente",
+      "cancelado_cliente",
+    )
+    .replace(
+      "cancelado pela profissional",
+      "cancelado_profissional",
+    );
+}
+
+function obterGrupoStatus(status) {
+  const statusNormalizado =
+    normalizarStatus(status);
+
+  if (statusNormalizado === "agendado") {
+    return "agendados";
+  }
+
+  if (
+    statusNormalizado === "confirmado" ||
+    statusNormalizado === "reagendado"
+  ) {
+    return "confirmados";
+  }
+
+  if (
+    statusNormalizado === "concluido" ||
+    statusNormalizado === "realizado"
+  ) {
+    return "concluidos";
+  }
+
+  if (
+    statusNormalizado.startsWith(
+      "cancelado",
+    )
+  ) {
+    return "cancelados";
+  }
+
+  return "agendados";
+}
+
+function obterNomeCliente(dados) {
+  return String(
+    obterPrimeiroValor(
+      dados,
+      [
+        "nomeCliente",
+        "clienteNome",
+        "nome",
+        "cliente",
+      ],
+      "Cliente",
+    ),
+  ).trim();
+}
+
+function obterServico(dados) {
+  return String(
+    obterPrimeiroValor(
+      dados,
+      [
+        "servico",
+        "nomeServico",
+        "servicoNome",
+      ],
+      "Serviço não informado",
+    ),
+  ).trim();
+}
+
+function obterHorario(dados) {
+  return String(
+    obterPrimeiroValor(
+      dados,
+      ["horario", "hora"],
+      "",
+    ),
+  ).trim();
+}
+
+function obterChaveCliente(dados) {
+  const identificador =
+    obterPrimeiroValor(
+      dados,
+      [
+        "clienteId",
+        "idCliente",
+        "userId",
+        "uidCliente",
+      ],
+      "",
+    );
+
+  if (identificador) {
+    return `id:${String(
+      identificador,
+    ).trim()}`;
+  }
+
+  const email = normalizarTexto(
+    obterPrimeiroValor(
+      dados,
+      [
+        "emailCliente",
+        "clienteEmail",
+        "email",
+      ],
+      "",
+    ),
+  );
+
+  if (email) {
+    return `email:${email}`;
+  }
+
+  const telefone = String(
+    obterPrimeiroValor(
+      dados,
+      [
+        "telefoneCliente",
+        "celularCliente",
+        "clienteTelefone",
+        "telefone",
+        "celular",
+        "whatsapp",
+      ],
+      "",
+    ),
+  ).replace(/\D/g, "");
+
+  if (telefone) {
+    return `telefone:${telefone}`;
+  }
+
+  return `nome:${normalizarTexto(
+    obterNomeCliente(dados),
+  )}`;
+}
+
+function converterValorMonetario(valor) {
+  if (
+    valor === undefined ||
+    valor === null ||
+    valor === ""
+  ) {
+    return 0;
+  }
+
+  if (typeof valor === "number") {
+    return Number.isFinite(valor)
+      ? valor
+      : 0;
+  }
+
+  let texto = String(valor)
+    .trim()
+    .replace(/R\$/gi, "")
+    .replace(/\s/g, "");
+
+  if (texto.includes(",")) {
+    texto = texto
+      .replace(/\./g, "")
+      .replace(",", ".");
+  } else if (
+    /^\d{1,3}(\.\d{3})+$/.test(texto)
+  ) {
+    texto = texto.replace(/\./g, "");
+  }
+
+  texto = texto.replace(
+    /[^0-9.-]/g,
+    "",
+  );
+
+  const numero = Number(texto);
+
+  return Number.isFinite(numero)
+    ? numero
+    : 0;
+}
+
+function obterValorAgendamento(
+  agendamento,
+) {
+  return converterValorMonetario(
+    obterPrimeiroValor(
+      agendamento,
+      [
+        "valorFinal",
+        "precoSnapshot",
+        "valor",
+        "preco",
+      ],
+      0,
+    ),
+  );
+}
+
+function formatarMoeda(valor) {
+  return new Intl.NumberFormat(
+    "pt-BR",
+    {
+      style: "currency",
+      currency: "BRL",
+    },
+  ).format(valor || 0);
+}
+
+function formatarQuantidade(
+  quantidade,
+  singular,
+  plural,
+) {
+  return quantidade === 1
+    ? `1 ${singular}`
+    : `${quantidade} ${plural}`;
+}
+
+/* ============================================================
+   DATAS E PERÍODOS
+   ============================================================ */
+
+function converterParaData(valor) {
+  if (!valor) {
+    return null;
+  }
+
+  if (
+    typeof valor?.toDate === "function"
+  ) {
+    const dataTimestamp =
+      valor.toDate();
+
+    return Number.isNaN(
+      dataTimestamp.getTime(),
+    )
+      ? null
+      : dataTimestamp;
+  }
+
+  if (valor instanceof Date) {
+    return Number.isNaN(valor.getTime())
+      ? null
+      : new Date(valor);
+  }
+
+  const texto = String(valor).trim();
+
+  if (!texto) {
+    return null;
+  }
+
+  const formatoISO = texto.match(
+    /^(\d{4})-(\d{2})-(\d{2})/,
+  );
+
+  if (formatoISO) {
+    return new Date(
+      Number(formatoISO[1]),
+      Number(formatoISO[2]) - 1,
+      Number(formatoISO[3]),
+    );
+  }
+
+  const formatoBrasileiro =
+    texto.match(
+      /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/,
+    );
+
+  if (formatoBrasileiro) {
+    let ano = Number(
+      formatoBrasileiro[3],
+    );
+
+    if (ano < 100) {
+      ano += 2000;
+    }
+
+    return new Date(
+      ano,
+      Number(formatoBrasileiro[2]) - 1,
+      Number(formatoBrasileiro[1]),
+    );
+  }
+
+  const tentativa = new Date(texto);
+
+  return Number.isNaN(
+    tentativa.getTime(),
+  )
+    ? null
+    : tentativa;
+}
+
+function obterDataAgendamento(
+  agendamento,
+) {
+  return converterParaData(
+    obterPrimeiroValor(
+      agendamento,
+      [
+        "data",
+        "dataAgendamento",
+      ],
+      null,
+    ),
+  );
+}
+
+function normalizarInicioDia(data) {
+  const resultado = new Date(data);
+
+  resultado.setHours(0, 0, 0, 0);
+
+  return resultado;
+}
+
+function normalizarFimDia(data) {
+  const resultado = new Date(data);
+
+  resultado.setHours(
+    23,
+    59,
+    59,
+    999,
+  );
+
+  return resultado;
+}
+
+function obterIntervaloPeriodo(periodo) {
+  const hoje = new Date();
+
+  const inicioHoje =
+    normalizarInicioDia(hoje);
+
+  const fimHoje =
+    normalizarFimDia(hoje);
+
+  if (periodo === "today") {
+    return {
+      inicio: inicioHoje,
+      fim: fimHoje,
+      rotulo: "Hoje",
+    };
+  }
+
+  if (
+    periodo === "last-7-days"
+  ) {
+    const inicio =
+      new Date(inicioHoje);
+
+    inicio.setDate(
+      inicio.getDate() - 6,
+    );
+
+    return {
+      inicio,
+      fim: fimHoje,
+      rotulo: "Últimos 7 dias",
+    };
+  }
+
+  if (
+    periodo === "last-30-days"
+  ) {
+    const inicio =
+      new Date(inicioHoje);
+
+    inicio.setDate(
+      inicio.getDate() - 29,
+    );
+
+    return {
+      inicio,
+      fim: fimHoje,
+      rotulo: "Últimos 30 dias",
+    };
+  }
+
+  if (
+    periodo === "current-year"
+  ) {
+    return {
+      inicio: new Date(
+        hoje.getFullYear(),
+        0,
+        1,
+      ),
+
+      fim: new Date(
+        hoje.getFullYear(),
+        11,
+        31,
+        23,
+        59,
+        59,
+        999,
+      ),
+
+      rotulo:
+        `Ano de ${hoje.getFullYear()}`,
+    };
+  }
+
+  if (periodo === "all") {
+    return {
+      inicio: null,
+      fim: null,
+      rotulo: "Período geral",
+    };
+  }
+
+  const nomeMes =
+    new Intl.DateTimeFormat(
+      "pt-BR",
+      {
+        month: "long",
+        year: "numeric",
+      },
+    ).format(hoje);
+
+  return {
+    inicio: new Date(
+      hoje.getFullYear(),
+      hoje.getMonth(),
+      1,
+    ),
+
+    fim: new Date(
+      hoje.getFullYear(),
+      hoje.getMonth() + 1,
+      0,
+      23,
+      59,
+      59,
+      999,
+    ),
+
+    rotulo:
+      nomeMes.charAt(0).toUpperCase() +
+      nomeMes.slice(1),
+  };
+}
+
+function filtrarPorPeriodo(
+  agendamentos,
+  periodo,
+) {
+  const intervalo =
+    obterIntervaloPeriodo(periodo);
+
+  if (
+    !intervalo.inicio ||
+    !intervalo.fim
+  ) {
+    return [...agendamentos];
+  }
+
+  return agendamentos.filter(
+    (agendamento) => {
+      const data =
+        obterDataAgendamento(
+          agendamento,
         );
-        window.location.href = "login.html";
+
+      if (!data) {
+        return false;
       }
-    } catch (e) {
-      console.error("Erro na autenticação:", e);
-      window.location.href = "login.html";
-    }
-  } else {
-    console.log("Nenhum usuário detectado.");
-    window.location.href = "login.html";
-  }
-});
 
-function initFilters() {
-  const yearSelect = document.getElementById("filter-year");
-  const monthSelect = document.getElementById("filter-month");
-
-  // Listener para os filtros
-  yearSelect.addEventListener("change", carregarDashboard);
-  monthSelect.addEventListener("change", carregarDashboard);
-
-  // Popular anos (do atual para trás como padrão, será atualizado com dados reais)
-  const currentYear = new Date().getFullYear();
-  for (let y = currentYear; y >= 2024; y--) {
-    const opt = document.createElement("option");
-    opt.value = y;
-    opt.textContent = `${y}`;
-    yearSelect.appendChild(opt);
-  }
+      return (
+        data >= intervalo.inicio &&
+        data <= intervalo.fim
+      );
+    },
+  );
 }
 
-/**
- * Função principal que buscará os dados do B.I. filtrados
- */
-async function carregarDashboard() {
-  try {
-    const year = document.getElementById("filter-year").value;
-    const month = document.getElementById("filter-month").value;
-    const label = document.getElementById("current-month-label");
+function obterChaveDia(data) {
+  const ano = data.getFullYear();
 
-    const biRef = collection(db, "B.I.");
-    
-    // Estratégia: Ler todos os docs e filtrar em JS para evitar problemas com índices compostos
-    console.log("[dashboard] Lendo todos os dados da coleção B.I...");
-    const snapshot = await getDocs(biRef);
-    console.log(`[dashboard] Coleção B.I. consultada: ${snapshot.size} documentos na receita`);
+  const mes = String(
+    data.getMonth() + 1,
+  ).padStart(2, "0");
 
-    // Filtro em JavaScript
-    let docsOrdenados = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
+  const dia = String(
+    data.getDate(),
+  ).padStart(2, "0");
 
-    // Aplicar filtros conforme seleção
-    if (year !== "Geral" || month !== "Geral") {
-      docsOrdenados = docsOrdenados.filter((doc) => {
-        const mesRef = String(doc.mesReferencia || "");
-        
-        if (year !== "Geral" && month === "Geral") {
-          return mesRef.startsWith(year);
-        } else if (year !== "Geral" && month !== "Geral") {
-          const mesEsperado = `${year}-${month}`;
-          return mesRef === mesEsperado;
-        }
-        return true;
-      });
-    }
-
-    // Define label
-    if (year !== "Geral" && month === "Geral") {
-      label.textContent = `Período: ${year}`;
-    } else if (year !== "Geral" && month !== "Geral") {
-      const dataFormatada = new Date(
-        year,
-        parseInt(month) - 1,
-      ).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
-      label.textContent = `Período: ${dataFormatada}`;
-    } else {
-      label.textContent = `Período Geral`;
-    }
-
-    console.log(`[dashboard] Documentos após filtro: ${docsOrdenados.length}`);
-
-    let totalReceita = 0;
-    let totalAtendimentos = docsOrdenados.length;
-    const distribuicaoServicos = {};
-
-    docsOrdenados.forEach((doc) => {
-      const dados = typeof doc.data === 'function' ? doc.data() : doc;
-      totalReceita += dados.valor || 0; // Soma o valor de cada registro
-
-      // Agrupa para o gráfico
-      const servico = dados.servico || "Outros";
-      distribuicaoServicos[servico] = (distribuicaoServicos[servico] || 0) + 1;
-    });
-    
-    console.log(`[dashboard] Receita total: R$ ${totalReceita.toFixed(2)}`);
-
-    // Atualiza os elementos na tela
-    const receitaEl = document.getElementById("valor-receita");
-    const atendimentosEl = document.getElementById("total-atendimentos");
-
-    if (receitaEl) receitaEl.innerText = `R$ ${totalReceita.toFixed(2)}`;
-    if (atendimentosEl) atendimentosEl.innerText = totalAtendimentos;
-
-    await carregarStatusEClientes(year, month);
-    renderChart(distribuicaoServicos);
-  } catch (error) {
-    console.error("Erro ao carregar Dashboard:", error);
-  }
+  return `${ano}-${mes}-${dia}`;
 }
 
-async function carregarStatusEClientes(year, month) {
-  try {
-    const agendamentosRef = collection(db, "agendamentos");
-    console.log("[dashboard] Acessando coleção agendamentos...");
-    
-    // Estratégia: Ler todos os docs e filtrar em JS para evitar problemas com índices compostos
-    const snapshot = await getDocs(agendamentosRef);
-    console.log(`[dashboard] Snapshot: ${snapshot.size} documentos encontrados na coleção agendamentos`);
-    const documentos = snapshot.docs.map((docItem) => ({
-      id: docItem.id,
-      ...docItem.data(),
-    }));
+function obterChaveMes(data) {
+  const ano = data.getFullYear();
 
-    const filtrados = documentos.filter((dados) => {
-      if (!dados || !dados.data) return false;
-      
-      // Filtro de ano
-      if (year !== "Geral") {
-        const anoDocsrv = String(dados.data).split("-")[0] || "";
-        if (anoDocsrv !== year) return false;
-      }
-      
-      // Filtro de mês
-      if (month !== "Geral") {
-        const mesDoc = String(dados.data).split("-")[1] || "";
-        if (mesDoc !== month) return false;
-      }
-      
-      return true;
-    });
-    
-    console.log(`[dashboard] Documentos após filtro de data: ${filtrados.length}`);
+  const mes = String(
+    data.getMonth() + 1,
+  ).padStart(2, "0");
 
-    let canceladosCount = 0;
-    let agendadosCount = 0;
-    let concluidosCount = 0;
-    const completadosPorCliente = {};
+  return `${ano}-${mes}`;
+}
 
-    filtrados.forEach((dados) => {
-      const status = String(dados.status || "").toLowerCase();
-      const clienteId = String(dados.clienteId || dados.idCliente || "").trim();
+function criarIntervaloDeDias(
+  inicio,
+  fim,
+) {
+  const dias = [];
 
-      if (status.startsWith("cancelado")) {
-        canceladosCount += 1;
-      }
-      if (["agendado", "reagendado", "confirmado"].includes(status)) {
-        agendadosCount += 1;
-      }
-      if (["concluido", "realizado"].includes(status)) {
-        concluidosCount += 1;
-        if (clienteId) {
-          completadosPorCliente[clienteId] = (completadosPorCliente[clienteId] || 0) + 1;
-        }
-      }
-    });
+  const cursor =
+    normalizarInicioDia(inicio);
 
-    const totalOrders = filtrados.length;
-    const cancelRate = totalOrders ? Math.round((canceladosCount / totalOrders) * 100) : 0;
+  const limite =
+    normalizarInicioDia(fim);
 
-    const cancelamentoEl = document.getElementById("valor-cancelamento");
-    if (cancelamentoEl) cancelamentoEl.innerText = `${cancelRate}%`;
+  while (cursor <= limite) {
+    dias.push(new Date(cursor));
 
-    renderCancelamentoChart(canceladosCount, agendadosCount, concluidosCount);
+    cursor.setDate(
+      cursor.getDate() + 1,
+    );
+  }
 
-    const ranking = Object.entries(completadosPorCliente)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5);
+  return dias;
+}
 
-    if (ranking.length === 0) {
-      renderTopClientesChart([]);
-      return;
-    }
+/* ============================================================
+   ACESSO ADMINISTRATIVO
+   ============================================================ */
 
-    const clientesComNomes = await Promise.all(
-      ranking.map(async ([clienteId]) => {
-        try {
-          const clienteSnap = await getDoc(doc(db, "clientes", clienteId));
-          if (clienteSnap.exists()) {
-            const clienteData = clienteSnap.data();
-            return clienteData.nome || clienteData.displayName || clienteId;
-          }
-        } catch (error) {
-          console.error(`Erro ao buscar cliente ${clienteId}:`, error);
-        }
-        return clienteId;
+async function verificarAcessoAdmin(
+  user,
+) {
+  const usuarioRef = doc(
+    db,
+    "usuarios",
+    user.uid,
+  );
+
+  const usuarioSnap =
+    await getDoc(usuarioRef);
+
+  if (!usuarioSnap.exists()) {
+    return false;
+  }
+
+  const usuarioData =
+    usuarioSnap.data();
+
+  return (
+    String(
+      usuarioData.role || "",
+    ).toLowerCase() === "admin" &&
+    usuarioData.ativo === true
+  );
+}
+
+function mostrarAcessoNegado(
+  titulo,
+  mensagem,
+) {
+  elements.body.dataset.accessState =
+    "denied";
+
+  elements.accessLoading.hidden = true;
+  elements.content.hidden = true;
+  elements.accessError.hidden = false;
+
+  elements.accessErrorTitle.textContent =
+    titulo;
+
+  elements.accessErrorMessage.textContent =
+    mensagem;
+}
+
+function liberarConteudoAdmin() {
+  elements.body.dataset.accessState =
+    "allowed";
+
+  elements.accessLoading.hidden = true;
+  elements.accessError.hidden = true;
+  elements.content.hidden = false;
+}
+
+/* ============================================================
+   ESTADOS DOS DADOS
+   ============================================================ */
+
+function mostrarCarregamentoDados() {
+  elements.dataLoading.hidden = false;
+  elements.dataError.hidden = true;
+  elements.dataSections.hidden = true;
+
+  elements.updateLabel.textContent =
+    "Atualizando";
+}
+
+function mostrarErroDados() {
+  elements.dataLoading.hidden = true;
+  elements.dataError.hidden = false;
+  elements.dataSections.hidden = true;
+
+  elements.updateLabel.textContent =
+    "Erro ao atualizar";
+}
+
+function mostrarDadosCarregados() {
+  elements.dataLoading.hidden = true;
+  elements.dataError.hidden = true;
+  elements.dataSections.hidden = false;
+
+  const horario =
+    new Intl.DateTimeFormat(
+      "pt-BR",
+      {
+        hour: "2-digit",
+        minute: "2-digit",
+      },
+    ).format(new Date());
+
+  elements.updateLabel.textContent =
+    `Atualizado às ${horario}`;
+}
+
+/* ============================================================
+   CÁLCULO DOS INDICADORES
+   ============================================================ */
+
+function calcularIndicadores(
+  agendamentosFiltrados,
+) {
+  const concluidos =
+    agendamentosFiltrados.filter(
+      (agendamento) =>
+        obterGrupoStatus(
+          agendamento.status,
+        ) === "concluidos",
+    );
+
+  const cancelados =
+    agendamentosFiltrados.filter(
+      (agendamento) =>
+        obterGrupoStatus(
+          agendamento.status,
+        ) === "cancelados",
+    );
+
+  const receita = concluidos.reduce(
+    (total, agendamento) =>
+      total +
+      obterValorAgendamento(
+        agendamento,
+      ),
+    0,
+  );
+
+  const ticketMedio =
+    concluidos.length
+      ? receita / concluidos.length
+      : 0;
+
+  const taxaCancelamento =
+    agendamentosFiltrados.length
+      ? (
+          cancelados.length /
+          agendamentosFiltrados.length
+        ) * 100
+      : 0;
+
+  return {
+    receita,
+    concluidos,
+    ticketMedio,
+    taxaCancelamento,
+  };
+}
+
+function atualizarIndicadores(
+  indicadores,
+) {
+  elements.revenue.textContent =
+    formatarMoeda(
+      indicadores.receita,
+    );
+
+  elements.completed.textContent =
+    String(
+      indicadores.concluidos.length,
+    );
+
+  elements.averageTicket.textContent =
+    formatarMoeda(
+      indicadores.ticketMedio,
+    );
+
+  elements.cancellationRate.textContent =
+    `${Math.round(
+      indicadores.taxaCancelamento,
+    )}%`;
+}
+
+/* ============================================================
+   DADOS DOS GRÁFICOS
+   ============================================================ */
+
+function criarDadosEvolucao(
+  concluidos,
+  periodo,
+) {
+  const intervalo =
+    obterIntervaloPeriodo(periodo);
+
+  if (periodo === "today") {
+    const horas = Array.from(
+      { length: 10 },
+      (_, indice) => indice + 9,
+    );
+
+    const itens = horas.map(
+      (hora) => ({
+        chave:
+          `${String(hora).padStart(
+            2,
+            "0",
+          )}:00`,
+
+        rotulo:
+          `${String(hora).padStart(
+            2,
+            "0",
+          )}h`,
+
+        receita: 0,
+        atendimentos: 0,
       }),
     );
 
-    renderTopClientesChart(ranking, clientesComNomes);
-    console.log("[dashboard] Métricas e gráficos renderizados com sucesso");
-  } catch (error) {
-    console.error("[dashboard] ERRO ao carregar métricas de status e top clientes:", error);
-    console.error("Detalhes completos do erro:", JSON.stringify(error));
-  }
-}
+    const mapa = new Map(
+      itens.map(
+        (item) => [
+          item.chave,
+          item,
+        ],
+      ),
+    );
 
-function renderCancelamentoChart(canceladosCount, agendadosCount, concluidosCount) {
-  const ctx = document.getElementById("cancelamentoChart");
-  if (!ctx) return;
+    concluidos.forEach(
+      (agendamento) => {
+        const horario =
+          obterHorario(agendamento);
 
-  if (cancelChart) {
-    cancelChart.destroy();
-  }
+        const match =
+          horario.match(
+            /^(\d{1,2}):/,
+          );
 
-  cancelChart = new Chart(ctx.getContext("2d"), {
-    type: "bar",
-    data: {
-      labels: ["Cancelados", "Agendados", "Concluídos"],
-      datasets: [
-        {
-          data: [canceladosCount, agendadosCount, concluidosCount],
-          backgroundColor: ["#b53f60", "#ffd9e7", "#2a7a4a"],
-          borderRadius: 12,
-          barThickness: 28,
-        },
-      ],
-    },
-    options: {
-      indexAxis: "y",
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          backgroundColor: "rgba(0, 0, 0, 0.8)",
-          titleColor: "#FFD9E7",
-          bodyColor: "#FFD9E7",
-          padding: 10,
-          displayColors: false,
-          callbacks: {
-            label: function(context) {
-              return Math.round(context.parsed.x) + " agendamentos";
-            }
-          }
-        },
-      },
-      scales: {
-        x: {
-          beginAtZero: true,
-          ticks: {
-            color: "#ffd9e7",
-            font: { size: 12, weight: "500" },
-            stepSize: 1,
-            callback: function(value) {
-              if (Number.isInteger(value)) {
-                return value;
-              }
-            }
-          },
-          grid: { color: "rgba(255,255,255,0.08)" },
-        },
-        y: {
-          ticks: { color: "#ffd9e7", font: { size: 12 } },
-          grid: { display: false },
-        },
-      },
-      layout: {
-        padding: {
-          top: 10,
-          bottom: 10,
-          left: 10,
-          right: 10
+        if (!match) {
+          return;
         }
-      }
-    },
-  });
-}
 
+        const hora =
+          Number(match[1]);
 
-function renderTopClientesChart(ranking, clienteNomes = []) {
-  const ctx = document.getElementById("topClientesChart");
-  if (!ctx) return;
+        const chave =
+          `${String(hora).padStart(
+            2,
+            "0",
+          )}:00`;
 
-  if (topClientesChart) {
-    topClientesChart.destroy();
-  }
+        const item =
+          mapa.get(chave);
 
-  // Paleta de cores com tons de rosa e roxo (mesma lógica do gráfico de serviços)
-  const colorPalette = [
-    "#ff80ab",  // Rosa principal
-    "#f6b8d0",  // Rosa claro
-    "#f0a4c3",  // Rosa médio
-    "#d47fa8",  // Rosa escuro
-    "#b53f60",  // Rosa escuro forte
-    "#9d1a45",  // Vermelho/rosa escuro
-    "#a6577a",  // Roxo médio
-    "#7c334c",  // Roxo escuro
-  ];
-
-  const labels = ranking.length
-    ? ranking.map(([_, __], index) => clienteNomes[index] || `Cliente ${index + 1}`)
-    : ["Sem dados"];
-  const values = ranking.length ? ranking.map(([_, valor]) => valor) : [0];
-  
-  // Aplicar cores diferentes para cada barra
-  const backgroundColor = ranking.length
-    ? labels.map((_, index) => colorPalette[index % colorPalette.length])
-    : ["rgba(255, 255, 255, 0.12)"];
-
-  topClientesChart = new Chart(ctx.getContext("2d"), {
-    type: "bar",
-    data: {
-      labels,
-      datasets: [
-        {
-          label: "Pedidos concluídos",
-          data: values,
-          backgroundColor,
-          borderRadius: 12,
-          barPercentage: 0.75,
-          maxBarThickness: 60,
-        },
-      ],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          backgroundColor: "rgba(0, 0, 0, 0.8)",
-          titleColor: "#FFD9E7",
-          bodyColor: "#FFD9E7",
-          padding: 10,
-          displayColors: false,
-          callbacks: {
-            label: function(context) {
-              return Math.round(context.parsed.y) + " pedidos";
-            }
-          }
-        },
-      },
-      scales: {
-        x: {
-          ticks: { 
-            color: "#ffd9e7",
-            font: { size: 11 }
-          },
-          grid: { display: false },
-        },
-        y: {
-          beginAtZero: true,
-          ticks: {
-            color: "#ffd9e7",
-            font: { size: 12, weight: "500" },
-            stepSize: 1,
-            callback: function(value) {
-              if (Number.isInteger(value)) {
-                return value;
-              }
-            }
-          },
-          grid: { color: "rgba(255,255,255,0.08)" },
-        },
-      },
-      layout: {
-        padding: {
-          top: 10,
-          bottom: 10,
-          left: 10,
-          right: 10
+        if (!item) {
+          return;
         }
+
+        item.atendimentos += 1;
+
+        item.receita +=
+          obterValorAgendamento(
+            agendamento,
+          );
+      },
+    );
+
+    return itens;
+  }
+
+  if (
+    periodo === "last-7-days" ||
+    periodo === "last-30-days" ||
+    periodo === "current-month"
+  ) {
+    const dias =
+      criarIntervaloDeDias(
+        intervalo.inicio,
+        intervalo.fim,
+      );
+
+    const itens = dias.map(
+      (data) => ({
+        chave:
+          obterChaveDia(data),
+
+        rotulo:
+          new Intl.DateTimeFormat(
+            "pt-BR",
+            {
+              day: "2-digit",
+              month: "2-digit",
+            },
+          ).format(data),
+
+        receita: 0,
+        atendimentos: 0,
+      }),
+    );
+
+    const mapa = new Map(
+      itens.map(
+        (item) => [
+          item.chave,
+          item,
+        ],
+      ),
+    );
+
+    concluidos.forEach(
+      (agendamento) => {
+        const data =
+          obterDataAgendamento(
+            agendamento,
+          );
+
+        if (!data) {
+          return;
+        }
+
+        const item = mapa.get(
+          obterChaveDia(data),
+        );
+
+        if (!item) {
+          return;
+        }
+
+        item.atendimentos += 1;
+
+        item.receita +=
+          obterValorAgendamento(
+            agendamento,
+          );
+      },
+    );
+
+    return itens;
+  }
+
+  if (
+    periodo === "current-year"
+  ) {
+    const ano =
+      new Date().getFullYear();
+
+    const itens = Array.from(
+      { length: 12 },
+      (_, mes) => {
+        const data =
+          new Date(ano, mes, 1);
+
+        return {
+          chave:
+            obterChaveMes(data),
+
+          rotulo:
+            new Intl.DateTimeFormat(
+              "pt-BR",
+              {
+                month: "short",
+              },
+            )
+              .format(data)
+              .replace(".", ""),
+
+          receita: 0,
+          atendimentos: 0,
+        };
+      },
+    );
+
+    const mapa = new Map(
+      itens.map(
+        (item) => [
+          item.chave,
+          item,
+        ],
+      ),
+    );
+
+    concluidos.forEach(
+      (agendamento) => {
+        const data =
+          obterDataAgendamento(
+            agendamento,
+          );
+
+        if (!data) {
+          return;
+        }
+
+        const item = mapa.get(
+          obterChaveMes(data),
+        );
+
+        if (!item) {
+          return;
+        }
+
+        item.atendimentos += 1;
+
+        item.receita +=
+          obterValorAgendamento(
+            agendamento,
+          );
+      },
+    );
+
+    return itens;
+  }
+
+  const mapaMeses = new Map();
+
+  concluidos.forEach(
+    (agendamento) => {
+      const data =
+        obterDataAgendamento(
+          agendamento,
+        );
+
+      if (!data) {
+        return;
       }
+
+      const chave =
+        obterChaveMes(data);
+
+      if (
+        !mapaMeses.has(chave)
+      ) {
+        mapaMeses.set(
+          chave,
+          {
+            chave,
+
+            rotulo:
+              new Intl.DateTimeFormat(
+                "pt-BR",
+                {
+                  month: "short",
+                  year: "2-digit",
+                },
+              )
+                .format(data)
+                .replace(".", ""),
+
+            receita: 0,
+            atendimentos: 0,
+          },
+        );
+      }
+
+      const item =
+        mapaMeses.get(chave);
+
+      item.atendimentos += 1;
+
+      item.receita +=
+        obterValorAgendamento(
+          agendamento,
+        );
     },
-  });
-}
-
-
-function renderChart(dados) {
-  const ctx = document.getElementById("servicesChart").getContext("2d");
-
-  const labels = Object.keys(dados);
-  const valores = Object.values(dados);
-
-  if (myChart) {
-    myChart.destroy();
-  }
-
-  if (labels.length === 0) {
-    return; // Não desenha se não houver dados
-  }
-
-  const palette = {
-    Alongamento: "#ff80ab",
-    "Manicure Simples": "#f0c1d1",
-    "ID do Serviço Inválido": "#3b1122",
-    Outros: "#7c334c",
-  };
-
-  const fallbackColors = [
-    "#ff80ab",
-    "#f6b8d0",
-    "#3b1122",
-    "#7c334c",
-    "#591c31",
-    "#a6577a",
-  ];
-  const backgroundColor = labels.map(
-    (label, index) =>
-      palette[label] || fallbackColors[index % fallbackColors.length],
   );
 
-  myChart = new Chart(ctx, {
-    type: "pie",
-    data: {
-      labels: labels,
-      datasets: [
+  const itens = Array.from(
+    mapaMeses.values(),
+  ).sort(
+    (a, b) =>
+      a.chave.localeCompare(
+        b.chave,
+      ),
+  );
+
+  return itens.length
+    ? itens
+    : [
         {
-          data: valores,
-          backgroundColor,
-          borderWidth: 1,
-          borderColor: "#2d0b19",
-          hoverOffset: 12,
+          chave: "sem-dados",
+          rotulo: "Sem dados",
+          receita: 0,
+          atendimentos: 0,
         },
-      ],
+      ];
+}
+
+function criarRankingServicos(
+  concluidos,
+) {
+  const mapa = new Map();
+
+  concluidos.forEach(
+    (agendamento) => {
+      const servico =
+        obterServico(agendamento);
+
+      mapa.set(
+        servico,
+        (mapa.get(servico) || 0) + 1,
+      );
     },
-    options: {
-      maintainAspectRatio: false,
-      aspectRatio: 1.2,
-      plugins: {
-        legend: {
-          position: "bottom",
-          labels: {
-            color: "#FFD9E7",
-            font: { family: "Urbanist", size: 14 },
-            boxWidth: 14,
-            padding: 16,
-            usePointStyle: true,
+  );
+
+  return Array.from(
+    mapa.entries(),
+  )
+    .map(
+      ([nome, quantidade]) => ({
+        nome,
+        quantidade,
+      }),
+    )
+    .sort(
+      (a, b) =>
+        b.quantidade -
+        a.quantidade,
+    )
+    .slice(0, 6);
+}
+
+function criarDistribuicaoStatus(
+  agendamentos,
+) {
+  const contadores = {
+    agendados: 0,
+    confirmados: 0,
+    concluidos: 0,
+    cancelados: 0,
+  };
+
+  agendamentos.forEach(
+    (agendamento) => {
+      const grupo =
+        obterGrupoStatus(
+          agendamento.status,
+        );
+
+      if (
+        grupo in contadores
+      ) {
+        contadores[grupo] += 1;
+      }
+    },
+  );
+
+  return contadores;
+}
+
+function criarPerfilClientes(
+  concluidosDoPeriodo,
+) {
+  const totaisHistoricos =
+    new Map();
+
+  todosAgendamentos
+    .filter(
+      (agendamento) =>
+        obterGrupoStatus(
+          agendamento.status,
+        ) === "concluidos",
+    )
+    .forEach(
+      (agendamento) => {
+        const chave =
+          obterChaveCliente(
+            agendamento,
+          );
+
+        totaisHistoricos.set(
+          chave,
+          (
+            totaisHistoricos.get(
+              chave,
+            ) || 0
+          ) + 1,
+        );
+      },
+    );
+
+  const clientesDoPeriodo =
+    new Map();
+
+  concluidosDoPeriodo.forEach(
+    (agendamento) => {
+      const chave =
+        obterChaveCliente(
+          agendamento,
+        );
+
+      if (
+        !clientesDoPeriodo.has(
+          chave,
+        )
+      ) {
+        clientesDoPeriodo.set(
+          chave,
+          agendamento,
+        );
+      }
+    },
+  );
+
+  let novas = 0;
+  let recorrentes = 0;
+
+  clientesDoPeriodo.forEach(
+    (_, chave) => {
+      if (
+        (
+          totaisHistoricos.get(
+            chave,
+          ) || 0
+        ) >= 2
+      ) {
+        recorrentes += 1;
+      } else {
+        novas += 1;
+      }
+    },
+  );
+
+  return {
+    novas,
+    recorrentes,
+  };
+}
+
+function criarRankingClientes(
+  concluidos,
+) {
+  const mapa = new Map();
+
+  concluidos.forEach(
+    (agendamento) => {
+      const chave =
+        obterChaveCliente(
+          agendamento,
+        );
+
+      if (!mapa.has(chave)) {
+        mapa.set(
+          chave,
+          {
+            nome:
+              obterNomeCliente(
+                agendamento,
+              ),
+
+            quantidade: 0,
+            receita: 0,
+          },
+        );
+      }
+
+      const cliente =
+        mapa.get(chave);
+
+      cliente.quantidade += 1;
+
+      cliente.receita +=
+        obterValorAgendamento(
+          agendamento,
+        );
+    },
+  );
+
+  return Array.from(
+    mapa.values(),
+  )
+    .sort(
+      (a, b) => {
+        if (
+          b.quantidade !==
+          a.quantidade
+        ) {
+          return (
+            b.quantidade -
+            a.quantidade
+          );
+        }
+
+        return (
+          b.receita -
+          a.receita
+        );
+      },
+    )
+    .slice(0, 5);
+}
+
+function obterItemMaisFrequente(
+  mapa,
+) {
+  return (
+    Array.from(
+      mapa.entries(),
+    ).sort(
+      (a, b) => b[1] - a[1],
+    )[0] || null
+  );
+}
+
+function calcularDestaques(
+  agendamentosFiltrados,
+  concluidos,
+) {
+  const agendamentosValidos =
+    agendamentosFiltrados.filter(
+      (agendamento) =>
+        obterGrupoStatus(
+          agendamento.status,
+        ) !== "cancelados",
+    );
+
+  const dias = new Map();
+  const horarios = new Map();
+  const servicos = new Map();
+
+  agendamentosValidos.forEach(
+    (agendamento) => {
+      const data =
+        obterDataAgendamento(
+          agendamento,
+        );
+
+      if (data) {
+        const nomeDia =
+          new Intl.DateTimeFormat(
+            "pt-BR",
+            {
+              weekday: "long",
+            },
+          ).format(data);
+
+        const rotuloDia =
+          nomeDia
+            .charAt(0)
+            .toUpperCase() +
+          nomeDia.slice(1);
+
+        dias.set(
+          rotuloDia,
+          (
+            dias.get(
+              rotuloDia,
+            ) || 0
+          ) + 1,
+        );
+      }
+
+      const horario =
+        obterHorario(agendamento);
+
+      if (horario) {
+        horarios.set(
+          horario,
+          (
+            horarios.get(
+              horario,
+            ) || 0
+          ) + 1,
+        );
+      }
+    },
+  );
+
+  concluidos.forEach(
+    (agendamento) => {
+      const servico =
+        obterServico(agendamento);
+
+      servicos.set(
+        servico,
+        (
+          servicos.get(
+            servico,
+          ) || 0
+        ) + 1,
+      );
+    },
+  );
+
+  return {
+    diaMaisMovimentado:
+      obterItemMaisFrequente(
+        dias,
+      ),
+
+    horarioMaisProcurado:
+      obterItemMaisFrequente(
+        horarios,
+      ),
+
+    servicoMaisRealizado:
+      obterItemMaisFrequente(
+        servicos,
+      ),
+  };
+}
+
+/* ============================================================
+   GRÁFICOS
+   ============================================================ */
+
+function configurarChartJS() {
+  if (
+    typeof Chart === "undefined"
+  ) {
+    throw new Error(
+      "Chart.js não foi carregado.",
+    );
+  }
+
+  Chart.defaults.font.family =
+    "Poppins, sans-serif";
+
+  Chart.defaults.color =
+    "#8a5a6a";
+}
+
+function renderizarGraficoEvolucao(
+  concluidos,
+  periodo,
+) {
+  const canvas =
+    document.getElementById(
+      "dashboard-evolution-chart",
+    );
+
+  if (!canvas) {
+    return;
+  }
+
+  if (evolutionChart) {
+    evolutionChart.destroy();
+  }
+
+  const dados =
+    criarDadosEvolucao(
+      concluidos,
+      periodo,
+    );
+
+  evolutionChart = new Chart(
+    canvas,
+    {
+      type: "line",
+
+      data: {
+        labels: dados.map(
+          (item) => item.rotulo,
+        ),
+
+        datasets: [
+          {
+            label: "Receita",
+
+            data: dados.map(
+              (item) =>
+                item.receita,
+            ),
+
+            borderColor:
+              "#7c334c",
+
+            backgroundColor:
+              "rgba(124, 51, 76, 0.12)",
+
+            pointBackgroundColor:
+              "#7c334c",
+
+            pointRadius: 3,
+
+            pointHoverRadius: 5,
+
+            borderWidth: 2,
+
+            tension: 0.35,
+
+            fill: true,
+
+            yAxisID: "yRevenue",
+          },
+
+          {
+            label: "Atendimentos",
+
+            data: dados.map(
+              (item) =>
+                item.atendimentos,
+            ),
+
+            borderColor:
+              "#a8617b",
+
+            backgroundColor:
+              "rgba(168, 97, 123, 0.08)",
+
+            pointBackgroundColor:
+              "#a8617b",
+
+            pointRadius: 3,
+
+            pointHoverRadius: 5,
+
+            borderWidth: 2,
+
+            tension: 0.35,
+
+            yAxisID:
+              "yAppointments",
+          },
+        ],
+      },
+
+      options: {
+        responsive: true,
+
+        maintainAspectRatio:
+          false,
+
+        interaction: {
+          mode: "index",
+          intersect: false,
+        },
+
+        plugins: {
+          legend: {
+            position: "bottom",
+
+            labels: {
+              usePointStyle: true,
+              boxWidth: 8,
+              padding: 14,
+
+              font: {
+                size: 9,
+              },
+            },
+          },
+
+          tooltip: {
+            callbacks: {
+              label(context) {
+                if (
+                  context.dataset
+                    .yAxisID ===
+                  "yRevenue"
+                ) {
+                  return ` Receita: ${formatarMoeda(
+                    context.parsed.y,
+                  )}`;
+                }
+
+                return ` Atendimentos: ${Math.round(
+                  context.parsed.y,
+                )}`;
+              },
+            },
           },
         },
-        tooltip: {
-          backgroundColor: "rgba(0, 0, 0, 0.8)",
-          titleColor: "#FFD9E7",
-          bodyColor: "#FFD9E7",
-          borderColor: "rgba(255,255,255,0.08)",
-          borderWidth: 1,
-          padding: 12,
-          bodyFont: { family: "Urbanist", size: 13 },
+
+        scales: {
+          x: {
+            grid: {
+              display: false,
+            },
+
+            ticks: {
+              font: {
+                size: 8,
+              },
+
+              maxRotation: 0,
+              autoSkip: true,
+              maxTicksLimit: 8,
+            },
+          },
+
+          yRevenue: {
+            beginAtZero: true,
+
+            position: "left",
+
+            grid: {
+              color:
+                "rgba(89, 28, 49, 0.06)",
+            },
+
+            ticks: {
+              font: {
+                size: 8,
+              },
+
+              callback(value) {
+                return new Intl.NumberFormat(
+                  "pt-BR",
+                  {
+                    notation:
+                      "compact",
+
+                    compactDisplay:
+                      "short",
+                  },
+                ).format(value);
+              },
+            },
+          },
+
+          yAppointments: {
+            beginAtZero: true,
+
+            position: "right",
+
+            grid: {
+              drawOnChartArea:
+                false,
+            },
+
+            ticks: {
+              precision: 0,
+              stepSize: 1,
+
+              font: {
+                size: 8,
+              },
+            },
+          },
         },
       },
     },
-  });
+  );
+}
+
+function renderizarGraficoServicos(
+  ranking,
+) {
+  const canvas =
+    document.getElementById(
+      "dashboard-services-chart",
+    );
+
+  if (!canvas) {
+    return;
+  }
+
+  if (servicesChart) {
+    servicesChart.destroy();
+  }
+
+  const dados = ranking.length
+    ? ranking
+    : [
+        {
+          nome: "Sem dados",
+          quantidade: 0,
+        },
+      ];
+
+  servicesChart = new Chart(
+    canvas,
+    {
+      type: "bar",
+
+      data: {
+        labels: dados.map(
+          (item) => item.nome,
+        ),
+
+        datasets: [
+          {
+            label:
+              "Atendimentos concluídos",
+
+            data: dados.map(
+              (item) =>
+                item.quantidade,
+            ),
+
+            backgroundColor: [
+              "#7c334c",
+              "#934761",
+              "#a8617b",
+              "#c88da3",
+              "#ddb0c0",
+              "#f0c1d1",
+            ],
+
+            borderRadius: 9,
+
+            borderSkipped: false,
+
+            maxBarThickness: 28,
+          },
+        ],
+      },
+
+      options: {
+        indexAxis: "y",
+
+        responsive: true,
+
+        maintainAspectRatio:
+          false,
+
+        plugins: {
+          legend: {
+            display: false,
+          },
+
+          tooltip: {
+            callbacks: {
+              label(context) {
+                const quantidade =
+                  Math.round(
+                    context.parsed.x,
+                  );
+
+                return formatarQuantidade(
+                  quantidade,
+                  "atendimento",
+                  "atendimentos",
+                );
+              },
+            },
+          },
+        },
+
+        scales: {
+          x: {
+            beginAtZero: true,
+
+            grid: {
+              color:
+                "rgba(89, 28, 49, 0.06)",
+            },
+
+            ticks: {
+              precision: 0,
+              stepSize: 1,
+
+              font: {
+                size: 8,
+              },
+            },
+          },
+
+          y: {
+            grid: {
+              display: false,
+            },
+
+            ticks: {
+              font: {
+                size: 8,
+              },
+
+              callback(value) {
+                const label =
+                  this.getLabelForValue(
+                    value,
+                  );
+
+                return label.length > 22
+                  ? `${label.slice(
+                      0,
+                      21,
+                    )}…`
+                  : label;
+              },
+            },
+          },
+        },
+      },
+    },
+  );
+}
+
+function renderizarGraficoStatus(
+  contadores,
+) {
+  const canvas =
+    document.getElementById(
+      "dashboard-status-chart",
+    );
+
+  if (!canvas) {
+    return;
+  }
+
+  if (statusChart) {
+    statusChart.destroy();
+  }
+
+  const valores = [
+    contadores.agendados,
+    contadores.confirmados,
+    contadores.concluidos,
+    contadores.cancelados,
+  ];
+
+  const possuiDados =
+    valores.some(
+      (valor) => valor > 0,
+    );
+
+  statusChart = new Chart(
+    canvas,
+    {
+      type: "doughnut",
+
+      data: {
+        labels: possuiDados
+          ? [
+              "Agendados",
+              "Confirmados",
+              "Concluídos",
+              "Cancelados",
+            ]
+          : ["Sem dados"],
+
+        datasets: [
+          {
+            data: possuiDados
+              ? valores
+              : [1],
+
+            backgroundColor:
+              possuiDados
+                ? [
+                    "#f0c1d1",
+                    "#934761",
+                    "#2f855a",
+                    "#b53f60",
+                  ]
+                : ["#eadde2"],
+
+            borderWidth: 0,
+
+            hoverOffset:
+              possuiDados
+                ? 6
+                : 0,
+          },
+        ],
+      },
+
+      options: {
+        responsive: true,
+
+        maintainAspectRatio:
+          false,
+
+        cutout: "66%",
+
+        plugins: {
+          legend: {
+            position: "bottom",
+
+            labels: {
+              usePointStyle: true,
+              boxWidth: 8,
+              padding: 13,
+
+              font: {
+                size: 8,
+              },
+            },
+          },
+
+          tooltip: {
+            enabled: possuiDados,
+
+            callbacks: {
+              label(context) {
+                const quantidade =
+                  Number(
+                    context.raw,
+                  ) || 0;
+
+                return ` ${formatarQuantidade(
+                  quantidade,
+                  "agendamento",
+                  "agendamentos",
+                )}`;
+              },
+            },
+          },
+        },
+      },
+    },
+  );
+}
+
+function renderizarGraficoClientes(
+  perfil,
+) {
+  const canvas =
+    document.getElementById(
+      "dashboard-clients-chart",
+    );
+
+  if (!canvas) {
+    return;
+  }
+
+  if (clientsChart) {
+    clientsChart.destroy();
+  }
+
+  const valores = [
+    perfil.novas,
+    perfil.recorrentes,
+  ];
+
+  const possuiDados =
+    valores.some(
+      (valor) => valor > 0,
+    );
+
+  clientsChart = new Chart(
+    canvas,
+    {
+      type: "doughnut",
+
+      data: {
+        labels: possuiDados
+          ? [
+              "Clientes novas",
+              "Clientes recorrentes",
+            ]
+          : ["Sem dados"],
+
+        datasets: [
+          {
+            data: possuiDados
+              ? valores
+              : [1],
+
+            backgroundColor:
+              possuiDados
+                ? [
+                    "#f0c1d1",
+                    "#7c334c",
+                  ]
+                : ["#eadde2"],
+
+            borderWidth: 0,
+
+            hoverOffset:
+              possuiDados
+                ? 6
+                : 0,
+          },
+        ],
+      },
+
+      options: {
+        responsive: true,
+
+        maintainAspectRatio:
+          false,
+
+        cutout: "66%",
+
+        plugins: {
+          legend: {
+            position: "bottom",
+
+            labels: {
+              usePointStyle: true,
+              boxWidth: 8,
+              padding: 13,
+
+              font: {
+                size: 8,
+              },
+            },
+          },
+
+          tooltip: {
+            enabled: possuiDados,
+
+            callbacks: {
+              label(context) {
+                const quantidade =
+                  Number(
+                    context.raw,
+                  ) || 0;
+
+                return ` ${formatarQuantidade(
+                  quantidade,
+                  "cliente",
+                  "clientes",
+                )}`;
+              },
+            },
+          },
+        },
+      },
+    },
+  );
+}
+
+/* ============================================================
+   RANKING E DESTAQUES
+   ============================================================ */
+
+function renderizarRankingClientes(
+  ranking,
+) {
+  if (!ranking.length) {
+    elements.topClients.innerHTML =
+      "";
+
+    elements.topClients.hidden =
+      true;
+
+    elements.topClientsEmpty.hidden =
+      false;
+
+    return;
+  }
+
+  elements.topClientsEmpty.hidden =
+    true;
+
+  elements.topClients.hidden =
+    false;
+
+  elements.topClients.innerHTML =
+    ranking
+      .map(
+        (cliente, indice) => `
+          <article class="dashboard-client-ranking-item">
+
+            <span class="dashboard-client-ranking-position">
+              ${indice + 1}º
+            </span>
+
+            <div class="dashboard-client-ranking-info">
+
+              <strong>
+                ${escaparHTML(
+                  cliente.nome,
+                )}
+              </strong>
+
+              <span>
+                ${formatarQuantidade(
+                  cliente.quantidade,
+                  "atendimento concluído",
+                  "atendimentos concluídos",
+                )}
+              </span>
+
+            </div>
+
+            <span class="dashboard-client-ranking-value">
+              ${escaparHTML(
+                formatarMoeda(
+                  cliente.receita,
+                ),
+              )}
+            </span>
+
+          </article>
+        `,
+      )
+      .join("");
+}
+
+function renderizarDestaques(
+  destaques,
+) {
+  if (
+    destaques.diaMaisMovimentado
+  ) {
+    const [dia, quantidade] =
+      destaques.diaMaisMovimentado;
+
+    elements.busiestDay.textContent =
+      `${dia} · ${formatarQuantidade(
+        quantidade,
+        "agendamento",
+        "agendamentos",
+      )}`;
+  } else {
+    elements.busiestDay.textContent =
+      "Sem dados";
+  }
+
+  if (
+    destaques.horarioMaisProcurado
+  ) {
+    const [horario, quantidade] =
+      destaques.horarioMaisProcurado;
+
+    elements.busiestTime.textContent =
+      `${horario} · ${formatarQuantidade(
+        quantidade,
+        "agendamento",
+        "agendamentos",
+      )}`;
+  } else {
+    elements.busiestTime.textContent =
+      "Sem dados";
+  }
+
+  if (
+    destaques.servicoMaisRealizado
+  ) {
+    const [servico, quantidade] =
+      destaques.servicoMaisRealizado;
+
+    elements.topService.textContent =
+      `${servico} · ${formatarQuantidade(
+        quantidade,
+        "atendimento",
+        "atendimentos",
+      )}`;
+  } else {
+    elements.topService.textContent =
+      "Sem dados";
+  }
+}
+
+/* ============================================================
+   CARREGAMENTO PRINCIPAL
+   ============================================================ */
+
+async function carregarDashboard() {
+  if (carregamentoEmAndamento) {
+    return;
+  }
+
+  carregamentoEmAndamento = true;
+
+  mostrarCarregamentoDados();
+
+  if (elements.refreshButton) {
+    elements.refreshButton.disabled =
+      true;
+  }
+
+  try {
+    const snapshot = await getDocs(
+      collection(
+        db,
+        "agendamentos",
+      ),
+    );
+
+    todosAgendamentos =
+      snapshot.docs.map(
+        (documento) => ({
+          id: documento.id,
+          ...documento.data(),
+        }),
+      );
+
+    const periodo =
+      elements.periodFilter.value ||
+      "current-month";
+
+    const intervalo =
+      obterIntervaloPeriodo(periodo);
+
+    elements.periodLabel.textContent =
+      intervalo.rotulo;
+
+    const agendamentosFiltrados =
+      filtrarPorPeriodo(
+        todosAgendamentos,
+        periodo,
+      );
+
+    const indicadores =
+      calcularIndicadores(
+        agendamentosFiltrados,
+      );
+
+    atualizarIndicadores(
+      indicadores,
+    );
+
+    configurarChartJS();
+
+    renderizarGraficoEvolucao(
+      indicadores.concluidos,
+      periodo,
+    );
+
+    const rankingServicos =
+      criarRankingServicos(
+        indicadores.concluidos,
+      );
+
+    renderizarGraficoServicos(
+      rankingServicos,
+    );
+
+    const distribuicaoStatus =
+      criarDistribuicaoStatus(
+        agendamentosFiltrados,
+      );
+
+    renderizarGraficoStatus(
+      distribuicaoStatus,
+    );
+
+    const perfilClientes =
+      criarPerfilClientes(
+        indicadores.concluidos,
+      );
+
+    renderizarGraficoClientes(
+      perfilClientes,
+    );
+
+    const rankingClientes =
+      criarRankingClientes(
+        indicadores.concluidos,
+      );
+
+    renderizarRankingClientes(
+      rankingClientes,
+    );
+
+    const destaques =
+      calcularDestaques(
+        agendamentosFiltrados,
+        indicadores.concluidos,
+      );
+
+    renderizarDestaques(
+      destaques,
+    );
+
+    mostrarDadosCarregados();
+  } catch (error) {
+    console.error(
+      "Erro ao carregar o Dashboard:",
+      error,
+    );
+
+    mostrarErroDados();
+  } finally {
+    carregamentoEmAndamento =
+      false;
+
+    if (elements.refreshButton) {
+      elements.refreshButton.disabled =
+        false;
+    }
+  }
+}
+
+/* ============================================================
+   EVENTOS E INICIALIZAÇÃO
+   ============================================================ */
+
+function configurarEventos() {
+  elements.refreshButton?.addEventListener(
+    "click",
+    carregarDashboard,
+  );
+
+  elements.retryButton?.addEventListener(
+    "click",
+    carregarDashboard,
+  );
+
+  elements.periodFilter?.addEventListener(
+    "change",
+    carregarDashboard,
+  );
+}
+
+function iniciarPagina() {
+  carregarElementos();
+  configurarEventos();
+
+  onAuthStateChanged(
+    auth,
+    async (user) => {
+      if (!user) {
+        window.location.replace(
+          "login.html",
+        );
+
+        return;
+      }
+
+      try {
+        const autorizado =
+          await verificarAcessoAdmin(
+            user,
+          );
+
+        if (!autorizado) {
+          mostrarAcessoNegado(
+            "Acesso não autorizado",
+            "Esta conta não possui permissão para acessar o Dashboard.",
+          );
+
+          return;
+        }
+
+        liberarConteudoAdmin();
+
+        await carregarDashboard();
+      } catch (error) {
+        console.error(
+          "Erro ao verificar acesso administrativo:",
+          error,
+        );
+
+        mostrarAcessoNegado(
+          "Não foi possível verificar o acesso",
+          "Verifique sua conexão e tente abrir a página novamente.",
+        );
+      }
+    },
+  );
+}
+
+if (
+  document.readyState === "loading"
+) {
+  document.addEventListener(
+    "DOMContentLoaded",
+    iniciarPagina,
+  );
+} else {
+  iniciarPagina();
 }

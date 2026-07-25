@@ -280,7 +280,13 @@ body {
   display: grid;
   gap: 20px;
 }
+.cliente-principal {
+  width: 100%;
+  min-width: 0;
 
+  display: grid;
+  gap: 18px;
+}
 /* Serviços sem card externo */
 
 .principal-services {
@@ -1508,4 +1514,61 @@ body[data-page="principal"]
   a[href="dashboard.html"]:focus-visible {
   outline: 3px solid rgba(255, 217, 231, 0.72);
   outline-offset: 3px;
+}
+/* ============================================================
+   BOTÃO DE LOGOUT ADMINISTRATIVO
+   ============================================================ */
+
+.principal-logout-button {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  padding: 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 14px;
+
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.09);
+
+  box-shadow: 0 6px 16px rgba(45, 8, 21, 0.13);
+
+  cursor: pointer;
+
+  transition:
+    transform 0.2s ease,
+    background-color 0.2s ease,
+    box-shadow 0.2s ease,
+    opacity 0.2s ease;
+}
+
+.principal-logout-button svg {
+  width: 20px;
+  height: 20px;
+
+  display: block;
+
+  margin: 0;
+}
+
+.principal-logout-button:hover,
+.principal-logout-button:focus-visible {
+  transform: translateY(-1px);
+
+  background: rgba(255, 255, 255, 0.15);
+
+  box-shadow: 0 8px 20px rgba(45, 8, 21, 0.17);
+}
+
+.principal-logout-button:active {
+  transform: scale(0.97);
+}
+
+.principal-logout-button:disabled {
+  cursor: wait;
+  opacity: 0.55;
 }

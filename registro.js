@@ -118,11 +118,30 @@ function setupFieldListeners() {
   });
 
   const checkbox = document.getElementById("termsCheckbox");
-  checkbox.addEventListener("change", function () {
-    if (this.checked) {
+
+  const submitButton = document.querySelector('[data-action="submit-signup"]');
+
+  const googleButton = document.getElementById("googleSignupBtn");
+
+  function atualizarBotoesCadastro() {
+    const termosAceitos = checkbox.checked;
+
+    submitButton.disabled = !termosAceitos;
+
+    googleButton.disabled = !termosAceitos;
+
+    submitButton.setAttribute("aria-disabled", String(!termosAceitos));
+
+    googleButton.setAttribute("aria-disabled", String(!termosAceitos));
+
+    if (termosAceitos) {
       clearError("termsCheckbox");
     }
-  });
+  }
+
+  checkbox.addEventListener("change", atualizarBotoesCadastro);
+
+  atualizarBotoesCadastro();
 }
 
 function openGooglePhoneModal(defaultPhone = "") {
@@ -343,6 +362,11 @@ async function performSignup(name, email, phone, password) {
       nome: name,
       email: email,
       telefone: phone,
+
+      termosAceitos: true,
+      versaoTermos: "2026-07-25",
+      termosAceitosEm: serverTimestamp(),
+
       dataCadastro: new Date().toISOString(),
     });
 
@@ -392,7 +416,20 @@ function setupGoogleSignup() {
   const googleBtn = document.getElementById("googleSignupBtn");
 
   googleBtn.addEventListener("click", async function () {
-    logEvent("signup_attempt", { method: "google" });
+    const termosAceitos = document.getElementById("termsCheckbox")?.checked;
+
+    if (!termosAceitos) {
+      showError(
+        "termsCheckbox",
+        "Você deve aceitar os Termos de Uso e a Política de Privacidade",
+      );
+
+      return;
+    }
+
+    logEvent("signup_attempt", {
+      method: "google",
+    });
 
     console.log("[GOOGLE SIGNUP] Clicado");
 
@@ -434,6 +471,10 @@ function setupGoogleSignup() {
         nome: user.displayName || "",
         email: user.email || "",
         foto: user.photoURL || "",
+
+        termosAceitos: true,
+        versaoTermos: "2026-07-25",
+        termosAceitosEm: serverTimestamp(),
       };
 
       if (pendingPhone) {

@@ -174,7 +174,25 @@ function obterTelefoneCliente(dados) {
     ),
   ).trim();
 }
+function obterClienteId(dados) {
+  return String(
+    obterPrimeiroValor(
+      dados,
+      ["clienteId", "idCliente", "usuarioId", "uidCliente", "userId"],
+      "",
+    ),
+  ).trim();
+}
 
+function obterFotoCliente(dados) {
+  return String(
+    obterPrimeiroValor(
+      dados,
+      ["fotoCliente", "clienteFoto", "foto", "photoURL", "fotoPerfil"],
+      "",
+    ),
+  ).trim();
+}
 function obterServico(dados) {
   return String(
     obterPrimeiroValor(
@@ -301,7 +319,44 @@ function obterIniciais(nome) {
 
   return `${partes[0][0]}${partes.at(-1)[0]}`.toUpperCase();
 }
+function converterValorMonetario(valor) {
+  if (valor === undefined || valor === null || valor === "") {
+    return 0;
+  }
 
+  if (typeof valor === "number") {
+    return Number.isFinite(valor) ? valor : 0;
+  }
+
+  let texto = String(valor).trim().replace(/R\$/gi, "").replace(/\s/g, "");
+
+  if (texto.includes(",")) {
+    texto = texto.replace(/\./g, "").replace(",", ".");
+  }
+
+  texto = texto.replace(/[^0-9.-]/g, "");
+
+  const numero = Number(texto);
+
+  return Number.isFinite(numero) ? numero : 0;
+}
+
+function formatarValorMonetario(valor) {
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(valor);
+}
+
+function obterValorSugeridoAgendamento(agendamento) {
+  return converterValorMonetario(
+    obterPrimeiroValor(
+      agendamento,
+      ["valorFinal", "precoSnapshot", "valor", "preco"],
+      0,
+    ),
+  );
+}
 /* ============================================================
    DATAS
    ============================================================ */
@@ -509,12 +564,57 @@ async function carregarAgendamentos() {
   }
 
   try {
-    const snapshot = await getDocs(collection(db, "agendamentos"));
+    const [agendamentosSnapshot, clientesSnapshot] = await Promise.all([
+      getDocs(collection(db, "agendamentos")),
 
-    todosAgendamentos = snapshot.docs.map((documento) => ({
-      id: documento.id,
-      ...documento.data(),
-    }));
+      getDocs(collection(db, "clientes")),
+    ]);
+
+    const clientesPorId = new Map(
+      clientesSnapshot.docs.map((documentoCliente) => [
+        documentoCliente.id,
+        documentoCliente.data(),
+      ]),
+    );
+
+    todosAgendamentos = agendamentosSnapshot.docs.map((documento) => {
+      const dadosAgendamento = documento.data();
+
+      const clienteId = obterClienteId(dadosAgendamento);
+
+      const dadosCliente = clientesPorId.get(clienteId) || {};
+
+      return {
+        id: documento.id,
+        ...dadosAgendamento,
+
+        clienteId: clienteId || dadosAgendamento.clienteId || "",
+
+        nomeCliente: obterPrimeiroValor(
+          dadosCliente,
+          ["nome", "nomeCliente"],
+          obterNomeCliente(dadosAgendamento),
+        ),
+
+        emailCliente: obterPrimeiroValor(
+          dadosCliente,
+          ["email", "emailCliente"],
+          obterEmailCliente(dadosAgendamento),
+        ),
+
+        telefoneCliente: obterPrimeiroValor(
+          dadosCliente,
+          ["telefone", "celular", "whatsapp"],
+          obterTelefoneCliente(dadosAgendamento),
+        ),
+
+        fotoCliente: obterPrimeiroValor(
+          dadosCliente,
+          ["foto", "photoURL", "fotoPerfil"],
+          obterFotoCliente(dadosAgendamento),
+        ),
+      };
+    });
 
     ordenarAgendamentos();
     atualizarResumo();
@@ -814,6 +914,8 @@ function criarCardAgendamento(agendamento) {
 
   const telefoneCliente = obterTelefoneCliente(agendamento);
 
+  const fotoCliente = obterFotoCliente(agendamento);
+
   const servico = obterServico(agendamento);
 
   const dataVisual = formatarDataVisual(obterData(agendamento));
@@ -838,11 +940,21 @@ function criarCardAgendamento(agendamento) {
         <div class="admin-agendamento-cliente">
 
           <span
-            class="admin-agendamento-avatar"
-            aria-hidden="true"
-          >
-            ${escaparHTML(obterIniciais(nomeCliente))}
-          </span>
+  class="admin-agendamento-avatar"
+  aria-hidden="true"
+>
+  ${
+    fotoCliente
+      ? `
+        <img
+          src="${escaparHTML(fotoCliente)}"
+          alt=""
+          loading="lazy"
+        >
+      `
+      : escaparHTML(obterIniciais(nomeCliente))
+  }
+</span>
 
           <div class="admin-agendamento-cliente-info">
             <strong>
@@ -1028,6 +1140,8 @@ function abrirModal(id) {
 
   const emailCliente = obterEmailCliente(agendamento);
 
+  const fotoCliente = obterFotoCliente(agendamento);
+
   const servico = obterServico(agendamento);
 
   const dataVisual = formatarDataVisual(obterData(agendamento));
@@ -1042,11 +1156,21 @@ function abrirModal(id) {
     <div class="admin-modal-client">
 
       <span
-        class="admin-modal-client-avatar"
-        aria-hidden="true"
-      >
-        ${escaparHTML(obterIniciais(nomeCliente))}
-      </span>
+  class="admin-modal-client-avatar"
+  aria-hidden="true"
+>
+  ${
+    fotoCliente
+      ? `
+        <img
+          src="${escaparHTML(fotoCliente)}"
+          alt=""
+          loading="lazy"
+        >
+      `
+      : escaparHTML(obterIniciais(nomeCliente))
+  }
+</span>
 
       <div>
         <strong>
@@ -1386,8 +1510,29 @@ async function confirmarAgendamento(agendamento) {
 }
 
 async function concluirAgendamento(agendamento) {
+  const nomeCliente = obterNomeCliente(agendamento);
+
+  const valorSugerido = obterValorSugeridoAgendamento(agendamento);
+
+  const valorInformado = window.prompt(
+    `Informe o valor final cobrado no atendimento de ${nomeCliente}:`,
+    valorSugerido > 0 ? valorSugerido.toFixed(2).replace(".", ",") : "",
+  );
+
+  if (valorInformado === null) {
+    return;
+  }
+
+  const valorFinal = converterValorMonetario(valorInformado);
+
+  if (valorFinal <= 0) {
+    window.alert("Informe um valor final válido.");
+
+    return;
+  }
+
   const confirmou = window.confirm(
-    `Marcar o atendimento de ${obterNomeCliente(agendamento)} como concluído?`,
+    `Concluir o atendimento de ${nomeCliente} por ${formatarValorMonetario(valorFinal)}?`,
   );
 
   if (!confirmou) {
@@ -1397,6 +1542,8 @@ async function concluirAgendamento(agendamento) {
   try {
     await atualizarAgendamento(agendamento.id, {
       status: "concluido",
+
+      valorFinal,
 
       concluidoEm: serverTimestamp(),
     });

@@ -226,12 +226,16 @@
               <input type="checkbox" id="termsCheckbox" class="signup-checkbox" aria-label="Concordo com os Termos e Condições" data-action="terms-checkbox" required>
 
               <label for="termsCheckbox" class="checkbox-label">
-                Concordo com os Termos e Condições de uso do aplicativo.
+                Li e aceito os
+
+                <a href="termos.html" class="signup-link signup-terms-link">
+                  Termos de Uso e a Política de Privacidade
+                </a>.
               </label>
             </div>
           </div>
 
-          <button type="submit" class="signup-button signup-button--primary" data-action="submit-signup">
+          <button type="submit" class="signup-button signup-button--primary" data-action="submit-signup" disabled aria-disabled="true">
             <span>Criar minha conta</span>
 
             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -251,7 +255,7 @@
           <span></span>
         </div>
 
-        <button type="button" class="signup-button signup-button--google" id="googleSignupBtn" data-action="google-signup">
+        <button type="button" class="signup-button signup-button--google" id="googleSignupBtn" data-action="google-signup" disabled aria-disabled="true">
           <svg class="google-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path d="M22.56 12.25C22.56 11.47 22.49 10.72 22.36 10H12V14.26H17.92C17.66 15.63 16.88 16.79 15.71 17.57V20.34H19.28C21.36 18.42 22.56 15.6 22.56 12.25Z" fill="#4285F4" />
 

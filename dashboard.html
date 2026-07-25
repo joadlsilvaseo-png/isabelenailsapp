@@ -3,141 +3,493 @@
 
 <head>
   <meta charset="UTF-8">
+
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Painel de Isabele Mariana | Isabele Mariana Nails</title>
-  <link rel="stylesheet" href="base.css">
-  <link rel="stylesheet" href="admin-style.css">
-  <link rel="stylesheet" href="dashboard.css">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Urbanist:wght@400;700&display=swap" rel="stylesheet">
-  <style>
-    /* Mantemos apenas o loading screen aqui por ser uma sobreposição crítica */
-    #loading-screen {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: #2d0b19;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 9999;
-      font-weight: 600;
-      color: #FFD9E7;
-    }
 
-    .filters {
-      display: flex;
-      gap: 8px;
-      justify-content: center;
-      flex-wrap: wrap;
-      /* Garante que não quebre em telas muito pequenas */
-    }
+  <meta name="description" content="Dashboard administrativo da Isabele Mariana Nails.">
 
-    /* Diminuir o tamanho dos botões e seletores */
-    .btn-admin {
-      font-size: 12px !important;
-      padding: 6px 10px !important;
-      height: auto !important;
-      min-height: unset !important;
-      width: auto !important;
-      border-radius: 8px !important;
-    }
-  </style>
+  <meta name="theme-color" content="#591c31">
+
+  <meta name="mobile-web-app-capable" content="yes">
+
+  <meta name="apple-mobile-web-app-capable" content="yes">
+
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+  <meta name="apple-mobile-web-app-title" content="IM Nails">
+
+  <title>Dashboard | Isabele Mariana Nails</title>
+
+  <link rel="manifest" href="./manifest.json">
+
+  <link rel="icon" type="image/png" href="./assets/favicon.png">
+
+  <link rel="apple-touch-icon" href="./assets/apple-touch-icon.png">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="base.css?v=1.0.4">
+
+  <link rel="stylesheet" href="dashboard.css?v=2.0.0">
 </head>
 
-<body>
-  <div id="loading-screen">Verificando Credenciais...</div>
-  <div class="dashboard-container">
-    <header class="admin-header" style="max-width: none; margin-bottom: 10px;">
-      <a href="login.html" class="btn-back" aria-label="Sair">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
-          <path d="M15 18L9 12L15 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-        </svg>
-      </a>
-      <h2 style="font-family: 'Urbanist', sans-serif; font-size: 22px;">Painel B.I.</h2>
-      <a href="login.html" class="btn-home" aria-label="Logout">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
-          <path d="M4 10L12 3L20 10V20C20 20.5523 19.5523 21 19 21H5C4.44772 21 4 20.5523 4 20V10Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-          <path d="M9 21V13H15V21" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-        </svg>
-      </a>
+<body data-page="dashboard" data-access-state="loading">
+
+  <div class="app-container">
+
+    <header class="dashboard-page-header">
+
+      <nav class="dashboard-page-nav" aria-label="Navegação administrativa">
+        <a href="principal.html" class="dashboard-nav-button" aria-label="Voltar para a gestão">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M15 18L9 12L15 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </a>
+
+        <div class="dashboard-page-title">
+          <span>Gestão</span>
+
+          <h1>Dashboard</h1>
+        </div>
+
+        <button id="dashboard-refresh-button" type="button" class="dashboard-nav-button" aria-label="Atualizar indicadores" title="Atualizar indicadores">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M20 7V12H15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+
+            <path d="M18.2 16A8 8 0 1 1 19.5 8.5L20 12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </button>
+      </nav>
+
+      <section class="dashboard-page-intro">
+
+        <div>
+          <span class="dashboard-page-eyebrow">
+            Visão do negócio
+          </span>
+
+          <h2>
+            Acompanhe seus resultados
+          </h2>
+
+          <p>
+            Analise receita, atendimentos, clientes e serviços
+            em um único lugar.
+          </p>
+        </div>
+
+        <span class="dashboard-page-intro-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <path d="M5 19V13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+
+            <path d="M12 19V5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+
+            <path d="M19 19V9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+
+            <path d="M3 19H21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+          </svg>
+        </span>
+
+      </section>
+
     </header>
 
-    <div style="display: flex; flex-direction: column; align-items: center; gap: 15px; margin-bottom: 20px;">
-      <div class="filters">
-        <select id="filter-year" class="btn-admin filter-select">
-          <option value="Geral" selected>Ano</option>
-        </select>
-        <select id="filter-month" class="btn-admin filter-select">
-          <option value="Geral" selected>Mês</option>
-          <option value="01">Janeiro</option>
-          <option value="02">Fevereiro</option>
-          <option value="03">Março</option>
-          <option value="04">Abril</option>
-          <option value="05">Maio</option>
-          <option value="06">Junho</option>
-          <option value="07">Julho</option>
-          <option value="08">Agosto</option>
-          <option value="09">Setembro</option>
-          <option value="10">Outubro</option>
-          <option value="11">Novembro</option>
-          <option value="12">Dezembro</option>
-        </select>
-      </div>
-      <p id="current-month-label" class="period-label"></p>
-      <a href="admin.html" class="btn-admin" style="min-width: 260px; padding: 14px 30px; text-align: center; font-size: 14px;">Meus Agendamentos</a>
-    </div>
+    <main class="dashboard-page-main">
 
-    <main class="metrics-grid">
-      <div class="card card-revenue">
-        <div class="card-header-row">
-          <h3>Receita do Mês</h3>
-          <span class="card-pill">Atendimentos</span>
+      <section id="dashboard-access-loading" class="dashboard-state-card" aria-live="polite">
+        <span class="dashboard-loading-spinner" aria-hidden="true"></span>
+
+        <div>
+          <strong>
+            Verificando acesso
+          </strong>
+
+          <p>
+            Aguarde enquanto carregamos os indicadores.
+          </p>
         </div>
-        <div id="valor-receita" class="value">R$ 0,00</div>
-        <div class="card-meta-row">
-          <div class="meta-block">
-            <span class="meta-label">Total atendimentos</span>
-            <span id="total-atendimentos" class="meta-value">0</span>
+      </section>
+
+      <section id="dashboard-access-error" class="dashboard-state-card dashboard-state-card--error" aria-live="assertive" hidden>
+        <span class="dashboard-state-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8" />
+
+            <path d="M12 7V13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+
+            <circle cx="12" cy="17" r="1" fill="currentColor" />
+          </svg>
+        </span>
+
+        <div>
+          <strong id="dashboard-access-error-title">
+            Acesso não autorizado
+          </strong>
+
+          <p id="dashboard-access-error-message">
+            Esta conta não possui permissão administrativa.
+          </p>
+
+          <a href="principal.html" class="dashboard-state-link">
+            Voltar para a página principal
+          </a>
+        </div>
+      </section>
+
+      <div id="dashboard-content" class="dashboard-content" hidden>
+
+        <section class="dashboard-filter-card">
+
+          <div class="dashboard-filter-heading">
+            <div>
+              <span class="dashboard-section-eyebrow">
+                Período analisado
+              </span>
+
+              <strong id="dashboard-period-label">
+                Mês atual
+              </strong>
+            </div>
+
+            <span id="dashboard-update-label" class="dashboard-update-label">
+              Atualizando
+            </span>
           </div>
+
+          <label class="dashboard-period-filter" for="dashboard-period-filter">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <rect x="4" y="5" width="16" height="15" rx="3" stroke="currentColor" stroke-width="1.8" />
+
+              <path d="M8 3V7M16 3V7M4 10H20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+            </svg>
+
+            <select id="dashboard-period-filter">
+              <option value="today">
+                Hoje
+              </option>
+
+              <option value="last-7-days">
+                Últimos 7 dias
+              </option>
+
+              <option value="last-30-days">
+                Últimos 30 dias
+              </option>
+
+              <option value="current-month" selected>
+                Mês atual
+              </option>
+
+              <option value="current-year">
+                Ano atual
+              </option>
+
+              <option value="all">
+                Período geral
+              </option>
+            </select>
+          </label>
+
+        </section>
+
+        <section class="dashboard-summary" aria-labelledby="dashboard-summary-title">
+          <header class="dashboard-section-heading">
+            <div>
+              <span class="dashboard-section-eyebrow">
+                Indicadores principais
+              </span>
+
+              <h2 id="dashboard-summary-title">
+                Resumo do período
+              </h2>
+            </div>
+          </header>
+
+          <div class="dashboard-summary-grid">
+
+            <article class="dashboard-summary-card">
+
+              <span class="dashboard-summary-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M12 3V21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+
+                  <path d="M16 7.5C16 5.8 14.3 5 12 5C9.7 5 8 6 8 8C8 12 16 10 16 15C16 17.4 14.2 19 12 19C9.8 19 8 18 8 16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+                </svg>
+              </span>
+
+              <div>
+                <span>Receita realizada</span>
+
+                <strong id="dashboard-revenue">
+                  R$ 0,00
+                </strong>
+              </div>
+
+            </article>
+
+            <article class="dashboard-summary-card">
+
+              <span class="dashboard-summary-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8" />
+
+                  <path d="M8 12L11 15L16 9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </span>
+
+              <div>
+                <span>Concluídos</span>
+
+                <strong id="dashboard-completed">
+                  0
+                </strong>
+              </div>
+
+            </article>
+
+            <article class="dashboard-summary-card">
+
+              <span class="dashboard-summary-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M5 17L10 12L13 15L19 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+
+                  <path d="M15 8H19V12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </span>
+
+              <div>
+                <span>Ticket médio</span>
+
+                <strong id="dashboard-average-ticket">
+                  R$ 0,00
+                </strong>
+              </div>
+
+            </article>
+
+            <article class="dashboard-summary-card">
+
+              <span class="dashboard-summary-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8" />
+
+                  <path d="M8 8L16 16M16 8L8 16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+                </svg>
+              </span>
+
+              <div>
+                <span>Cancelamento</span>
+
+                <strong id="dashboard-cancellation-rate">
+                  0%
+                </strong>
+              </div>
+
+            </article>
+
+          </div>
+        </section>
+
+        <section id="dashboard-data-loading" class="dashboard-state-card" aria-live="polite">
+          <span class="dashboard-loading-spinner" aria-hidden="true"></span>
+
+          <div>
+            <strong>
+              Calculando indicadores
+            </strong>
+
+            <p>
+              Organizando os dados do período selecionado.
+            </p>
+          </div>
+        </section>
+
+        <section id="dashboard-data-error" class="dashboard-state-card dashboard-state-card--error" hidden>
+          <span class="dashboard-state-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8" />
+
+              <path d="M12 7V13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+
+              <circle cx="12" cy="17" r="1" fill="currentColor" />
+            </svg>
+          </span>
+
+          <div>
+            <strong>
+              Não foi possível carregar
+            </strong>
+
+            <p>
+              Verifique sua conexão e tente novamente.
+            </p>
+
+            <button id="dashboard-retry-button" type="button" class="dashboard-state-link">
+              Tentar novamente
+            </button>
+          </div>
+        </section>
+
+        <div id="dashboard-data-sections" class="dashboard-data-sections" hidden>
+
+          <section class="dashboard-chart-card" aria-labelledby="dashboard-evolution-title">
+            <header class="dashboard-chart-heading">
+              <div>
+                <span class="dashboard-section-eyebrow">
+                  Evolução
+                </span>
+
+                <h2 id="dashboard-evolution-title">
+                  Receita e atendimentos
+                </h2>
+              </div>
+            </header>
+
+            <div class="dashboard-chart-container dashboard-chart-container--line">
+              <canvas id="dashboard-evolution-chart"></canvas>
+            </div>
+          </section>
+
+          <section class="dashboard-chart-card" aria-labelledby="dashboard-services-title">
+            <header class="dashboard-chart-heading">
+              <div>
+                <span class="dashboard-section-eyebrow">
+                  Serviços
+                </span>
+
+                <h2 id="dashboard-services-title">
+                  Mais realizados
+                </h2>
+              </div>
+            </header>
+
+            <div class="dashboard-chart-container dashboard-chart-container--bars">
+              <canvas id="dashboard-services-chart"></canvas>
+            </div>
+          </section>
+
+          <section class="dashboard-chart-card" aria-labelledby="dashboard-status-title">
+            <header class="dashboard-chart-heading">
+              <div>
+                <span class="dashboard-section-eyebrow">
+                  Operação
+                </span>
+
+                <h2 id="dashboard-status-title">
+                  Distribuição por status
+                </h2>
+              </div>
+            </header>
+
+            <div class="dashboard-chart-container dashboard-chart-container--doughnut">
+              <canvas id="dashboard-status-chart"></canvas>
+            </div>
+          </section>
+
+          <section class="dashboard-chart-card" aria-labelledby="dashboard-clients-title">
+            <header class="dashboard-chart-heading">
+              <div>
+                <span class="dashboard-section-eyebrow">
+                  Relacionamento
+                </span>
+
+                <h2 id="dashboard-clients-title">
+                  Perfil das clientes
+                </h2>
+              </div>
+            </header>
+
+            <div class="dashboard-chart-container dashboard-chart-container--doughnut">
+              <canvas id="dashboard-clients-chart"></canvas>
+            </div>
+          </section>
+
+          <section class="dashboard-ranking-card" aria-labelledby="dashboard-ranking-title">
+            <header class="dashboard-chart-heading">
+              <div>
+                <span class="dashboard-section-eyebrow">
+                  Fidelização
+                </span>
+
+                <h2 id="dashboard-ranking-title">
+                  Top clientes
+                </h2>
+              </div>
+
+              <span class="dashboard-ranking-badge">
+                Concluídos
+              </span>
+            </header>
+
+            <div id="dashboard-top-clients" class="dashboard-top-clients">
+            </div>
+
+            <div id="dashboard-top-clients-empty" class="dashboard-inline-empty" hidden>
+              Ainda não existem atendimentos concluídos
+              suficientes para gerar o ranking.
+            </div>
+          </section>
+
+          <section class="dashboard-highlights" aria-labelledby="dashboard-highlights-title">
+            <header class="dashboard-section-heading">
+              <div>
+                <span class="dashboard-section-eyebrow">
+                  Destaques
+                </span>
+
+                <h2 id="dashboard-highlights-title">
+                  Comportamento da agenda
+                </h2>
+              </div>
+            </header>
+
+            <div class="dashboard-highlights-grid">
+
+              <article class="dashboard-highlight-card">
+                <span>Dia mais movimentado</span>
+
+                <strong id="dashboard-busiest-day">
+                  Sem dados
+                </strong>
+              </article>
+
+              <article class="dashboard-highlight-card">
+                <span>Horário mais procurado</span>
+
+                <strong id="dashboard-busiest-time">
+                  Sem dados
+                </strong>
+              </article>
+
+              <article class="dashboard-highlight-card dashboard-highlight-card--wide">
+                <span>Serviço mais realizado</span>
+
+                <strong id="dashboard-top-service">
+                  Sem dados
+                </strong>
+              </article>
+
+            </div>
+          </section>
+
         </div>
+
       </div>
 
-      <div class="card card-cancelamento">
-        <div class="card-header-row">
-          <h3>Taxa de Cancelamento</h3>
-          <span class="card-pill">Status</span>
-        </div>
-        <div id="valor-cancelamento" class="value">0%</div>
-        <div class="card-chart">
-          <canvas id="cancelamentoChart"></canvas>
-        </div>
-      </div>
-
-      <div class="card card-top-clientes">
-        <div class="card-header-row">
-          <h3>Top Clientes</h3>
-          <span class="card-pill">Pedidos</span>
-        </div>
-        <div class="card-chart">
-          <canvas id="topClientesChart"></canvas>
-        </div>
-      </div>
     </main>
 
-    <section class="chart-section" style="height: auto; min-height: 350px; display: flex; flex-direction: column; align-items: center;">
-      <h3 style="color: var(--rosa-detalhe); margin-bottom: 20px; text-transform: uppercase; font-size: 14px; letter-spacing: 1px;">Distribuição de Serviços</h3>
-      <div style="width: 100%; max-width: 300px;"><canvas id="servicesChart"></canvas></div>
-    </section>
-
-    <section class="dashboard-actions" style="margin-top: 20px;">
-      <a href="principal.html" style="text-align: center; color: var(--vinho); font-weight: 500;">Voltar</a>
-    </section>
   </div>
 
-  <script type="module" src="dashboard.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+
+  <script type="module" src="dashboard.js?v=2.0.0"></script>
+
+  <script src="app.js?v=2.0.0" defer></script>
+
 </body>
 
 </html>

@@ -112,7 +112,27 @@ function formatarPrecoServico(valor) {
     currency: "BRL",
   }).format(valorNumerico);
 }
+function converterPrecoParaNumero(valor) {
+  if (valor === undefined || valor === null || valor === "") {
+    return 0;
+  }
 
+  if (typeof valor === "number") {
+    return Number.isFinite(valor) ? valor : 0;
+  }
+
+  let texto = String(valor).trim().replace(/R\$/gi, "").replace(/\s/g, "");
+
+  if (texto.includes(",")) {
+    texto = texto.replace(/\./g, "").replace(",", ".");
+  }
+
+  texto = texto.replace(/[^0-9.-]/g, "");
+
+  const numero = Number(texto);
+
+  return Number.isFinite(numero) ? numero : 0;
+}
 function atualizarCabecalhoData(botaoData) {
   if (!botaoData) return;
 
@@ -573,8 +593,12 @@ async function inicializarAgendamento() {
   localStorage.removeItem("horarioAgendamento");
   localStorage.removeItem("horaAgendamento");
   const serviceInfo = await carregarServicoSelecionado(serviceId);
+
   const serviceName = serviceInfo?.nome || "Manicure Simples";
-  const serviceDuration = serviceInfo?.duracao || 60;
+
+  const serviceDuration = Number(serviceInfo?.duracao) || 60;
+
+  const servicePrice = converterPrecoParaNumero(serviceInfo?.preco);
 
   preencherNomeClienteDoLocalStorage();
   const nomeClienteInput = document.getElementById("nomeCliente");
@@ -761,7 +785,12 @@ async function inicializarAgendamento() {
         } else {
           const agendamentoData = {
             ...payload,
+
             clienteId: user.uid,
+
+            precoSnapshot: servicePrice,
+            duracaoSnapshot: serviceDuration,
+
             dataCriacao: serverTimestamp(),
             status: "agendado",
           };
