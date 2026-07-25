@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <meta name="description" content="Gestão de serviços da Isabele Mariana Nails.">
+
+  <meta name="theme-color" content="#591c31">
+
+  <meta name="mobile-web-app-capable" content="yes">
+
+  <meta name="apple-mobile-web-app-capable" content="yes">
+
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+  <meta name="apple-mobile-web-app-title" content="IM Nails">
+
+  <title>Serviços | Isabele Mariana Nails</title>
+
+  <link rel="manifest" href="./manifest.json">
+
+  <link rel="icon" type="image/png" href="./assets/favicon.png">
+
+  <link rel="apple-touch-icon" href="./assets/apple-touch-icon.png">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="base.css?v=1.0.4">
+
+  <link rel="stylesheet" href="admin-servicos.css?v=1.0.0">
+</head>
+
+<body data-page="admin-servicos" data-access-state="loading">
+
+  <div class="app-container">
+
+    <header class="admin-page-header">
+
+      <nav class="admin-page-nav" aria-label="Navegação administrativa">
+        <a href="principal.html" class="admin-nav-button" aria-label="Voltar para a gestão">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M15 18L9 12L15 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </a>
+
+        <div class="admin-page-title">
+          <span>Gestão</span>
+          <h1>Serviços</h1>
+        </div>
+
+        <button id="admin-new-service-button" type="button" class="admin-nav-button" aria-label="Cadastrar novo serviço">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+          </svg>
+        </button>
+      </nav>
+
+      <section class="admin-page-intro">
+
+        <div>
+          <span class="admin-page-eyebrow">
+            Catálogo de atendimentos
+          </span>
+
+          <h2>
+            Gerencie seus serviços
+          </h2>
+
+          <p>
+            Organize preços, duração, categorias e disponibilidade
+            dos procedimentos oferecidos.
+          </p>
+        </div>
+
+        <span class="admin-page-intro-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <path d="M12 3L13.2 6.2L16.5 7.5L13.2 8.8L12 12L10.8 8.8L7.5 7.5L10.8 6.2L12 3Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+
+            <path d="M18 13L18.8 15.2L21 16L18.8 16.8L18 19L17.2 16.8L15 16L17.2 15.2L18 13Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+
+            <path d="M6 13L6.7 14.8L8.5 15.5L6.7 16.2L6 18L5.3 16.2L3.5 15.5L5.3 14.8L6 13Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </span>
+
+      </section>
+
+    </header>
+
+    <main class="admin-page-main">
+
+      <section id="admin-access-loading" class="admin-state-card" aria-live="polite">
+        <span class="admin-loading-spinner" aria-hidden="true"></span>
+
+        <div>
+          <strong>
+            Verificando acesso
+          </strong>
+
+          <p>
+            Aguarde enquanto carregamos a gestão de serviços.
+          </p>
+        </div>
+      </section>
+
+      <section id="admin-access-error" class="admin-state-card admin-state-card--error" aria-live="assertive" hidden>
+        <span class="admin-state-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8" />
+
+            <path d="M12 7V13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+
+            <circle cx="12" cy="17" r="1" fill="currentColor" />
+          </svg>
+        </span>
+
+        <div>
+          <strong id="admin-access-error-title">
+            Acesso não autorizado
+          </strong>
+
+          <p id="admin-access-error-message">
+            Esta conta não possui permissão administrativa.
+          </p>
+
+          <a href="principal.html" class="admin-state-link">
+            Voltar para a página principal
+          </a>
+        </div>
+      </section>
+
+      <div id="admin-servicos-content" class="admin-servicos-content" hidden>
+
+        <section class="admin-summary" aria-labelledby="admin-summary-title">
+          <header class="admin-section-heading">
+            <div>
+              <span class="admin-section-eyebrow">
+                Visão rápida
+              </span>
+
+              <h2 id="admin-summary-title">
+                Resumo dos serviços
+              </h2>
+            </div>
+
+            <span id="admin-services-results" class="admin-results-count">
+              0 serviços
+            </span>
+          </header>
+
+          <div id="admin-services-summary" class="admin-summary-grid">
+
+            <button type="button" class="admin-summary-card is-active" data-summary-filter="todos" aria-pressed="true">
+              <span class="admin-summary-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M5 5H19V19H5V5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+
+                  <path d="M8 9H16M8 12H16M8 15H13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+                </svg>
+              </span>
+
+              <span class="admin-summary-content">
+                <strong id="admin-total-services">
+                  0
+                </strong>
+
+                <span>
+                  Todos os serviços
+                </span>
+              </span>
+            </button>
+
+            <button type="button" class="admin-summary-card" data-summary-filter="ativos" aria-pressed="false">
+              <span class="admin-summary-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8" />
+
+                  <path d="M8 12L11 15L16 9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </span>
+
+              <span class="admin-summary-content">
+                <strong id="admin-active-services">
+                  0
+                </strong>
+
+                <span>
+                  Serviços ativos
+                </span>
+              </span>
+            </button>
+
+            <button type="button" class="admin-summary-card" data-summary-filter="inativos" aria-pressed="false">
+              <span class="admin-summary-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8" />
+
+                  <path d="M8 8L16 16M16 8L8 16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+                </svg>
+              </span>
+
+              <span class="admin-summary-content">
+                <strong id="admin-inactive-services">
+                  0
+                </strong>
+
+                <span>
+                  Serviços inativos
+                </span>
+              </span>
+            </button>
+
+            <button type="button" class="admin-summary-card" data-summary-filter="sem-preco" aria-pressed="false">
+              <span class="admin-summary-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M12 3V21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+
+                  <path d="M16 7.5C16 5.6 14.2 5 12 5C9.8 5 8 6 8 8C8 12 16 10 16 15C16 17.4 14.2 19 12 19C9.8 19 8 18 8 16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+                </svg>
+              </span>
+
+              <span class="admin-summary-content">
+                <strong id="admin-services-without-price">
+                  0
+                </strong>
+
+                <span>
+                  Sem preço definido
+                </span>
+              </span>
+            </button>
+
+          </div>
+        </section>
+
+        <section class="admin-controls" aria-labelledby="admin-services-list-title">
+          <header class="admin-section-heading">
+            <div>
+              <span class="admin-section-eyebrow">
+                Catálogo
+              </span>
+
+              <h2 id="admin-services-list-title">
+                Serviços cadastrados
+              </h2>
+            </div>
+
+            <button id="admin-add-service-button" type="button" class="admin-add-button">
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+              </svg>
+
+              Novo serviço
+            </button>
+          </header>
+
+          <form id="admin-services-search-form" class="admin-search-form" role="search">
+            <label class="admin-search-box" for="admin-services-search-input">
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <circle cx="11" cy="11" r="6" stroke="currentColor" stroke-width="2" />
+
+                <path d="M16 16L21 21" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+              </svg>
+
+              <input id="admin-services-search-input" type="search" placeholder="Buscar serviço ou categoria" autocomplete="off">
+            </label>
+
+            <label class="admin-category-filter" for="admin-services-category-filter">
+              <span>Categoria</span>
+
+              <select id="admin-services-category-filter">
+                <option value="todas">
+                  Todas
+                </option>
+
+                <option value="unhas-em-gel">
+                  Unhas em Gel
+                </option>
+
+                <option value="manicure">
+                  Manicure
+                </option>
+
+                <option value="pedicure">
+                  Pedicure
+                </option>
+              </select>
+            </label>
+          </form>
+        </section>
+
+        <section id="admin-services-loading" class="admin-state-card" aria-live="polite">
+          <span class="admin-loading-spinner" aria-hidden="true"></span>
+
+          <div>
+            <strong>
+              Carregando serviços
+            </strong>
+
+            <p>
+              Buscando os procedimentos cadastrados.
+            </p>
+          </div>
+        </section>
+
+        <section id="admin-services-list" class="admin-services-list" aria-live="polite" hidden>
+        </section>
+
+        <section id="admin-services-empty" class="admin-empty-state" hidden>
+          <span class="admin-empty-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M5 5H19V19H5V5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+
+              <path d="M8 9H16M8 12H16M8 15H13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+            </svg>
+          </span>
+
+          <strong id="admin-services-empty-title">
+            Nenhum serviço encontrado
+          </strong>
+
+          <p id="admin-services-empty-message">
+            Não existem serviços para os filtros selecionados.
+          </p>
+
+          <button id="admin-services-clear-filters" type="button" class="admin-clear-filters-button">
+            Limpar filtros
+          </button>
+        </section>
+
+        <section id="admin-services-error" class="admin-state-card admin-state-card--error" hidden>
+          <span class="admin-state-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8" />
+
+              <path d="M12 7V13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+
+              <circle cx="12" cy="17" r="1" fill="currentColor" />
+            </svg>
+          </span>
+
+          <div>
+            <strong>
+              Não foi possível carregar
+            </strong>
+
+            <p>
+              Verifique sua conexão e tente novamente.
+            </p>
+
+            <button id="admin-services-retry-button" type="button" class="admin-state-link">
+              Tentar novamente
+            </button>
+          </div>
+        </section>
+
+      </div>
+
+    </main>
+
+    <div id="admin-service-modal" class="admin-modal" role="dialog" aria-modal="true" aria-labelledby="admin-service-modal-title" hidden>
+      <button type="button" class="admin-modal-backdrop" data-close-service-modal aria-label="Fechar formulário"></button>
+
+      <section class="admin-modal-panel">
+
+        <header class="admin-modal-header">
+          <div>
+            <span class="admin-modal-eyebrow">
+              Catálogo
+            </span>
+
+            <h2 id="admin-service-modal-title">
+              Novo serviço
+            </h2>
+          </div>
+
+          <button type="button" class="admin-modal-close" data-close-service-modal aria-label="Fechar">
+            &times;
+          </button>
+        </header>
+
+        <form id="admin-service-form" class="admin-service-form">
+          <input id="admin-service-id" type="hidden">
+
+          <label class="admin-form-field">
+            <span>
+              Nome do serviço
+            </span>
+
+            <input id="admin-service-name" type="text" placeholder="Ex.: Manutenção em gel" maxlength="80" required>
+          </label>
+
+          <label class="admin-form-field">
+            <span>
+              Categoria
+            </span>
+
+            <select id="admin-service-category" required>
+              <option value="">
+                Selecione
+              </option>
+
+              <option value="unhas-em-gel">
+                Unhas em Gel
+              </option>
+
+              <option value="manicure">
+                Manicure
+              </option>
+
+              <option value="pedicure">
+                Pedicure
+              </option>
+            </select>
+          </label>
+
+          <div class="admin-form-grid">
+
+            <label class="admin-form-field">
+              <span>
+                Preço
+              </span>
+
+              <input id="admin-service-price" type="text" inputmode="decimal" placeholder="R$ 0,00" required>
+            </label>
+
+            <label class="admin-form-field">
+              <span>
+                Duração
+              </span>
+
+              <input id="admin-service-duration" type="number" inputmode="numeric" min="5" step="5" placeholder="60" required>
+
+              <small>
+                Em minutos
+              </small>
+            </label>
+
+          </div>
+
+          <label class="admin-form-field">
+            <span>
+              Descrição
+            </span>
+
+            <textarea id="admin-service-description" rows="4" maxlength="300" placeholder="Descreva brevemente o procedimento."></textarea>
+          </label>
+
+          <label class="admin-status-switch">
+
+            <span>
+              <strong>
+                Serviço ativo
+              </strong>
+
+              <small>
+                Serviços inativos não devem aparecer para as clientes.
+              </small>
+            </span>
+
+            <input id="admin-service-active" type="checkbox" checked>
+
+            <span class="admin-switch-control" aria-hidden="true"></span>
+
+          </label>
+
+          <div class="admin-form-actions">
+
+            <button type="button" class="admin-form-button admin-form-button--secondary" data-close-service-modal>
+              Cancelar
+            </button>
+
+            <button id="admin-service-submit-button" type="submit" class="admin-form-button admin-form-button--primary">
+              Salvar serviço
+            </button>
+
+          </div>
+
+        </form>
+
+      </section>
+    </div>
+
+    <div id="admin-delete-service-modal" class="admin-modal" role="dialog" aria-modal="true" aria-labelledby="admin-delete-service-title" hidden>
+      <button type="button" class="admin-modal-backdrop" data-close-delete-modal aria-label="Fechar confirmação"></button>
+
+      <section class="admin-modal-panel admin-modal-panel--confirmation">
+
+        <header class="admin-modal-header">
+          <div>
+            <span class="admin-modal-eyebrow">
+              Atenção
+            </span>
+
+            <h2 id="admin-delete-service-title">
+              Excluir serviço
+            </h2>
+          </div>
+
+          <button type="button" class="admin-modal-close" data-close-delete-modal aria-label="Fechar">
+            &times;
+          </button>
+        </header>
+
+        <div class="admin-delete-content">
+
+          <span class="admin-delete-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M5 7H19" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+
+              <path d="M9 7V4H15V7" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+
+              <path d="M7 7L8 20H16L17 7" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+            </svg>
+          </span>
+
+          <strong>
+            Deseja excluir este serviço?
+          </strong>
+
+          <p id="admin-delete-service-message">
+            Essa ação não poderá ser desfeita.
+          </p>
+
+        </div>
+
+        <footer class="admin-delete-actions">
+
+          <button type="button" class="admin-form-button admin-form-button--secondary" data-close-delete-modal>
+            Voltar
+          </button>
+
+          <button id="admin-confirm-delete-service" type="button" class="admin-form-button admin-form-button--danger">
+            Excluir serviço
+          </button>
+
+        </footer>
+
+      </section>
+    </div>
+
+  </div>
+
+  <script type="module" src="analytics.js?v=1.0.1"></script>
+
+  <script type="module" src="admin-servicos.js?v=1.0.0"></script>
+
+  <script src="app.js?v=2.0.0" defer></script>
+
+</body>
+
+</html>

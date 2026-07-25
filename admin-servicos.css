@@ -27,6 +27,7 @@
   --admin-info-soft: #f0ebfb;
 
   --admin-border: rgba(89, 28, 49, 0.1);
+  --admin-border-strong: rgba(89, 28, 49, 0.18);
   --admin-border-light: rgba(255, 255, 255, 0.18);
 
   --admin-shadow: 0 14px 32px rgba(45, 8, 21, 0.16);
@@ -47,6 +48,7 @@ html {
   width: 100%;
   min-width: 0;
   min-height: 100%;
+
   overflow-x: hidden;
 }
 
@@ -55,10 +57,11 @@ body {
   min-width: 0;
   min-height: 100vh;
   margin: 0;
-  overflow-x: hidden;
 
   display: flex;
   justify-content: center;
+
+  overflow-x: hidden;
 
   font-family: "Poppins", sans-serif;
 
@@ -69,7 +72,7 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-body[data-page="admin-agendamentos"] [hidden] {
+body[data-page="admin-servicos"] [hidden] {
   display: none !important;
 }
 
@@ -233,7 +236,9 @@ svg {
   color: var(--admin-white);
 }
 
-/* Introdução */
+/* ============================================================
+   INTRODUÇÃO
+   ============================================================ */
 
 .admin-page-intro {
   width: 100%;
@@ -346,7 +351,7 @@ svg {
   padding: 20px 16px max(30px, env(safe-area-inset-bottom));
 }
 
-.admin-agendamentos-content {
+.admin-servicos-content {
   width: 100%;
   max-width: 100%;
   min-width: 0;
@@ -356,14 +361,14 @@ svg {
   gap: 22px;
 }
 
-.admin-agendamentos-content > * {
+.admin-servicos-content > * {
   width: 100%;
   max-width: 100%;
   min-width: 0;
 }
 
 /* ============================================================
-   CABEÇALHOS DAS SEÇÕES
+   TÍTULOS DAS SEÇÕES
    ============================================================ */
 
 .admin-section-heading {
@@ -381,7 +386,7 @@ svg {
 
 .admin-section-heading > div {
   min-width: 0;
-  flex: 1 1 180px;
+  flex: 1 1 170px;
 }
 
 .admin-section-eyebrow {
@@ -409,7 +414,6 @@ svg {
   color: var(--admin-white);
 }
 
-.admin-current-date,
 .admin-results-count {
   max-width: 125px;
   min-height: 27px;
@@ -470,10 +474,43 @@ svg {
   border: 1px solid rgba(89, 28, 49, 0.08);
   border-radius: 17px;
 
+  text-align: left;
+
   color: var(--admin-text);
   background: rgba(255, 250, 252, 0.97);
 
   box-shadow: 0 8px 18px rgba(45, 8, 21, 0.11);
+
+  outline: none;
+
+  transition:
+    transform 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background-color 0.2s ease;
+}
+
+.admin-summary-card:hover,
+.admin-summary-card:focus-visible {
+  transform: translateY(-2px);
+
+  border-color: rgba(89, 28, 49, 0.22);
+
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.3),
+    0 11px 24px rgba(45, 8, 21, 0.15);
+}
+
+.admin-summary-card.is-active {
+  transform: translateY(-2px);
+
+  border-color: rgba(89, 28, 49, 0.34);
+
+  background: linear-gradient(145deg, #ffffff 0%, #fff0f5 100%);
+
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.62),
+    0 12px 26px rgba(45, 8, 21, 0.18);
 }
 
 .admin-summary-icon {
@@ -489,6 +526,18 @@ svg {
 
   color: var(--admin-primary);
   background: rgba(240, 193, 209, 0.38);
+
+  transition:
+    color 0.2s ease,
+    background-color 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.admin-summary-card.is-active .admin-summary-icon {
+  color: var(--admin-white);
+  background: var(--admin-primary);
+
+  border-color: var(--admin-primary);
 }
 
 .admin-summary-icon svg {
@@ -496,12 +545,14 @@ svg {
   height: 21px;
 }
 
-.admin-summary-card > div {
+.admin-summary-content {
   min-width: 0;
   flex: 1;
+
+  display: block;
 }
 
-.admin-summary-card strong {
+.admin-summary-content strong {
   display: block;
   max-width: 100%;
 
@@ -515,7 +566,7 @@ svg {
   color: var(--admin-dark);
 }
 
-.admin-summary-card span:last-child {
+.admin-summary-content > span {
   display: block;
   max-width: 100%;
   margin-top: 5px;
@@ -530,7 +581,7 @@ svg {
 }
 
 /* ============================================================
-   PESQUISA E FILTROS
+   PESQUISA E FILTRO DE CATEGORIA
    ============================================================ */
 
 .admin-controls {
@@ -539,6 +590,46 @@ svg {
   min-width: 0;
 
   overflow: hidden;
+}
+
+.admin-add-button {
+  width: fit-content;
+  max-width: 100%;
+  min-height: 36px;
+  padding: 0 12px;
+  flex: 0 0 auto;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+
+  border-radius: 11px;
+
+  font-size: 8.5px;
+  font-weight: 650;
+  white-space: nowrap;
+
+  color: var(--admin-dark);
+  background: var(--admin-white);
+
+  box-shadow: 0 7px 17px rgba(45, 8, 21, 0.15);
+
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.admin-add-button:hover,
+.admin-add-button:focus-visible {
+  transform: translateY(-1px);
+
+  box-shadow: 0 9px 21px rgba(45, 8, 21, 0.19);
+}
+
+.admin-add-button svg {
+  width: 15px;
+  height: 15px;
 }
 
 .admin-search-form {
@@ -552,7 +643,7 @@ svg {
 }
 
 .admin-search-box,
-.admin-date-filter {
+.admin-category-filter {
   width: 100%;
   max-width: 100%;
   min-width: 0;
@@ -604,7 +695,7 @@ svg {
   color: rgba(89, 28, 49, 0.46);
 }
 
-.admin-date-filter {
+.admin-category-filter {
   min-height: 48px;
   padding: 7px 12px;
 
@@ -614,9 +705,7 @@ svg {
   gap: 10px;
 }
 
-.admin-date-filter span {
-  display: block;
-
+.admin-category-filter > span {
   font-size: 7px;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -625,11 +714,12 @@ svg {
   color: var(--admin-medium);
 }
 
-.admin-date-filter input {
+.admin-category-filter select {
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  padding: 0;
+  height: 32px;
+  padding: 0 28px 0 9px;
 
   border: 0;
   outline: 0;
@@ -638,98 +728,13 @@ svg {
   font-weight: 600;
 
   color: var(--admin-text);
-  background: transparent;
+  background-color: transparent;
 
-  appearance: none;
-  -webkit-appearance: none;
-}
-
-.admin-filter-list {
-  width: 100%;
-  max-width: 100%;
-  min-width: 0;
-
-  margin-top: 11px;
-  padding: 2px 1px 5px;
-
-  display: flex;
-  gap: 8px;
-
-  overflow-x: auto;
-  overflow-y: hidden;
-
-  scrollbar-width: none;
-  overscroll-behavior-inline: contain;
-  -webkit-overflow-scrolling: touch;
-}
-
-.admin-filter-list::-webkit-scrollbar {
-  display: none;
-}
-
-.admin-filter-button {
-  min-height: 35px;
-  padding: 0 10px;
-  flex: 0 0 auto;
-
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: 999px;
-
-  font-size: 8.5px;
-  font-weight: 600;
-  white-space: nowrap;
-
-  color: rgba(255, 255, 255, 0.76);
-  background: rgba(255, 255, 255, 0.08);
-
-  transition:
-    transform 0.2s ease,
-    background-color 0.2s ease,
-    color 0.2s ease;
-}
-
-.admin-filter-button:hover,
-.admin-filter-button:focus-visible {
-  transform: translateY(-1px);
-
-  background: rgba(255, 255, 255, 0.14);
-}
-
-.admin-filter-button span {
-  min-width: 20px;
-  height: 20px;
-  padding: 0 5px;
-
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-
-  border-radius: 999px;
-
-  font-size: 7.5px;
-
-  color: rgba(255, 255, 255, 0.86);
-  background: rgba(255, 255, 255, 0.11);
-}
-
-.admin-filter-button.is-active {
-  color: var(--admin-dark);
-  background: var(--admin-white);
-
-  box-shadow: 0 7px 17px rgba(45, 8, 21, 0.16);
-}
-
-.admin-filter-button.is-active span {
-  color: var(--admin-white);
-  background: var(--admin-primary);
+  cursor: pointer;
 }
 
 /* ============================================================
-   ESTADOS
+   ESTADOS DE CARREGAMENTO E ERRO
    ============================================================ */
 
 .admin-state-card {
@@ -843,6 +848,16 @@ svg {
   background: rgba(255, 255, 255, 0.1);
 }
 
+@keyframes admin-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ============================================================
+   LISTA VAZIA
+   ============================================================ */
+
 .admin-empty-state {
   width: 100%;
   max-width: 100%;
@@ -872,6 +887,7 @@ svg {
   width: 58px;
   height: 58px;
   margin-bottom: 13px;
+  flex: 0 0 58px;
 
   display: grid;
   place-items: center;
@@ -890,6 +906,10 @@ svg {
 }
 
 .admin-empty-state strong {
+  max-width: 100%;
+
+  overflow-wrap: anywhere;
+
   font-size: 13px;
   font-weight: 700;
 }
@@ -897,6 +917,8 @@ svg {
 .admin-empty-state p {
   max-width: 280px;
   margin: 6px 0 0;
+
+  overflow-wrap: anywhere;
 
   font-size: 9px;
   line-height: 1.5;
@@ -920,17 +942,11 @@ svg {
   box-shadow: 0 7px 17px rgba(45, 8, 21, 0.15);
 }
 
-@keyframes admin-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 /* ============================================================
-   LISTA DE AGENDAMENTOS
+   LISTA DE SERVIÇOS
    ============================================================ */
 
-.admin-agendamentos-list {
+.admin-services-list {
   width: 100%;
   max-width: 100%;
   min-width: 0;
@@ -940,7 +956,7 @@ svg {
   gap: 11px;
 }
 
-.admin-agendamento-card {
+.admin-service-card {
   width: 100%;
   max-width: 100%;
   min-width: 0;
@@ -961,13 +977,13 @@ svg {
     box-shadow 0.2s ease;
 }
 
-.admin-agendamento-card:hover {
+.admin-service-card:hover {
   transform: translateY(-1px);
 
   box-shadow: 0 12px 26px rgba(45, 8, 21, 0.15);
 }
 
-.admin-agendamento-card-header {
+.admin-service-card-header {
   width: 100%;
   max-width: 100%;
   min-width: 0;
@@ -978,51 +994,19 @@ svg {
   gap: 10px;
 }
 
-.admin-agendamento-cliente {
-  min-width: 0;
-  flex: 1;
-
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.admin-agendamento-avatar {
-  width: 42px;
-  height: 42px;
-  flex: 0 0 42px;
-
-  display: grid;
-  place-items: center;
-
-  overflow: hidden;
-
-  border: 2px solid rgba(168, 97, 123, 0.16);
-  border-radius: 50%;
-
-  font-size: 14px;
-  font-weight: 700;
-
-  color: var(--admin-primary);
-  background: var(--admin-card-soft);
-}
-
-.admin-agendamento-cliente-info {
+.admin-service-card-title {
   min-width: 0;
   flex: 1;
 }
 
-.admin-agendamento-cliente-info strong,
-.admin-agendamento-cliente-info span {
+.admin-service-card-title strong {
   display: block;
   max-width: 100%;
 
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
 
-.admin-agendamento-cliente-info strong {
   font-size: 12.5px;
   font-weight: 700;
   line-height: 1.3;
@@ -1030,16 +1014,33 @@ svg {
   color: var(--admin-dark);
 }
 
-.admin-agendamento-cliente-info span {
-  margin-top: 2px;
+.admin-service-category {
+  width: fit-content;
+  max-width: 100%;
+  min-height: 24px;
+  margin-top: 5px;
+  padding: 0 8px;
 
-  font-size: 8.5px;
+  display: inline-flex;
+  align-items: center;
 
-  color: rgba(89, 28, 49, 0.58);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  border-radius: 999px;
+
+  font-size: 7px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+
+  color: var(--admin-primary);
+  background: var(--admin-card-soft);
 }
 
-.admin-status-badge {
-  max-width: 125px;
+.admin-service-status {
+  max-width: 90px;
   min-height: 25px;
   padding: 0 8px;
   flex: 0 1 auto;
@@ -1060,117 +1061,55 @@ svg {
   text-transform: uppercase;
 }
 
-.admin-status-badge--agendado {
-  color: var(--admin-warning);
-  background: var(--admin-warning-soft);
-}
-
-.admin-status-badge--confirmado {
+.admin-service-status--active,
+.admin-service-status--ativo {
   color: var(--admin-success);
   background: var(--admin-success-soft);
 }
 
-.admin-status-badge--reagendado {
-  color: var(--admin-info);
-  background: var(--admin-info-soft);
-}
-
-.admin-status-badge--concluido,
-.admin-status-badge--realizado {
-  color: var(--admin-success);
-  background: var(--admin-success-soft);
-}
-
-.admin-status-badge--cancelado {
+.admin-service-status--inactive,
+.admin-service-status--inativo {
   color: var(--admin-danger);
   background: var(--admin-danger-soft);
 }
 
-.admin-agendamento-service {
+.admin-service-description {
   width: 100%;
   max-width: 100%;
   min-width: 0;
 
-  margin-top: 13px;
-  padding: 11px;
+  margin: 12px 0 0;
 
-  display: flex;
-  align-items: center;
-  gap: 10px;
-
+  display: -webkit-box;
   overflow: hidden;
 
-  border: 1px solid rgba(168, 97, 123, 0.12);
-  border-radius: 14px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
 
-  background: rgba(240, 193, 209, 0.22);
+  overflow-wrap: anywhere;
+
+  font-size: 8.5px;
+  line-height: 1.55;
+
+  color: var(--admin-text-muted);
 }
 
-.admin-agendamento-service-icon {
-  width: 37px;
-  height: 37px;
-  flex: 0 0 37px;
-
-  display: grid;
-  place-items: center;
-
-  border-radius: 11px;
-
-  color: var(--admin-primary);
-  background: rgba(255, 255, 255, 0.68);
-}
-
-.admin-agendamento-service-icon svg {
-  width: 19px;
-  height: 19px;
-}
-
-.admin-agendamento-service div {
-  min-width: 0;
-  flex: 1;
-}
-
-.admin-agendamento-service strong,
-.admin-agendamento-service span {
-  display: block;
-  max-width: 100%;
-
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.admin-agendamento-service strong {
-  font-size: 10.5px;
-  font-weight: 700;
-
-  color: var(--admin-dark);
-}
-
-.admin-agendamento-service span {
-  margin-top: 2px;
-
-  font-size: 8px;
-
-  color: rgba(89, 28, 49, 0.58);
-}
-
-.admin-agendamento-meta {
+.admin-service-meta {
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  margin-top: 11px;
+  margin-top: 12px;
 
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
 
-.admin-agendamento-meta-item {
+.admin-service-meta-item {
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  min-height: 46px;
+  min-height: 48px;
   padding: 8px 9px;
 
   display: flex;
@@ -1182,24 +1121,35 @@ svg {
   border: 1px solid rgba(89, 28, 49, 0.07);
   border-radius: 12px;
 
-  background: rgba(255, 255, 255, 0.68);
+  background: rgba(240, 193, 209, 0.18);
 }
 
-.admin-agendamento-meta-item svg {
-  width: 16px;
-  height: 16px;
-  flex: 0 0 16px;
+.admin-service-meta-icon {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
 
-  color: var(--admin-medium);
+  display: grid;
+  place-items: center;
+
+  border-radius: 9px;
+
+  color: var(--admin-primary);
+  background: rgba(255, 255, 255, 0.7);
 }
 
-.admin-agendamento-meta-item div {
+.admin-service-meta-icon svg {
+  width: 15px;
+  height: 15px;
+}
+
+.admin-service-meta-item > div {
   min-width: 0;
   flex: 1;
 }
 
-.admin-agendamento-meta-item span,
-.admin-agendamento-meta-item strong {
+.admin-service-meta-item span,
+.admin-service-meta-item strong {
   display: block;
   max-width: 100%;
 
@@ -1208,17 +1158,17 @@ svg {
   white-space: nowrap;
 }
 
-.admin-agendamento-meta-item span {
-  font-size: 6.8px;
+.admin-service-meta-item span {
+  font-size: 6.7px;
   font-weight: 700;
-  letter-spacing: 0.07em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 
-  color: rgba(89, 28, 49, 0.45);
+  color: rgba(89, 28, 49, 0.46);
 }
 
-.admin-agendamento-meta-item strong {
-  margin-top: 1px;
+.admin-service-meta-item strong {
+  margin-top: 2px;
 
   font-size: 9px;
   font-weight: 650;
@@ -1226,18 +1176,18 @@ svg {
   color: var(--admin-dark);
 }
 
-.admin-agendamento-actions {
+.admin-service-actions {
   width: 100%;
   max-width: 100%;
   min-width: 0;
   margin-top: 12px;
 
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 39px;
+  grid-template-columns: minmax(0, 1fr) 39px 39px;
   gap: 8px;
 }
 
-.admin-card-button {
+.admin-service-button {
   max-width: 100%;
   min-width: 0;
   min-height: 39px;
@@ -1261,28 +1211,47 @@ svg {
     opacity 0.2s ease;
 }
 
-.admin-card-button--primary {
+.admin-service-button:hover,
+.admin-service-button:focus-visible {
+  transform: translateY(-1px);
+}
+
+.admin-service-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.admin-service-button svg {
+  width: 15px;
+  height: 15px;
+}
+
+.admin-service-button--primary,
+.admin-service-button--edit {
   color: var(--admin-white);
   background: var(--admin-primary);
 
   box-shadow: 0 7px 16px rgba(89, 28, 49, 0.18);
 }
 
-.admin-card-button--secondary {
-  color: var(--admin-primary);
-  background: var(--admin-card-soft);
-}
-
-.admin-card-button--icon {
+.admin-service-button--toggle {
   width: 39px;
   padding: 0;
 
   color: var(--admin-primary);
-  background: rgba(240, 193, 209, 0.32);
+  background: var(--admin-card-soft);
+}
+
+.admin-service-button--delete {
+  width: 39px;
+  padding: 0;
+
+  color: var(--admin-danger);
+  background: var(--admin-danger-soft);
 }
 
 /* ============================================================
-   MODAL
+   MODAIS
    ============================================================ */
 
 .admin-modal {
@@ -1292,6 +1261,7 @@ svg {
 
   width: 100%;
   max-width: 100vw;
+  min-width: 0;
 
   display: flex;
   align-items: flex-end;
@@ -1323,7 +1293,7 @@ svg {
   width: min(100%, 456px);
   max-width: calc(100vw - 24px);
   min-width: 0;
-  max-height: min(88vh, 720px);
+  max-height: min(90vh, 760px);
 
   display: flex;
   flex-direction: column;
@@ -1339,6 +1309,10 @@ svg {
   box-shadow: 0 24px 60px rgba(20, 3, 9, 0.36);
 
   animation: admin-modal-enter 0.24s ease;
+}
+
+.admin-modal-panel--confirmation {
+  max-height: min(80vh, 520px);
 }
 
 .admin-modal-header {
@@ -1404,226 +1378,380 @@ svg {
   background: var(--admin-card-soft);
 }
 
-.admin-modal-content {
+/* ============================================================
+   FORMULÁRIO DO SERVIÇO
+   ============================================================ */
+
+.admin-service-form {
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  padding: 15px 17px;
+  padding: 15px 17px 17px;
+
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
 
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
 
-.admin-modal-actions {
+.admin-form-field {
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  padding: 12px 17px 17px;
 
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 8px;
-
-  border-top: 1px solid rgba(89, 28, 49, 0.08);
-
-  background: rgba(255, 250, 252, 0.98);
+  gap: 6px;
 }
 
-.admin-modal-client {
+.admin-form-field > span {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+
+  color: var(--admin-dark);
+}
+
+.admin-form-field input,
+.admin-form-field select,
+.admin-form-field textarea {
+  width: 100%;
+  max-width: 100%;
   min-width: 0;
+
+  border: 1px solid rgba(89, 28, 49, 0.11);
+  border-radius: 13px;
+  outline: 0;
+
+  font-size: 10px;
+  font-weight: 500;
+
+  color: var(--admin-text);
+  background: var(--admin-surface-soft);
+
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background-color 0.2s ease;
+}
+
+.admin-form-field input,
+.admin-form-field select {
+  min-height: 46px;
+  padding: 0 12px;
+}
+
+.admin-form-field textarea {
+  min-height: 96px;
+  padding: 12px;
+
+  resize: vertical;
+}
+
+.admin-form-field input:focus,
+.admin-form-field select:focus,
+.admin-form-field textarea:focus {
+  border-color: rgba(124, 51, 76, 0.48);
+
+  background: var(--admin-white);
+
+  box-shadow: 0 0 0 3px rgba(168, 97, 123, 0.12);
+}
+
+.admin-form-field input::placeholder,
+.admin-form-field textarea::placeholder {
+  color: rgba(89, 28, 49, 0.42);
+}
+
+.admin-form-field small {
+  margin-top: -2px;
+
+  font-size: 7px;
+
+  color: var(--admin-text-muted);
+}
+
+.admin-form-grid {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+/* ============================================================
+   SWITCH DE STATUS
+   ============================================================ */
+
+.admin-status-switch {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  padding: 12px;
 
   display: flex;
   align-items: center;
-  gap: 11px;
+  gap: 12px;
+
+  overflow: hidden;
+
+  border: 1px solid rgba(89, 28, 49, 0.09);
+  border-radius: 14px;
+
+  background: var(--admin-surface-soft);
+
+  cursor: pointer;
 }
 
-.admin-modal-client > div {
+.admin-status-switch > span:first-child {
   min-width: 0;
   flex: 1;
 }
 
-.admin-modal-client-avatar {
-  width: 48px;
-  height: 48px;
-  flex: 0 0 48px;
-
-  display: grid;
-  place-items: center;
-
-  overflow: hidden;
-
-  border: 2px solid rgba(168, 97, 123, 0.18);
-  border-radius: 50%;
-
-  font-size: 15px;
-  font-weight: 700;
-
-  color: var(--admin-primary);
-  background: var(--admin-card-soft);
-}
-
-.admin-modal-client strong,
-.admin-modal-client span {
+.admin-status-switch strong {
   display: block;
-  max-width: 100%;
 
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+  overflow-wrap: anywhere;
 
-.admin-modal-client strong {
-  font-size: 13px;
+  font-size: 10px;
   font-weight: 700;
 
   color: var(--admin-dark);
 }
 
-.admin-modal-client span {
-  margin-top: 2px;
+.admin-status-switch small {
+  display: block;
+  max-width: 100%;
+  margin-top: 3px;
 
-  font-size: 8.5px;
+  overflow-wrap: anywhere;
+
+  font-size: 7.5px;
+  line-height: 1.45;
 
   color: var(--admin-text-muted);
 }
 
-.admin-modal-details-grid {
+.admin-status-switch input {
+  position: absolute;
+
+  width: 1px;
+  height: 1px;
+
+  opacity: 0;
+  pointer-events: none;
+}
+
+.admin-switch-control {
+  position: relative;
+
+  width: 46px;
+  height: 26px;
+  flex: 0 0 46px;
+
+  display: block;
+
+  border-radius: 999px;
+
+  background: rgba(89, 28, 49, 0.18);
+
+  transition: background-color 0.2s ease;
+}
+
+.admin-switch-control::after {
+  content: "";
+
+  position: absolute;
+  top: 3px;
+  left: 3px;
+
+  width: 20px;
+  height: 20px;
+
+  border-radius: 50%;
+
+  background: var(--admin-white);
+
+  box-shadow: 0 2px 7px rgba(45, 8, 21, 0.18);
+
+  transition: transform 0.2s ease;
+}
+
+.admin-status-switch input:checked + .admin-switch-control {
+  background: var(--admin-success);
+}
+
+.admin-status-switch input:checked + .admin-switch-control::after {
+  transform: translateX(20px);
+}
+
+.admin-status-switch input:focus-visible + .admin-switch-control {
+  box-shadow: 0 0 0 3px rgba(168, 97, 123, 0.2);
+}
+
+/* ============================================================
+   BOTÕES DO FORMULÁRIO
+   ============================================================ */
+
+.admin-form-actions {
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  margin-top: 15px;
 
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 9px;
 }
 
-.admin-modal-detail {
+.admin-form-button {
+  width: 100%;
+  max-width: 100%;
   min-width: 0;
-  padding: 11px;
+  min-height: 43px;
+  padding: 0 12px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 
   overflow: hidden;
 
-  border: 1px solid rgba(89, 28, 49, 0.08);
   border-radius: 13px;
 
+  font-size: 9px;
+  font-weight: 650;
+
+  transition:
+    transform 0.2s ease,
+    opacity 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.admin-form-button:hover,
+.admin-form-button:focus-visible {
+  transform: translateY(-1px);
+}
+
+.admin-form-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.admin-form-button--primary {
+  color: var(--admin-white);
+  background: var(--admin-primary);
+
+  box-shadow: 0 8px 18px rgba(89, 28, 49, 0.19);
+}
+
+.admin-form-button--secondary {
+  color: var(--admin-primary);
   background: var(--admin-surface-soft);
 }
 
-.admin-modal-detail span,
-.admin-modal-detail strong {
-  display: block;
+.admin-form-button--danger {
+  color: var(--admin-white);
+  background: var(--admin-danger);
+
+  box-shadow: 0 8px 18px rgba(181, 63, 96, 0.2);
+}
+
+/* ============================================================
+   EXCLUSÃO
+   ============================================================ */
+
+.admin-delete-content {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  padding: 22px 17px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+
+  overflow: hidden;
+
+  text-align: center;
+}
+
+.admin-delete-icon {
+  width: 58px;
+  height: 58px;
+  margin-bottom: 13px;
+  flex: 0 0 58px;
+
+  display: grid;
+  place-items: center;
+
+  border-radius: 18px;
+
+  color: var(--admin-danger);
+  background: var(--admin-danger-soft);
+}
+
+.admin-delete-icon svg {
+  width: 27px;
+  height: 27px;
+}
+
+.admin-delete-content strong {
   max-width: 100%;
 
   overflow-wrap: anywhere;
-}
 
-.admin-modal-detail span {
-  font-size: 7px;
+  font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-
-  color: var(--admin-medium);
-}
-
-.admin-modal-detail strong {
-  margin-top: 3px;
-
-  font-size: 9.5px;
-  font-weight: 650;
-  line-height: 1.4;
 
   color: var(--admin-dark);
 }
 
-.admin-modal-observation {
-  width: 100%;
-  max-width: 100%;
-  min-width: 0;
-
-  margin-top: 11px;
-  padding: 12px;
-
-  overflow: hidden;
-
-  border: 1px solid rgba(89, 28, 49, 0.08);
-  border-radius: 14px;
-
-  background: rgba(240, 193, 209, 0.2);
-}
-
-.admin-modal-observation span {
-  display: block;
-
-  font-size: 7px;
-  font-weight: 700;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-
-  color: var(--admin-medium);
-}
-
-.admin-modal-observation p {
-  max-width: 100%;
-  margin: 5px 0 0;
+.admin-delete-content p {
+  max-width: 280px;
+  margin: 6px 0 0;
 
   overflow-wrap: anywhere;
 
   font-size: 9px;
   line-height: 1.5;
 
-  color: rgba(89, 28, 49, 0.72);
+  color: var(--admin-text-muted);
 }
 
-.admin-modal-button {
+.admin-delete-actions {
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  min-height: 43px;
-  padding: 0 14px;
+  padding: 12px 17px 17px;
 
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
 
-  border-radius: 13px;
-
-  font-size: 9.5px;
-  font-weight: 650;
+  border-top: 1px solid rgba(89, 28, 49, 0.08);
 }
 
-.admin-modal-button--primary {
-  color: var(--admin-white);
-  background: var(--admin-primary);
+/* ============================================================
+   ESTADOS DE ACESSO
+   ============================================================ */
+
+body[data-access-state="loading"] #admin-new-service-button {
+  pointer-events: none;
+  opacity: 0.55;
 }
 
-.admin-modal-button--success {
-  color: var(--admin-white);
-  background: var(--admin-success);
+body[data-access-state="denied"] #admin-new-service-button {
+  display: none;
 }
 
-.admin-modal-button--warning {
-  color: var(--admin-warning);
-  background: var(--admin-warning-soft);
-}
-
-.admin-modal-button--danger {
-  color: var(--admin-danger);
-  background: var(--admin-danger-soft);
-}
-
-.admin-modal-button--whatsapp {
-  color: #176c42;
-  background: #e8f8ef;
-}
-
-.admin-modal-button--secondary {
-  color: var(--admin-primary);
-  background: var(--admin-surface-soft);
-}
+/* ============================================================
+   ANIMAÇÃO DO MODAL
+   ============================================================ */
 
 @keyframes admin-modal-enter {
   from {
@@ -1635,19 +1763,6 @@ svg {
     opacity: 1;
     transform: translateY(0);
   }
-}
-
-/* ============================================================
-   ESTADOS DE ACESSO
-   ============================================================ */
-
-body[data-access-state="loading"] #admin-refresh-button {
-  pointer-events: none;
-  opacity: 0.55;
-}
-
-body[data-access-state="denied"] #admin-refresh-button {
-  display: none;
 }
 
 /* ============================================================
@@ -1687,16 +1802,16 @@ body[data-access-state="denied"] #admin-refresh-button {
     flex-basis: 38px;
   }
 
-  .admin-summary-card strong {
+  .admin-summary-content strong {
     font-size: 17px;
   }
 
-  .admin-agendamento-card {
+  .admin-service-card {
     padding: 12px;
   }
 
-  .admin-status-badge {
-    max-width: 105px;
+  .admin-service-status {
+    max-width: 78px;
     padding: 0 6px;
 
     font-size: 6.5px;
@@ -1719,19 +1834,25 @@ body[data-access-state="denied"] #admin-refresh-button {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .admin-agendamento-meta,
-  .admin-modal-details-grid {
+  .admin-form-grid,
+  .admin-form-actions,
+  .admin-delete-actions,
+  .admin-service-meta {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .admin-agendamento-card-header {
+  .admin-service-card-header {
     align-items: stretch;
     flex-direction: column;
   }
 
-  .admin-status-badge {
+  .admin-service-status {
     width: fit-content;
     max-width: 100%;
+  }
+
+  .admin-service-actions {
+    grid-template-columns: minmax(0, 1fr) 39px 39px;
   }
 }
 
@@ -1750,51 +1871,6 @@ body[data-access-state="denied"] #admin-refresh-button {
   }
 }
 /* ============================================================
-   CARDS DE RESUMO COMO FILTROS
-   ============================================================ */
-
-.admin-summary-card {
-  cursor: pointer;
-  user-select: none;
-  outline: none;
-
-  transition:
-    transform 0.2s ease,
-    border-color 0.2s ease,
-    box-shadow 0.2s ease,
-    background-color 0.2s ease;
-}
-
-.admin-summary-card:hover,
-.admin-summary-card:focus-visible {
-  transform: translateY(-2px);
-
-  border-color: rgba(89, 28, 49, 0.22);
-
-  box-shadow:
-    0 0 0 2px rgba(255, 255, 255, 0.3),
-    0 11px 24px rgba(45, 8, 21, 0.15);
-}
-
-.admin-summary-card.is-active {
-  transform: translateY(-2px);
-
-  border-color: rgba(89, 28, 49, 0.34);
-
-  background: linear-gradient(145deg, #ffffff 0%, #fff0f5 100%);
-
-  box-shadow:
-    0 0 0 2px rgba(255, 255, 255, 0.62),
-    0 12px 26px rgba(45, 8, 21, 0.18);
-}
-
-.admin-summary-card.is-active .admin-summary-icon {
-  color: #ffffff;
-  background: var(--admin-primary);
-
-  border-color: var(--admin-primary);
-}
-/* ============================================================
    CENTRALIZAÇÃO EXATA DOS ÍCONES
    ============================================================ */
 
@@ -1803,8 +1879,11 @@ body[data-access-state="denied"] #admin-refresh-button {
 .admin-summary-icon,
 .admin-state-icon,
 .admin-empty-icon,
-.admin-agendamento-service-icon,
-.admin-card-button--icon {
+.admin-service-meta-icon,
+.admin-service-button--toggle,
+.admin-service-button--delete,
+.admin-delete-icon,
+.admin-modal-close {
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
@@ -1820,8 +1899,10 @@ body[data-access-state="denied"] #admin-refresh-button {
 .admin-summary-icon svg,
 .admin-state-icon svg,
 .admin-empty-icon svg,
-.admin-agendamento-service-icon svg,
-.admin-card-button--icon svg {
+.admin-service-meta-icon svg,
+.admin-service-button--toggle svg,
+.admin-service-button--delete svg,
+.admin-delete-icon svg {
   position: static !important;
 
   display: block !important;
@@ -1833,3 +1914,62 @@ body[data-access-state="denied"] #admin-refresh-button {
 
   vertical-align: middle;
 }
+/* ============================================================
+   ALINHAMENTO DOS CAMPOS PREÇO E DURAÇÃO
+   ============================================================ */
+
+.admin-form-grid {
+  align-items: start;
+}
+
+.admin-form-grid .admin-form-field {
+  min-width: 0;
+
+  grid-template-rows:
+    14px
+    46px
+    14px;
+
+  align-content: start;
+  gap: 6px;
+}
+
+.admin-form-grid .admin-form-field > span {
+  width: 100%;
+  height: 14px;
+  min-height: 14px;
+  margin: 0;
+
+  display: flex;
+  align-items: center;
+
+  line-height: 1;
+}
+
+.admin-form-grid .admin-form-field input {
+  width: 100%;
+  height: 46px;
+  min-height: 46px;
+  margin: 0;
+
+  align-self: start;
+}
+
+.admin-form-grid .admin-form-field small {
+  width: 100%;
+  height: 14px;
+  min-height: 14px;
+  margin: 0;
+
+  display: flex;
+  align-items: center;
+
+  line-height: 1;
+}
+
+/*
+ * O campo Preço não possui texto auxiliar,
+ * mas mantém a terceira linha reservada.
+ * Isso garante que os dois campos tenham
+ * exatamente a mesma altura e posição.
+ */
