@@ -116,20 +116,9 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   if (btnWhatsapp) {
-    /*
-     * Substitua pelo número real da Isabele.
-     * Use somente números:
-     * 55 + DDD + número.
-     */
     const numeroWhatsSalao = "5511949494062";
 
     btnWhatsapp.addEventListener("click", () => {
-      if (numeroWhatsSalao === "5511999999999") {
-        console.warn(
-          "O número do WhatsApp ainda está usando o valor de exemplo.",
-        );
-      }
-
       const linhasMensagem = [
         "Olá, Isabele! Gostaria de enviar os dados do meu agendamento:",
         "",

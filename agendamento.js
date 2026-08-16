@@ -386,7 +386,60 @@ async function carregarServicoSelecionado(serviceId) {
     return null;
   }
 }
+function obterIntervalosBloqueadosFixos(dataIso) {
+  if (!dataIso) {
+    return [];
+  }
 
+  const [ano, mes, dia] = String(dataIso).split("-").map(Number);
+
+  const data = new Date(ano, mes - 1, dia, 12, 0, 0);
+
+  const diaSemana = data.getDay();
+
+  /*
+   * 0 = Domingo
+   * 1 = Segunda
+   * 2 = Terça
+   * 3 = Quarta
+   * 4 = Quinta
+   * 5 = Sexta
+   * 6 = Sábado
+   */
+
+  if (diaSemana === 2) {
+    return [
+      {
+        start: timeToMins("09:00"),
+        end: timeToMins("14:00"),
+      },
+      {
+        start: timeToMins("16:00"),
+        end: timeToMins("18:00"),
+      },
+    ];
+  }
+
+  if (diaSemana === 3) {
+    return [
+      {
+        start: timeToMins("11:00"),
+        end: timeToMins("13:30"),
+      },
+    ];
+  }
+
+  if (diaSemana === 4) {
+    return [
+      {
+        start: timeToMins("09:00"),
+        end: timeToMins("12:00"),
+      },
+    ];
+  }
+
+  return [];
+}
 async function renderizarHorarios(dataIso, servicoDuracao) {
   const container = document.querySelector(".agendamento-times");
 
@@ -439,6 +492,13 @@ async function renderizarHorarios(dataIso, servicoDuracao) {
 
     const duracaoServico = Number(servicoDuracao) || 60;
 
+    const intervalosBloqueadosFixos = obterIntervalosBloqueadosFixos(dataIso);
+
+    const intervalosIndisponiveis = [
+      ...intervalosOcupados,
+      ...intervalosBloqueadosFixos,
+    ];
+
     const minAbertura = timeToMins("09:00");
 
     const minFechamento = timeToMins("18:00");
@@ -457,9 +517,8 @@ async function renderizarHorarios(dataIso, servicoDuracao) {
 
       const horarioTexto = minsToTime(atual);
 
-      const indisponivel = intervalosOcupados.some(
-        (agendamento) =>
-          atual < agendamento.end && fimServico > agendamento.start,
+      const indisponivel = intervalosIndisponiveis.some(
+        (intervalo) => atual < intervalo.end && fimServico > intervalo.start,
       );
 
       const botao = document.createElement("button");
