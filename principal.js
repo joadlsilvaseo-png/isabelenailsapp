@@ -227,6 +227,10 @@ function setupPrincipalSearch() {
       return;
     }
 
+    if (window.location.hash !== "#services-title") {
+      window.location.hash = "services-title";
+    }
+
     servicesSection?.scrollIntoView({
       behavior: "smooth",
       block: "start",
@@ -557,6 +561,51 @@ function setupPrincipalLogout(elements) {
   });
 }
 /* ============================================================
+   NAVEGAÇÃO INFERIOR DA CLIENTE
+   ============================================================ */
+
+function setupPrincipalNavigation() {
+  const homeNavigation = document.querySelector('[data-navigation="home"]');
+
+  const servicesNavigation = document.querySelector(
+    '[data-navigation="services"]',
+  );
+
+  if (!homeNavigation || !servicesNavigation) {
+    return;
+  }
+
+  function updatePrincipalNavigationState() {
+    const servicesActive = window.location.hash === "#services-title";
+
+    homeNavigation.classList.toggle(
+      "client-navigation-item--active",
+      !servicesActive,
+    );
+
+    servicesNavigation.classList.toggle(
+      "client-navigation-item--active",
+      servicesActive,
+    );
+
+    if (!servicesActive) {
+      homeNavigation.setAttribute("aria-current", "page");
+    } else {
+      homeNavigation.removeAttribute("aria-current");
+    }
+
+    if (servicesActive) {
+      servicesNavigation.setAttribute("aria-current", "page");
+    } else {
+      servicesNavigation.removeAttribute("aria-current");
+    }
+  }
+
+  window.addEventListener("hashchange", updatePrincipalNavigationState);
+
+  updatePrincipalNavigationState();
+}
+/* ============================================================
    AUTENTICAÇÃO E PERMISSÃO
    ============================================================ */
 
@@ -611,6 +660,7 @@ function initPrincipalPage() {
   const elements = getPrincipalElements();
 
   setupPrincipalLogout(elements);
+  setupPrincipalNavigation();
   hideAllRoleSections();
 
   onAuthStateChanged(auth, async (user) => {

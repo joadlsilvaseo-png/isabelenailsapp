@@ -17,7 +17,7 @@
 
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="base.css?v=1.0.3">
+  <link rel="stylesheet" href="base.css?v=1.0.4">
   <link rel="stylesheet" href="unhas-em-gel.css?v=2.0.0">
 </head>
 
@@ -26,7 +26,7 @@
   <div class="app-container">
 
     <header class="unhas-header" aria-label="Navegação da página">
-      <a href="principal.html" data-back="history" class="unhas-nav-link" aria-label="Voltar">
+      <a href="principal.html#services-title" class="unhas-nav-link" aria-label="Voltar">
         <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <path d="M15 18L9 12L15 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
@@ -139,10 +139,59 @@
       </footer>
 
     </main>
+
+    <!-- ======================================================
+         NAVEGAÇÃO DA CLIENTE
+    ======================================================= -->
+
+    <nav class="client-navigation" aria-label="Navegação da cliente">
+
+      <a href="principal.html" class="client-navigation-item">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M4 11L12 4L20 11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+
+          <path d="M6 10V20H18V10" stroke="currentColor" stroke-width="1.8" />
+        </svg>
+
+        <span>Início</span>
+      </a>
+
+      <a href="principal.html#services-title" class="client-navigation-item client-navigation-item--active" aria-current="page">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M12 3L13.5 7L17.5 8.5L13.5 10L12 14L10.5 10L6.5 8.5L10.5 7L12 3Z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
+
+          <path d="M18 14L18.8 16.2L21 17L18.8 17.8L18 20L17.2 17.8L15 17L17.2 16.2L18 14Z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+
+        <span>Serviços</span>
+      </a>
+
+      <a href="meu-perfil.html#meus-agendamentos" class="client-navigation-item">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <rect x="4" y="5" width="16" height="15" rx="3" stroke="currentColor" stroke-width="1.8" />
+
+          <path d="M8 3V7M16 3V7M4 10H20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+        </svg>
+
+        <span>Agenda</span>
+      </a>
+
+      <a href="meu-perfil.html" class="client-navigation-item">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.8" />
+
+          <path d="M5 21C5 17 8 14.5 12 14.5C16 14.5 19 17 19 21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+        </svg>
+
+        <span>Perfil</span>
+      </a>
+
+    </nav>
+
   </div>
 
   <script src="unhas-em-gel.js?v=2.0.0" defer></script>
-  <script src="app.js?v=1.0.3" defer></script>
+  <script src="app.js?v=2.0.0" defer></script>
 </body>
 
 </html>

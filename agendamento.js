@@ -1,6 +1,4 @@
-import { trackEvent } from "./analytics.js";
 import { auth, db } from "./firebase-config.js";
-import { webhookUrl } from "./config.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
 import {
   collection,
@@ -13,8 +11,6 @@ import {
   updateDoc,
   serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
-
-const appConfig = { webhookUrl };
 
 // Funções de ajuda para seleção única de data e horário
 function selecionarUnico(botaoAtivo, grupo, classeAtiva) {
@@ -133,6 +129,28 @@ function converterPrecoParaNumero(valor) {
 
   return Number.isFinite(numero) ? numero : 0;
 }
+function configurarLinkVoltar(categoria) {
+  const backLink = document.getElementById("agendamento-back-link");
+
+  if (!backLink) {
+    return;
+  }
+
+  const destinosPorCategoria = {
+    "unhas em gel": "unhas-em-gel.html",
+    manicure: "manicure.html",
+    pedicure: "pedicure.html",
+  };
+
+  const categoriaNormalizada = String(categoria || "")
+    .trim()
+    .toLowerCase();
+
+  backLink.href =
+    destinosPorCategoria[categoriaNormalizada] ||
+    "principal.html#services-title";
+}
+
 function atualizarCabecalhoData(botaoData) {
   if (!botaoData) return;
 
@@ -356,6 +374,7 @@ async function carregarServicoSelecionado(serviceId) {
       nome: nomeServico,
       duracao,
       preco: serviceData.preco,
+      categoria: serviceData.categoria || "",
     };
   } catch (error) {
     console.error("Erro ao carregar serviço:", error);
@@ -579,7 +598,7 @@ async function inicializarAgendamento() {
   gerarCalendarioDias(calendarContainer);
   const datas = Array.from(document.querySelectorAll(".agendamento-date"));
   const botaoAgendar = document.querySelector(".agendamento-button");
-  console.log("Botão localizado:", !!botaoAgendar);
+
   const textareaComentarios = document.querySelector("#agendamento-notes");
   const urlParams = new URLSearchParams(window.location.search);
   if (!botaoAgendar) {
@@ -594,11 +613,18 @@ async function inicializarAgendamento() {
   localStorage.removeItem("horaAgendamento");
   const serviceInfo = await carregarServicoSelecionado(serviceId);
 
-  const serviceName = serviceInfo?.nome || "Manicure Simples";
+  configurarLinkVoltar(serviceInfo?.categoria);
 
-  const serviceDuration = Number(serviceInfo?.duracao) || 60;
+  if (!serviceInfo) {
+    botaoAgendar.disabled = true;
+    return;
+  }
 
-  const servicePrice = converterPrecoParaNumero(serviceInfo?.preco);
+  const serviceName = serviceInfo.nome;
+
+  const serviceDuration = Number(serviceInfo.duracao) || 60;
+
+  const servicePrice = converterPrecoParaNumero(serviceInfo.preco);
 
   preencherNomeClienteDoLocalStorage();
   const nomeClienteInput = document.getElementById("nomeCliente");
@@ -663,39 +689,24 @@ async function inicializarAgendamento() {
   }
 
   onAuthStateChanged(auth, (user) => {
-    console.log(
-      "Autenticação verificada. Usuário:",
-      user ? user.uid : "Nenhum usuário logado",
-    );
     if (!user) return;
 
     const nomeInput = document.getElementById("nomeCliente");
+
     if (nomeInput) {
       const nomeUsuarioSalvo = localStorage.getItem("nomeUsuario");
-      console.log(
-        "[agendamento] Nome salvo no localStorage:",
-        nomeUsuarioSalvo,
-      );
-      console.log("[agendamento] Nome no Firebase Auth:", user.displayName);
 
-      // Prioridade 1: Nome salvo em meu-perfil (mais confiável)
       const nomePerfil =
         nomeUsuarioSalvo || user.displayName || user.email || "";
+
       if (nomePerfil) {
         nomeInput.value = nomePerfil;
-
-        console.log("[agendamento] ✅ Nome carregado no campo:", nomePerfil);
 
         atualizarResumoAgendamento();
       }
     }
 
     botaoAgendar.addEventListener("click", async () => {
-      console.log("Evento de clique disparado!");
-      console.log(
-        "Botão clicado. Estado do botão:",
-        botaoAgendar.disabled ? "Desabilitado" : "Habilitado",
-      );
       if (botaoAgendar.disabled) return;
       const horarioSalvo = localStorage.getItem("horarioAgendamento");
       const dataAgendamentoISO = localStorage.getItem("dataAgendamentoISO");
@@ -729,15 +740,6 @@ async function inicializarAgendamento() {
       const data = dataAgendamentoISO;
       const horario = horarioNormalizado;
       const observacoes = textareaComentarios?.value?.trim() || "";
-
-      console.log("[agendamento] Confirmando agendamento com dados:", {
-        nomeCliente,
-        servico,
-        serviceId,
-        data,
-        horario,
-        observacoes,
-      });
 
       localStorage.setItem("servicoAgendamento", serviceName);
       localStorage.setItem(
@@ -797,65 +799,23 @@ async function inicializarAgendamento() {
           await addDoc(collection(db, "agendamentos"), agendamentoData);
         }
 
-        // ========================================================================
-        // INÍCIO: LOGS DE AUDITORIA PARA GOOGLE APPS SCRIPT (TEMPORÁRIO)
-        // ========================================================================
-        console.log("===== AUDITORIA DE ENVIO PARA GOOGLE APPS SCRIPT =====");
-
-        // URL do Google Apps Script
         const googleScriptUrl =
           "https://script.google.com/macros/s/AKfycbzU9mjBQ3-RkHwShSkC6ADsrUiogFbXJs9wt8hn4YphVv7h0VsevtAhU-9fZYmWxHRQqA/exec";
-        console.log(`[AUDITORIA] URL de destino: ${googleScriptUrl}`);
-
-        console.log("[AUDITORIA] Payload completo:", payloadWebhook);
-        console.log("[AUDITORIA] Verificação de Tipos:");
-        console.log(
-          `  - nomeCliente: '${payloadWebhook.nomeCliente}' (tipo: ${typeof payloadWebhook.nomeCliente})`,
-        );
-        console.log(
-          `  - servico: '${payloadWebhook.servico}' (tipo: ${typeof payloadWebhook.servico})`,
-        );
-        console.log(
-          `  - dataInicio: '${payloadWebhook.dataInicio}' (tipo: ${typeof payloadWebhook.dataInicio})`,
-        );
-        console.log(
-          `  - duracaoMinutos: ${payloadWebhook.duracaoMinutos} (tipo: ${typeof payloadWebhook.duracaoMinutos})`,
-        );
-
-        console.log("[AUDITORIA] Verificação de Valores Críticos:");
-        console.log(
-          `  - Valor de serviceDuration (antes do parseInt): '${serviceDuration}' (tipo: ${typeof serviceDuration})`,
-        );
-        console.log(
-          `  - Valor final de dataInicio: '${payloadWebhook.dataInicio}'`,
-        );
-        console.log(
-          `  - Valor final de nomeCliente: '${payloadWebhook.nomeCliente}'`,
-        );
-        console.log(
-          "==========================================================",
-        );
-        // ========================================================================
-        // FIM: LOGS DE AUDITORIA
-        // ========================================================================
 
         try {
           await fetch(googleScriptUrl, {
             method: "POST",
-            mode: "no-cors", // Essencial para evitar bloqueio do navegador
+            mode: "no-cors",
             body: JSON.stringify(payloadWebhook),
           });
-          console.log(
-            "Dados do agendamento enviados para o Google Apps Script (requisição despachada).",
-          );
         } catch (fetchError) {
           console.error(
-            "[AUDITORIA] Ocorreu um erro de REDE ao tentar enviar para o Google Apps Script:",
+            "Erro de rede ao sincronizar o agendamento com o Google Apps Script:",
             fetchError,
           );
-          // Adiciona um alerta para o usuário em caso de falha de rede
+
           window.alert(
-            "Falha de conexão ao tentar salvar o agendamento. Verifique sua internet e tente novamente.",
+            "Seu agendamento foi salvo, mas houve uma falha na sincronização com a agenda. A reserva continuará registrada.",
           );
         }
 

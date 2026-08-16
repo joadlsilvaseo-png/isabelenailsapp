@@ -8,13 +8,13 @@
 
   <meta name="description" content="Crie sua conta na Isabele Mariana Nails para agendar seus serviços.">
 
-  <meta name="theme-color" content="#591c31">
+  <meta name="theme-color" content="#ffd9e7">
 
   <meta name="mobile-web-app-capable" content="yes">
 
   <meta name="apple-mobile-web-app-capable" content="yes">
 
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
 
   <meta name="apple-mobile-web-app-title" content="IM Nails">
 
@@ -40,89 +40,60 @@
 
   <link rel="stylesheet" href="base.css?v=1.0.4">
 
-  <link rel="stylesheet" href="registro.css?v=2.0.0">
+  <link rel="stylesheet" href="registro.css?v=3.0.0">
 </head>
 
 <body data-page="signup">
 
   <div class="app-container">
 
-    <span class="signup-decoration signup-decoration--top" aria-hidden="true"></span>
-
-    <span class="signup-decoration signup-decoration--bottom" aria-hidden="true"></span>
-
     <main class="signup-main">
+
+      <span class="signup-decoration signup-decoration--top" aria-hidden="true"></span>
+
+      <span class="signup-decoration signup-decoration--bottom" aria-hidden="true"></span>
 
       <header class="signup-header">
 
-        <nav class="signup-nav" aria-label="Navegação do cadastro">
-          <a href="index.html" data-back="history" class="signup-nav-link" aria-label="Voltar">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M15 18L9 12L15 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-            </svg>
-          </a>
+        <a href="index.html" class="signup-back-button" aria-label="Voltar">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M15 18L9 12L15 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </a>
 
-          <h1 class="signup-title">
-            Registre-se
-          </h1>
-
-          <a href="index.html" class="signup-nav-link" aria-label="Página inicial">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M4 10L12 3L20 10V20C20 20.5523 19.5523 21 19 21H5C4.44772 21 4 20.5523 4 20V10Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-
-              <path d="M9 21V13H15V21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-            </svg>
-          </a>
-        </nav>
-
-        <section class="signup-brand-card">
-
-          <div class="signup-logo-wrapper">
-            <img src="./assets/logo-isabele-mariana.png" alt="Logo Isabele Mariana Nails" class="signup-logo" width="239" height="167">
-          </div>
-
-          <div class="signup-brand-content">
-            <span class="signup-eyebrow">
-              Sua conta
-            </span>
-
-            <h2>
-              Comece seu momento de cuidado
-            </h2>
-
-            <p>
-              Cadastre-se para escolher serviços, reservar horários
-              e acompanhar seus atendimentos.
-            </p>
-          </div>
-
-        </section>
+        <img src="./assets/logo-isabele-mariana.png" alt="Isabele Mariana Nails" class="signup-logo" width="239" height="167">
 
       </header>
 
-      <section class="signup-card" aria-labelledby="signup-card-title">
-        <header class="signup-card-header">
-          <span class="signup-card-eyebrow">
-            Novo cadastro
-          </span>
+      <section class="signup-intro" aria-labelledby="signup-title">
 
-          <h2 id="signup-card-title">
-            Crie sua conta
-          </h2>
+        <span class="signup-eyebrow">
+          Sua conta
+        </span>
 
-          <p>
-            Preencha seus dados para acessar o aplicativo.
-          </p>
-        </header>
+        <h1 id="signup-title">
+          Crie sua conta.
+        </h1>
+
+        <p>
+          Preencha seus dados para agendar e acompanhar
+          seus atendimentos.
+        </p>
+
+      </section>
+
+      <section class="signup-content">
 
         <form class="signup-form" id="signupForm" novalidate>
 
           <div class="form-group">
+
             <label for="nameInput" class="form-label">
               Nome completo
             </label>
 
             <div class="signup-input-wrapper">
+
               <span class="signup-input-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none">
                   <circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.8" />
@@ -132,15 +103,19 @@
               </span>
 
               <input type="text" id="nameInput" class="signup-input signup-input--primary" placeholder="Digite seu nome completo" autocomplete="name" aria-label="Nome completo para cadastro" data-action="input-name" required>
+
             </div>
+
           </div>
 
           <div class="form-group">
+
             <label for="emailInput" class="form-label">
               E-mail
             </label>
 
             <div class="signup-input-wrapper">
+
               <span class="signup-input-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none">
                   <path d="M4 6H20V18H4V6Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
@@ -150,15 +125,19 @@
               </span>
 
               <input type="email" id="emailInput" class="signup-input" placeholder="seu@email.com" autocomplete="email" inputmode="email" aria-label="E-mail para cadastro" data-action="input-email" required>
+
             </div>
+
           </div>
 
           <div class="form-group">
+
             <label for="phoneInput" class="form-label">
               Celular
             </label>
 
             <div class="signup-input-wrapper">
+
               <span class="signup-input-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none">
                   <path d="M7 3H17C18.1 3 19 3.9 19 5V19C19 20.1 18.1 21 17 21H7C5.9 21 5 20.1 5 19V5C5 3.9 5.9 3 7 3Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
@@ -168,21 +147,21 @@
               </span>
 
               <input type="tel" id="phoneInput" class="signup-input" placeholder="(11) 99999-9999" autocomplete="tel" inputmode="tel" aria-label="Celular para contato" data-action="input-phone" maxlength="15" required>
+
             </div>
 
-            <span class="form-helper">
-              Usaremos esse número somente para contato sobre seus agendamentos.
-            </span>
           </div>
 
           <div class="signup-password-grid">
 
             <div class="form-group">
+
               <label for="passwordInput" class="form-label">
                 Senha
               </label>
 
               <div class="signup-input-wrapper">
+
                 <span class="signup-input-icon" aria-hidden="true">
                   <svg viewBox="0 0 24 24" fill="none">
                     <rect x="5" y="10" width="14" height="11" rx="3" stroke="currentColor" stroke-width="1.8" />
@@ -192,15 +171,19 @@
                 </span>
 
                 <input type="password" id="passwordInput" class="signup-input" placeholder="Digite sua senha" autocomplete="new-password" aria-label="Senha para cadastro" minlength="8" required>
+
               </div>
+
             </div>
 
             <div class="form-group">
+
               <label for="confirmPasswordInput" class="form-label">
                 Confirmar senha
               </label>
 
               <div class="signup-input-wrapper">
+
                 <span class="signup-input-icon" aria-hidden="true">
                   <svg viewBox="0 0 24 24" fill="none">
                     <rect x="5" y="10" width="14" height="11" rx="3" stroke="currentColor" stroke-width="1.8" />
@@ -212,17 +195,21 @@
                 </span>
 
                 <input type="password" id="confirmPasswordInput" class="signup-input" placeholder="Repita sua senha" autocomplete="new-password" aria-label="Confirmação da senha" minlength="8" required>
+
               </div>
+
             </div>
 
           </div>
 
           <span class="signup-password-helper">
-            Use pelo menos 8 caracteres para aumentar a segurança da sua conta.
+            Use pelo menos 8 caracteres.
           </span>
 
           <div class="form-group form-group--checkbox">
+
             <div class="checkbox-wrapper">
+
               <input type="checkbox" id="termsCheckbox" class="signup-checkbox" aria-label="Concordo com os Termos e Condições" data-action="terms-checkbox" required>
 
               <label for="termsCheckbox" class="checkbox-label">
@@ -232,14 +219,20 @@
                   Termos de Uso e a Política de Privacidade
                 </a>.
               </label>
+
             </div>
+
           </div>
 
           <button type="submit" class="signup-button signup-button--primary" data-action="submit-signup" disabled aria-disabled="true">
-            <span>Criar minha conta</span>
+            <span>
+              Criar conta
+            </span>
 
             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M9 18L15 12L9 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+              <path d="M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+
+              <path d="M13 6L19 12L13 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
             </svg>
           </button>
 
@@ -249,7 +242,7 @@
           <span></span>
 
           <p class="form-divider-text">
-            ou continue com
+            ou
           </p>
 
           <span></span>
@@ -272,18 +265,21 @@
         </button>
 
         <footer class="signup-footer">
+
           <p>
             Já possui uma conta?
 
             <a href="login.html" class="signup-link">
-              Entre aqui
+              Entrar
             </a>
           </p>
+
         </footer>
 
       </section>
 
     </main>
+
   </div>
 
   <script type="module" src="registro.js?v=2.0.0"></script>

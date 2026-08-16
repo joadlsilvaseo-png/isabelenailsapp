@@ -783,7 +783,7 @@ button {
 
 .agendamento-footer {
   position: sticky;
-  bottom: 10px;
+  bottom: max(10px, env(safe-area-inset-bottom));
   z-index: 20;
 
   width: 100%;

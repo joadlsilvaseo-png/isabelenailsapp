@@ -10,7 +10,6 @@ import {
   getDoc,
   getDocs,
   updateDoc,
-  deleteDoc,
   addDoc,
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
 
@@ -138,40 +137,6 @@ function configurarFiltrosAtendimentos() {
     });
   });
 }
-function parseDataString(dataString) {
-  if (!dataString) return null;
-
-  const parts = dataString.trim().split(/\s+/);
-  const onlyDate = parts[0];
-  const slashMatch = onlyDate.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?$/);
-  if (slashMatch) {
-    const day = parseInt(slashMatch[1], 10);
-    const month = parseInt(slashMatch[2], 10);
-    const year = slashMatch[3]
-      ? parseInt(slashMatch[3], 10)
-      : new Date().getFullYear();
-    return new Date(year, month - 1, day);
-  }
-
-  const dayNumber = parseInt(onlyDate, 10);
-  if (Number.isNaN(dayNumber)) return null;
-
-  const today = new Date();
-  const candidate = new Date(today.getFullYear(), today.getMonth(), dayNumber);
-  return candidate;
-}
-
-function isDataFuturaOuHoje(dataString) {
-  const data = parseDataString(dataString);
-  if (!data) return false;
-
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  data.setHours(0, 0, 0, 0);
-
-  return data.getTime() >= today.getTime();
-}
-
 async function resolveNomeServicoVisual(dados) {
   console.log("[meu-perfil] Resolvendo nome do serviço:", {
     servico: dados.servico,
@@ -343,15 +308,6 @@ function criarCardAtivo({
       if (auth.currentUser) {
         await carregarAgendamentos(auth.currentUser.uid);
       }
-
-      if (
-        containerAgendamentos &&
-        containerAgendamentos.querySelectorAll(".perfil-card").length === 0
-      ) {
-        containerAgendamentos.appendChild(
-          criarCardVazio("Nenhum agendamento ativo."),
-        );
-      }
     } catch (error) {
       console.error("Erro ao cancelar agendamento:", error);
       window.alert(
@@ -460,12 +416,10 @@ async function carregarAgendamentos(uid) {
   const uidBusca = String(uid || "").trim();
   if (!uidBusca) {
     console.error("UID de busca inválido em meu-perfil.js:", uid);
-    containerAgendamentos.appendChild(
-      criarCardVazio("Nenhum agendamento ativo."),
-    );
-    containerHistorico.appendChild(
-      criarCardVazio("Nenhum agendamento ativo.", true),
-    );
+
+    atualizarContadoresAtendimentos();
+    aplicarFiltroAtendimentos(filtroAtivo);
+
     return;
   }
 
@@ -525,12 +479,9 @@ async function carregarAgendamentos(uid) {
         });
       });
 
-      containerAgendamentos.appendChild(
-        criarCardVazio("Nenhum agendamento ativo."),
-      );
-      containerHistorico.appendChild(
-        criarCardVazio("Nenhum agendamento ativo.", true),
-      );
+      atualizarContadoresAtendimentos();
+      aplicarFiltroAtendimentos(filtroAtivo);
+
       return;
     }
 
@@ -629,6 +580,50 @@ document.addEventListener("DOMContentLoaded", () => {
   containerAtendimentos = document.getElementById("container-atendimentos");
 
   configurarFiltrosAtendimentos();
+
+  /* =========================================================
+     NAVEGAÇÃO INFERIOR
+  ========================================================= */
+
+  const agendaNavigation = document.querySelector('[data-navigation="agenda"]');
+
+  const profileNavigation = document.querySelector(
+    '[data-navigation="profile"]',
+  );
+
+  function atualizarNavegacaoPerfil() {
+    const agendaAtiva = window.location.hash === "#meus-agendamentos";
+
+    if (agendaNavigation) {
+      agendaNavigation.classList.toggle(
+        "client-navigation-item--active",
+        agendaAtiva,
+      );
+
+      if (agendaAtiva) {
+        agendaNavigation.setAttribute("aria-current", "page");
+      } else {
+        agendaNavigation.removeAttribute("aria-current");
+      }
+    }
+
+    if (profileNavigation) {
+      profileNavigation.classList.toggle(
+        "client-navigation-item--active",
+        !agendaAtiva,
+      );
+
+      if (!agendaAtiva) {
+        profileNavigation.setAttribute("aria-current", "page");
+      } else {
+        profileNavigation.removeAttribute("aria-current");
+      }
+    }
+  }
+
+  window.addEventListener("hashchange", atualizarNavegacaoPerfil);
+
+  atualizarNavegacaoPerfil();
 
   const logoutButton = document.getElementById("logout-button");
 

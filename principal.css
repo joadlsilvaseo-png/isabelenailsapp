@@ -1572,3 +1572,130 @@ body[data-page="principal"]
   cursor: wait;
   opacity: 0.55;
 }
+/* ============================================================
+   NAVEGAÇÃO INFERIOR — CLIENTE
+   ============================================================ */
+
+.client-navigation {
+  position: fixed;
+  z-index: 120;
+
+  left: 50%;
+  bottom: 12px;
+
+  width: calc(100% - 24px);
+  max-width: 456px;
+  min-height: 68px;
+
+  display: none;
+  grid-template-columns: repeat(4, 1fr);
+
+  padding: 7px;
+
+  border: 1px solid rgba(89, 28, 49, 0.09);
+  border-radius: 22px;
+
+  background: rgba(255, 255, 255, 0.92);
+
+  box-shadow: 0 14px 36px rgba(89, 28, 49, 0.16);
+
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+
+  transform: translateX(-50%);
+}
+
+body[data-user-role="cliente"] .client-navigation {
+  display: grid;
+}
+
+body[data-user-role="cliente"] .app-content {
+  padding-bottom: max(112px, env(safe-area-inset-bottom));
+}
+
+.client-navigation-item {
+  min-width: 0;
+  min-height: 54px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  gap: 4px;
+
+  border-radius: 16px;
+
+  color: rgba(89, 28, 49, 0.58);
+
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+
+  text-decoration: none;
+
+  -webkit-tap-highlight-color: transparent;
+
+  transition:
+    color 0.2s ease,
+    background-color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.client-navigation-item:hover,
+.client-navigation-item:focus-visible {
+  color: var(--nails-primary);
+
+  background: rgba(240, 193, 209, 0.26);
+}
+
+.client-navigation-item:active {
+  transform: scale(0.96);
+}
+
+.client-navigation-item svg {
+  width: 21px;
+  height: 21px;
+
+  display: block;
+}
+
+.client-navigation-item--active {
+  color: #ffffff;
+
+  background: linear-gradient(135deg, var(--nails-dark), var(--nails-primary));
+
+  box-shadow: 0 7px 17px rgba(89, 28, 49, 0.2);
+}
+
+.client-navigation-item--active:hover,
+.client-navigation-item--active:focus-visible {
+  color: #ffffff;
+
+  background: linear-gradient(135deg, var(--nails-dark), var(--nails-primary));
+}
+
+@media (max-width: 380px) {
+  .client-navigation {
+    width: calc(100% - 18px);
+
+    bottom: 9px;
+
+    min-height: 64px;
+
+    padding: 6px;
+
+    border-radius: 20px;
+  }
+
+  .client-navigation-item {
+    min-height: 52px;
+
+    font-size: 8.5px;
+  }
+
+  .client-navigation-item svg {
+    width: 20px;
+    height: 20px;
+  }
+}
