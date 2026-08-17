@@ -1611,105 +1611,22 @@ async function cancelarAgendamento(agendamento) {
 }
 
 async function reagendarAgendamento(agendamento) {
-  const dataAtual = formatarDataVisual(obterData(agendamento));
+  const idServico = String(agendamento.idServico || "").trim();
 
-  const horarioAtual = obterHorario(agendamento);
-
-  const novaDataTexto = window.prompt(
-    "Informe a nova data no formato DD/MM/AAAA:",
-    dataAtual,
-  );
-
-  if (novaDataTexto === null) {
-    return;
-  }
-
-  const novaData = converterParaData(novaDataTexto);
-
-  if (!novaData) {
-    window.alert("A data informada é inválida. Use o formato DD/MM/AAAA.");
+  if (!idServico) {
+    window.alert("Não foi possível identificar o serviço deste agendamento.");
 
     return;
   }
 
-  const novoHorario = window.prompt(
-    "Informe o novo horário no formato HH:MM:",
-    horarioAtual,
-  );
+  const parametros = new URLSearchParams({
+    id: idServico,
+    reagendar: agendamento.id,
+    origem: "admin",
+  });
 
-  if (novoHorario === null) {
-    return;
-  }
-
-  if (!/^([01]?\d|2[0-3]):[0-5]\d$/.test(novoHorario.trim())) {
-    window.alert("O horário informado é inválido. Use o formato HH:MM.");
-
-    return;
-  }
-
-  const dataFormatada = formatarDataParaSalvar(novaData);
-
-  const horarioFormatado = novoHorario.trim();
-
-  const horarioPartes = horarioFormatado.split(":");
-
-  const dataHora = new Date(
-    novaData.getFullYear(),
-    novaData.getMonth(),
-    novaData.getDate(),
-    Number(horarioPartes[0]),
-    Number(horarioPartes[1]),
-    0,
-    0,
-  );
-
-  const lembrete24h = new Date(dataHora.getTime() - 24 * 60 * 60 * 1000);
-
-  const lembrete2h = new Date(dataHora.getTime() - 2 * 60 * 60 * 1000);
-
-  const confirmou = window.confirm(
-    `Reagendar para ${dataFormatada} às ${horarioFormatado}?`,
-  );
-
-  if (!confirmou) {
-    return;
-  }
-
-  try {
-    await atualizarAgendamento(agendamento.id, {
-      data: dataFormatada,
-      horario: horarioFormatado,
-      status: "reagendado",
-
-      reagendadoEm: serverTimestamp(),
-
-      reminder_24h: lembrete24h.toISOString(),
-
-      reminder_2h: lembrete2h.toISOString(),
-
-      push_24h_sent: false,
-      push_2h_sent: false,
-    });
-
-    const atualizado = {
-      ...agendamento,
-      data: dataFormatada,
-      horario: horarioFormatado,
-      status: "reagendado",
-    };
-
-    await registrarEventoNotificacao("agendamento_reagendado", atualizado);
-
-    fecharModal();
-
-    window.alert("Agendamento reagendado com sucesso.");
-  } catch (error) {
-    console.error("Erro ao reagendar atendimento:", error);
-
-    window.alert("Não foi possível reagendar o atendimento.");
-  }
+  window.location.href = `agendamento.html?${parametros.toString()}`;
 }
-
 /* ============================================================
    EVENTOS DA TELA
    ============================================================ */

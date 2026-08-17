@@ -427,7 +427,7 @@ function obterIntervalosBloqueadosFixos(dataIso) {
 
   return [];
 }
-async function renderizarHorarios(dataIso, servicoDuracao) {
+async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null) {
   const container = document.querySelector(".agendamento-times");
 
   const availabilityElement = document.getElementById("availability-status");
@@ -462,6 +462,10 @@ async function renderizarHorarios(dataIso, servicoDuracao) {
 
     querySnapshot.forEach((documento) => {
       const dados = documento.data();
+
+      if (reagendarId && documento.id === reagendarId) {
+        return;
+      }
 
       if (!dados.horario || !statusValidos.includes(dados.status)) {
         return;
@@ -696,6 +700,7 @@ async function inicializarAgendamento() {
   }
   const serviceId = urlParams.get("id");
   const reagendarId = urlParams.get("reagendar");
+  const origemAdmin = urlParams.get("origem") === "admin";
 
   if (!botaoAgendar || datas.length === 0 || !textareaComentarios) return;
 
@@ -703,7 +708,15 @@ async function inicializarAgendamento() {
   localStorage.removeItem("horaAgendamento");
   const serviceInfo = await carregarServicoSelecionado(serviceId);
 
-  configurarLinkVoltar(serviceInfo?.categoria);
+  if (origemAdmin) {
+    const backLink = document.getElementById("agendamento-back-link");
+
+    if (backLink) {
+      backLink.href = "admin-agendamentos.html";
+    }
+  } else {
+    configurarLinkVoltar(serviceInfo?.categoria);
+  }
 
   if (!serviceInfo) {
     botaoAgendar.disabled = true;
@@ -716,8 +729,55 @@ async function inicializarAgendamento() {
 
   const servicePrice = converterPrecoParaNumero(serviceInfo.preco);
 
-  preencherNomeClienteDoLocalStorage();
   const nomeClienteInput = document.getElementById("nomeCliente");
+
+  let agendamentoOriginal = null;
+
+  if (reagendarId) {
+    const agendamentoOriginalRef = doc(db, "agendamentos", reagendarId);
+
+    const agendamentoOriginalSnap = await getDoc(agendamentoOriginalRef);
+
+    if (!agendamentoOriginalSnap.exists()) {
+      window.alert(
+        "Não foi possível localizar o agendamento que será reagendado.",
+      );
+
+      botaoAgendar.disabled = true;
+
+      return;
+    }
+
+    agendamentoOriginal = agendamentoOriginalSnap.data();
+
+    const observacoesOriginais = String(
+      agendamentoOriginal.observacoes || agendamentoOriginal.observacao || "",
+    ).trim();
+
+    if (textareaComentarios && observacoesOriginais) {
+      textareaComentarios.value = observacoesOriginais;
+    }
+  }
+
+  if (origemAdmin && agendamentoOriginal) {
+    if (nomeClienteInput) {
+      nomeClienteInput.value = String(
+        agendamentoOriginal.nomeCliente ||
+          agendamentoOriginal.clienteNome ||
+          "Cliente",
+      ).trim();
+
+      nomeClienteInput.readOnly = true;
+    }
+
+    botaoAgendar.textContent = "Confirmar Reagendamento";
+  } else {
+    preencherNomeClienteDoLocalStorage();
+
+    if (reagendarId) {
+      botaoAgendar.textContent = "Confirmar Reagendamento";
+    }
+  }
 
   if (nomeClienteInput) {
     nomeClienteInput.addEventListener("input", atualizarResumoAgendamento);
@@ -744,7 +804,7 @@ async function inicializarAgendamento() {
       atualizarCabecalhoData(botao);
       atualizarResumoAgendamento();
 
-      renderizarHorarios(dataIso, serviceDuration);
+      renderizarHorarios(dataIso, serviceDuration, reagendarId);
     });
   });
 
@@ -783,7 +843,7 @@ async function inicializarAgendamento() {
 
     const nomeInput = document.getElementById("nomeCliente");
 
-    if (nomeInput) {
+    if (nomeInput && !origemAdmin) {
       const nomeUsuarioSalvo = localStorage.getItem("nomeUsuario");
 
       const nomePerfil =
@@ -836,7 +896,7 @@ async function inicializarAgendamento() {
         "observacoesAgendamento",
         textareaComentarios?.value?.trim() || "",
       );
-      if (nomeCliente && nomeCliente.trim()) {
+      if (!origemAdmin && nomeCliente && nomeCliente.trim()) {
         localStorage.setItem("nomeUsuario", nomeCliente.trim());
       }
 
@@ -849,10 +909,32 @@ async function inicializarAgendamento() {
         return;
       }
 
-      const idEvento = "evt_" + Math.random().toString(36).substr(2, 9);
+      let idEvento = "evt_" + Math.random().toString(36).substr(2, 9);
+
+      if (reagendarId) {
+        const agendamentoAnteriorRef = doc(db, "agendamentos", reagendarId);
+
+        const agendamentoAnteriorSnap = await getDoc(agendamentoAnteriorRef);
+
+        if (!agendamentoAnteriorSnap.exists()) {
+          throw new Error(
+            "Agendamento original não encontrado para reagendamento.",
+          );
+        }
+
+        const calendarEventIdOriginal = String(
+          agendamentoAnteriorSnap.data().calendarEventId || "",
+        ).trim();
+
+        if (!calendarEventIdOriginal) {
+          throw new Error("Agendamento original sem calendarEventId.");
+        }
+
+        idEvento = calendarEventIdOriginal;
+      }
 
       const payloadWebhook = {
-        acao: "AGENDAR",
+        acao: reagendarId ? "REAGENDAR" : "AGENDAR",
         nomeCliente,
         servico,
         dataInicio: `${data}T${horario}:00`,
@@ -870,6 +952,11 @@ async function inicializarAgendamento() {
         calendarEventId: idEvento, // Incluímos aqui para simplificar
         duracao: parseInt(serviceDuration, 10),
       };
+
+      if (reagendarId) {
+        payload.status = "reagendado";
+        payload.reagendadoEm = serverTimestamp();
+      }
 
       try {
         if (reagendarId) {
@@ -914,7 +1001,9 @@ async function inicializarAgendamento() {
         // Sugestão: salve o nome do cliente também para usar na tela de confirmação
         localStorage.setItem("nomeCliente", payloadWebhook.nomeCliente);
 
-        window.location.href = "confirmacao.html";
+        window.location.href = origemAdmin
+          ? "admin-agendamentos.html"
+          : "confirmacao.html";
       } catch (error) {
         console.error(error);
         window.alert("Erro ao salvar agendamento.");
@@ -935,7 +1024,7 @@ async function inicializarAgendamento() {
     if (dataIso) {
       localStorage.setItem("dataAgendamentoISO", dataIso);
 
-      await renderizarHorarios(dataIso, serviceDuration);
+      await renderizarHorarios(dataIso, serviceDuration, reagendarId);
     }
   }
 
