@@ -411,19 +411,6 @@ function obterIntervalosBloqueadosFixos(dataIso) {
     return [
       {
         start: timeToMins("09:00"),
-        end: timeToMins("14:00"),
-      },
-      {
-        start: timeToMins("16:00"),
-        end: timeToMins("18:00"),
-      },
-    ];
-  }
-
-  if (diaSemana === 3) {
-    return [
-      {
-        start: timeToMins("11:00"),
         end: timeToMins("13:30"),
       },
     ];
@@ -492,6 +479,19 @@ async function renderizarHorarios(dataIso, servicoDuracao) {
 
     const duracaoServico = Number(servicoDuracao) || 60;
 
+    const [anoSelecionado, mesSelecionado, diaSelecionado] = String(dataIso)
+      .split("-")
+      .map(Number);
+
+    const diaSemanaSelecionado = new Date(
+      anoSelecionado,
+      mesSelecionado - 1,
+      diaSelecionado,
+      12,
+      0,
+      0,
+    ).getDay();
+
     const intervalosBloqueadosFixos = obterIntervalosBloqueadosFixos(dataIso);
 
     const intervalosIndisponiveis = [
@@ -501,25 +501,56 @@ async function renderizarHorarios(dataIso, servicoDuracao) {
 
     const minAbertura = timeToMins("09:00");
 
-    const minFechamento = timeToMins("18:00");
+    const minUltimoInicio = timeToMins("18:00");
+
+    const minFechamento = timeToMins("20:00");
 
     const horariosManha = [];
     const horariosTarde = [];
 
     let quantidadeDisponivel = 0;
 
-    for (let atual = minAbertura; atual < minFechamento; atual += 30) {
+    for (let atual = minAbertura; atual <= minUltimoInicio; atual += 30) {
       const fimServico = atual + duracaoServico;
 
       if (fimServico > minFechamento) {
-        break;
+        continue;
       }
 
       const horarioTexto = minsToTime(atual);
 
-      const indisponivel = intervalosIndisponiveis.some(
-        (intervalo) => atual < intervalo.end && fimServico > intervalo.start,
-      );
+      const bloqueadoPorRegraTerca =
+        diaSemanaSelecionado === 2 &&
+        (atual > timeToMins("15:30") || fimServico > timeToMins("17:30"));
+
+      const horarioPermitidoQuartaManha =
+        atual >= timeToMins("09:00") &&
+        atual <= timeToMins("10:30") &&
+        fimServico <= timeToMins("12:30");
+
+      const horarioPermitidoQuartaEncaixe =
+        atual >= timeToMins("11:00") &&
+        atual <= timeToMins("11:30") &&
+        duracaoServico <= 60 &&
+        fimServico <= timeToMins("12:30");
+
+      const horarioPermitidoQuartaTarde =
+        atual >= timeToMins("13:30") &&
+        atual <= timeToMins("15:30") &&
+        fimServico <= timeToMins("17:30");
+
+      const bloqueadoPorRegraQuarta =
+        diaSemanaSelecionado === 3 &&
+        !horarioPermitidoQuartaManha &&
+        !horarioPermitidoQuartaEncaixe &&
+        !horarioPermitidoQuartaTarde;
+
+      const indisponivel =
+        bloqueadoPorRegraTerca ||
+        bloqueadoPorRegraQuarta ||
+        intervalosIndisponiveis.some(
+          (intervalo) => atual < intervalo.end && fimServico > intervalo.start,
+        );
 
       const botao = document.createElement("button");
 
