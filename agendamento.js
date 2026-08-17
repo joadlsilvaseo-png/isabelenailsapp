@@ -890,7 +890,7 @@ async function inicializarAgendamento() {
         }
 
         const googleScriptUrl =
-          "https://script.google.com/macros/s/AKfycbzU9mjBQ3-RkHwShSkC6ADsrUiogFbXJs9wt8hn4YphVv7h0VsevtAhU-9fZYmWxHRQqA/exec";
+          "https://script.google.com/macros/s/AKfycbwUwXunAdMAroSPAeMHH2ZQxCOuQage7lmAHH7-llgmeVXug6-Z9KGq6R7NVgQ70XYy/exec";
 
         try {
           await fetch(googleScriptUrl, {

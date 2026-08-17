@@ -1567,6 +1567,8 @@ async function cancelarAgendamento(agendamento) {
     return;
   }
 
+  const calendarEventId = String(agendamento.calendarEventId || "").trim();
+
   try {
     await atualizarAgendamento(agendamento.id, {
       status: "cancelado_profissional",
@@ -1575,6 +1577,28 @@ async function cancelarAgendamento(agendamento) {
     });
 
     await registrarEventoNotificacao("cancelamento_admin", agendamento);
+
+    if (calendarEventId) {
+      try {
+        await fetch(
+          "https://script.google.com/macros/s/AKfycbwUwXunAdMAroSPAeMHH2ZQxCOuQage7lmAHH7-llgmeVXug6-Z9KGq6R7NVgQ70XYy/exec",
+          {
+            method: "POST",
+            mode: "no-cors",
+            body: JSON.stringify({
+              acao: "CANCELAR",
+              eventId: calendarEventId,
+            }),
+          },
+        );
+      } catch (erroGas) {
+        console.error("Erro ao comunicar cancelamento para o GAS:", erroGas);
+      }
+    } else {
+      console.warn(
+        "Agendamento sem calendarEventId. Evento do Google não foi removido.",
+      );
+    }
 
     fecharModal();
 

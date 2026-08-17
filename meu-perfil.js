@@ -282,22 +282,26 @@ function criarCardAtivo({
           );
         }
       })();
-      try {
-        await fetch(
-          "https://script.google.com/macros/s/AKfycbzU9mjBQ3-RkHwShSkC6ADsrUiogFbXJs9wt8hn4YphVv7h0VsevtAhU-9fZYmWxHRQqA/exec",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
+      if (calendarEventId) {
+        try {
+          await fetch(
+            "https://script.google.com/macros/s/AKfycbwUwXunAdMAroSPAeMHH2ZQxCOuQage7lmAHH7-llgmeVXug6-Z9KGq6R7NVgQ70XYy/exec",
+            {
+              method: "POST",
+              mode: "no-cors",
+              body: JSON.stringify({
+                acao: "CANCELAR",
+                eventId: calendarEventId,
+              }),
             },
-            body: JSON.stringify({
-              acao: "CANCELAR",
-              eventId: calendarEventId,
-            }),
-          },
+          );
+        } catch (erroGas) {
+          console.error("Erro ao comunicar cancelamento para o GAS:", erroGas);
+        }
+      } else {
+        console.warn(
+          "Agendamento sem calendarEventId. Evento do Google não foi removido.",
         );
-      } catch (erroGas) {
-        console.error("Erro ao comunicar cancelamento para o GAS:", erroGas);
       }
       window.alert("Agendamento cancelado com sucesso!");
 
