@@ -6,6 +6,8 @@
 
   const categoryName = "Unhas em Gel";
 
+  const CACHE_KEY = "im-nails:servicos:unhas-em-gel:v1";
+
   let selectedServiceId = null;
   let selectedServiceName = "";
 
@@ -215,6 +217,31 @@
         />
       </svg>
     `;
+  }
+  function getCachedServices() {
+    try {
+      const cachedValue = localStorage.getItem(CACHE_KEY);
+
+      if (!cachedValue) {
+        return null;
+      }
+
+      const services = JSON.parse(cachedValue);
+
+      return Array.isArray(services) ? services : null;
+    } catch (error) {
+      console.warn("Não foi possível ler o cache de unhas em gel:", error);
+
+      return null;
+    }
+  }
+
+  function setCachedServices(services) {
+    try {
+      localStorage.setItem(CACHE_KEY, JSON.stringify(services));
+    } catch (error) {
+      console.warn("Não foi possível salvar o cache de unhas em gel:", error);
+    }
   }
 
   async function loadFirestoreServices() {
@@ -475,12 +502,24 @@
   async function initPage() {
     setupNextButton();
 
+    const cachedServices = getCachedServices();
+
+    if (cachedServices) {
+      renderServices(cachedServices);
+    }
+
     try {
       const services = await loadFirestoreServices();
+
+      setCachedServices(services);
 
       renderServices(services);
     } catch (error) {
       console.error("Erro ao carregar serviços de unhas em gel:", error);
+
+      if (cachedServices) {
+        return;
+      }
 
       serviceList.classList.remove("loading");
       serviceList.setAttribute("aria-busy", "false");

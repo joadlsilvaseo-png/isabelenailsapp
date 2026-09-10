@@ -9,6 +9,8 @@ import {
 
 const categoryName = "Pedicure";
 
+const CACHE_KEY = "im-nails:servicos:pedicure:v1";
+
 const serviceList = document.getElementById("lista-servicos");
 
 const serviceCount = document.getElementById("pedicure-service-count");
@@ -466,9 +468,40 @@ function renderServices(services) {
       services.length === 1 ? "1 serviço" : `${services.length} serviços`;
   }
 }
+function getCachedServices() {
+  try {
+    const cachedValue = localStorage.getItem(CACHE_KEY);
+
+    if (!cachedValue) {
+      return null;
+    }
+
+    const services = JSON.parse(cachedValue);
+
+    return Array.isArray(services) ? services : null;
+  } catch (error) {
+    console.warn("Não foi possível ler o cache de pedicure:", error);
+
+    return null;
+  }
+}
+
+function setCachedServices(services) {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify(services));
+  } catch (error) {
+    console.warn("Não foi possível salvar o cache de pedicure:", error);
+  }
+}
 
 async function loadPedicureServices() {
   if (!serviceList) return;
+
+  const cachedServices = getCachedServices();
+
+  if (cachedServices) {
+    renderServices(cachedServices);
+  }
 
   const servicesRef = collection(db, "servicos");
 
@@ -505,9 +538,15 @@ async function loadPedicureServices() {
         );
       });
 
+    setCachedServices(services);
+
     renderServices(services);
   } catch (error) {
     console.error("Erro ao carregar serviços de pedicure:", error);
+
+    if (cachedServices) {
+      return;
+    }
 
     serviceList.classList.remove("loading");
     serviceList.setAttribute("aria-busy", "false");
