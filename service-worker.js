@@ -4,7 +4,7 @@
 // ======================================================
 
 const CACHE_PREFIX = "im-nails";
-const CACHE_VERSION = "v5";
+const CACHE_VERSION = "v6";
 const STATIC_CACHE = `${CACHE_PREFIX}-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `${CACHE_PREFIX}-runtime-${CACHE_VERSION}`;
 
@@ -206,7 +206,7 @@ self.addEventListener("fetch", (event) => {
    * tenta primeiro a versão da internet.
    */
   if (request.mode === "navigate") {
-    event.respondWith(networkFirst(request));
+    event.respondWith(staleWhileRevalidate(request));
 
     return;
   }
