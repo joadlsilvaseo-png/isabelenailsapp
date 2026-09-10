@@ -237,7 +237,10 @@ function gerarCalendarioDias(container) {
 
   const hojeIso = formatarDataIsoLocal(hoje);
 
-  const cursor = new Date(hoje);
+  const dataLiberacaoAgenda = new Date(2026, 9, 3, 12, 0, 0);
+
+  const cursor =
+    hoje < dataLiberacaoAgenda ? new Date(dataLiberacaoAgenda) : new Date(hoje);
 
   while (dias.length < 8) {
     if (diasAtendimento.has(cursor.getDay())) {
@@ -522,6 +525,10 @@ async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null) {
       }
 
       const horarioTexto = minsToTime(atual);
+
+      if (horarioTexto === "12:00" || horarioTexto === "12:30") {
+        continue;
+      }
 
       const bloqueadoPorRegraTerca =
         diaSemanaSelecionado === 2 &&
