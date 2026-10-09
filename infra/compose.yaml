@@ -1,0 +1,26 @@
+name: isabele-infra
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: isabele_nails
+      POSTGRES_USER: isabele_admin
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Senha obrigatoria}
+
+    ports:
+      - "127.0.0.1:5433:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U isabele_admin -d isabele_nails"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres_data:
