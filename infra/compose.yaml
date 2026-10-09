@@ -40,7 +40,7 @@ services:
       GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/firebase-admin.json
 
       # Ativaremos somente após os testes
-      FIREBASE_WATCH_ENABLED: "false"
+      FIREBASE_WATCH_ENABLED: "true"
       PUSH_WORKER_ENABLED: "false"
 
     volumes:
