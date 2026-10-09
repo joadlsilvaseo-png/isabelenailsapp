@@ -1,4 +1,4 @@
-name: isabele-infra
+﻿name: isabele-infra
 
 services:
   postgres:
@@ -21,6 +21,25 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+
+  api:
+    build: ./backend
+    restart: unless-stopped
+
+    environment:
+      PORT: "3001"
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGDATABASE: isabele_nails
+      PGUSER: isabele_admin
+      PGPASSWORD: ${POSTGRES_PASSWORD:?Senha obrigatoria}
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    ports:
+      - "127.0.0.1:3001:3001"
 
 volumes:
   postgres_data:
