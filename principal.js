@@ -3,6 +3,7 @@ import {
   ativarNotificacoes,
 } from "./notificationService.js";
 import { auth, db } from "./firebase-config.js";
+import { iniciarCentralNotificacoes } from "./centralNotificacoesUI.js";
 
 import {
   onAuthStateChanged,
@@ -749,6 +750,9 @@ async function handleAuthenticatedUser(user, elements) {
     } else {
       configureClientInterface(user, accessProfile, elements);
     }
+
+    // Central de notificações para cliente e administradora.
+    iniciarCentralNotificacoes(user);
 
     /*
      * Configura as notificações após identificar

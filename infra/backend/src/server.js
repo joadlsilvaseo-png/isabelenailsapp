@@ -4,6 +4,7 @@ import { registrarInscricaoPush } from "./pushSubscriptions.js";
 import { enviarTestePush } from "./pushSender.js";
 import { iniciarMonitorAgendamentos } from "./agendaMonitor.js";
 import { iniciarWorkerPush } from "./pushWorker.js";
+import { atenderCentralNotificacoes } from "./centralNotificacoes.js";
 
 const { Pool } = pg;
 
@@ -37,6 +38,14 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === "POST" && req.url === "/push/test") {
     await enviarTestePush(req, res, pool);
+    return;
+  }
+
+  // Central de notificações
+  if (
+    new URL(req.url, "http://localhost").pathname.startsWith("/notificacoes")
+  ) {
+    await atenderCentralNotificacoes(req, res, pool);
     return;
   }
 

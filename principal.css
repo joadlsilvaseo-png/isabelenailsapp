@@ -64,7 +64,7 @@ body {
   min-height: 44px;
 
   display: grid;
-  grid-template-columns: 42px 1fr 42px;
+  grid-template-columns: 42px minmax(0, 1fr) 42px 44px;
   align-items: center;
   gap: 12px;
 }
@@ -1806,4 +1806,168 @@ body[data-user-role="cliente"] .app-content {
     width: 100%;
     min-height: 42px;
   }
+}
+/* ============================================================
+   CENTRAL DE NOTIFICAÇÕES - ISABELE MARIANA NAILS
+   ============================================================ */
+
+.principal-notification-bell {
+  position: relative;
+  padding: 0;
+  cursor: pointer;
+}
+
+.principal-notification-count {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 4px;
+  display: grid;
+  place-items: center;
+  border: 2px solid #591c31;
+  border-radius: 99px;
+  background: #ffdae6;
+  color: #591c31;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.principal-notification-overlay {
+  position: fixed;
+  z-index: 300;
+  inset: 0;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: max(72px, calc(env(safe-area-inset-top) + 60px)) 12px 20px;
+  background: rgba(34, 8, 19, 0.62);
+  backdrop-filter: blur(4px);
+}
+
+.principal-notification-panel {
+  width: 100%;
+  max-width: 456px;
+  max-height: 75vh;
+  max-height: 75dvh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgba(89, 28, 49, 0.12);
+  border-radius: 22px;
+  background: #fffafb;
+  box-shadow: 0 20px 55px rgba(30, 5, 15, 0.28);
+  color: #591c31;
+}
+
+.principal-notification-header {
+  padding: 19px 20px 15px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid #f0dce3;
+}
+
+.principal-notification-eyebrow {
+  display: block;
+  color: #a8617b;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.principal-notification-header h2 {
+  margin: 4px 0 0;
+  color: #591c31;
+  font-size: 19px;
+  font-weight: 700;
+}
+
+.principal-notification-close {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: 10px;
+  background: #fff0f5;
+  color: #591c31;
+  font-size: 25px;
+  cursor: pointer;
+}
+
+.principal-notification-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 20px;
+  border-bottom: 1px solid #f0dce3;
+  font-size: 11px;
+  color: #8a5a6a;
+}
+
+#principal-notification-read-all {
+  border: 0;
+  background: transparent;
+  color: #7c334c;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.principal-notification-list {
+  min-height: 110px;
+  overflow-y: auto;
+  padding: 12px;
+  font-size: 12px;
+}
+
+.principal-notification-item {
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 13px;
+  display: block;
+  text-align: left;
+  border: 1px solid #f0dce3;
+  border-radius: 14px;
+  background: #ffffff;
+  color: #591c31;
+  cursor: pointer;
+}
+
+.principal-notification-item.is-unread {
+  border-color: #e9b0c4;
+  background: #fff0f5;
+}
+
+.principal-notification-item strong {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 12px;
+}
+
+.principal-notification-item p {
+  margin: 0 0 6px;
+  line-height: 1.5;
+  color: #805568;
+}
+
+.principal-notification-item small {
+  color: #a8617b;
+  font-size: 10px;
+}
+
+.principal-notification-empty {
+  padding: 30px 12px;
+  text-align: center;
+  color: #8a5a6a;
+}
+
+/* Controle de visibilidade da central */
+.principal-notification-overlay[hidden],
+.principal-notification-bell[hidden],
+.principal-notification-count[hidden],
+#principal-notification-read-all[hidden] {
+  display: none !important;
 }
