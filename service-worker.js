@@ -173,6 +173,19 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  /**
+   * API Node.js + PostgreSQL:
+   * não interceptar requisições /api/.
+   * As chamadas devem ir diretamente para a rede,
+   * sem utilizar ou atualizar o cache do aplicativo.
+   */
+  if (
+    requestUrl.pathname === "/api" ||
+    requestUrl.pathname.startsWith("/api/")
+  ) {
+    return;
+  }
+
   /*
    * Páginas HTML:
    * tenta primeiro a versão da internet.
