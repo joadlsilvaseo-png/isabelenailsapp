@@ -1,13 +1,44 @@
 import http from "node:http";
 import pg from "pg";
+import { registrarInscricaoPush } from "./pushSubscriptions.js";
+import { enviarTestePush } from "./pushSender.js";
+import { iniciarMonitorAgendamentos } from "./agendaMonitor.js";
+import { iniciarWorkerPush } from "./pushWorker.js";
 
 const { Pool } = pg;
 
 const pool = new Pool();
 const PORT = Number(process.env.PORT || 3001);
 
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
+
+if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
+  throw new Error("Chaves VAPID não configuradas no servidor.");
+}
+
 const server = http.createServer(async (req, res) => {
   res.setHeader("Content-Type", "application/json; charset=utf-8");
+
+  if (req.method === "GET" && req.url === "/push/public-key") {
+    res.writeHead(200);
+    res.end(
+      JSON.stringify({
+        publicKey: VAPID_PUBLIC_KEY,
+      }),
+    );
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/push/subscribe") {
+    await registrarInscricaoPush(req, res, pool);
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/push/test") {
+    await enviarTestePush(req, res, pool);
+    return;
+  }
 
   if (req.method !== "GET" || req.url !== "/health") {
     res.writeHead(404);
@@ -45,4 +76,12 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`API Isabele Nails iniciada na porta ${PORT}`);
+
+  iniciarWorkerPush(pool);
+
+  iniciarMonitorAgendamentos(pool).catch((erro) => {
+    console.error("Falha ao iniciar monitor de agendamentos:", erro);
+
+    process.exit(1);
+  });
 });

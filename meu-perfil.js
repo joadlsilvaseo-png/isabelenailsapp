@@ -263,10 +263,17 @@ function criarCardAtivo({
         processado: false,
         timestamp: new Date().toISOString(),
       };
-      await addDoc(
-        collection(db, "eventos_notificacao"),
-        eventPayloadCancelCliente,
-      );
+      try {
+        await addDoc(
+          collection(db, "eventos_notificacao"),
+          eventPayloadCancelCliente,
+        );
+      } catch (erroNotificacao) {
+        console.warn(
+          "Cancelamento salvo, mas houve falha no registro da notificação:",
+          erroNotificacao,
+        );
+      }
       // Dispara para Webhook (Redundância para WhatsApp)
       (async () => {
         try {

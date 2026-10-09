@@ -33,6 +33,8 @@ services:
       PGDATABASE: isabele_nails
       PGUSER: isabele_admin
       PGPASSWORD: ${POSTGRES_PASSWORD:?Senha obrigatoria}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:?Chave publica obrigatoria}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:?Chave privada obrigatoria}
 
     depends_on:
       postgres:

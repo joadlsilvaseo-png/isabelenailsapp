@@ -34,7 +34,7 @@
 
   <link rel="stylesheet" href="base.css?v=1.0.4">
 
-  <link rel="stylesheet" href="principal.css?v=1.1.1">
+  <link rel="stylesheet" href="principal.css?v=1.1.2">
 </head>
 
 <body data-page="principal" data-user-role="loading">
@@ -137,6 +137,35 @@
               Aguarde enquanto identificamos seu perfil.
             </p>
           </div>
+        </section>
+
+        <!-- ==================================================
+             ATIVAÇÃO DAS NOTIFICAÇÕES WEB PUSH
+        =================================================== -->
+
+        <section id="principal-push-card" class="principal-push-card" aria-labelledby="principal-push-title" hidden>
+          <span class="principal-push-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M18 8A6 6 0 0 0 6 8C6 15 3 17 3 17H21S18 15 18 8Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+              <path d="M10 21H14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+            </svg>
+          </span>
+
+          <div class="principal-push-content">
+            <strong id="principal-push-title">
+              Ative suas notificações
+            </strong>
+
+            <p id="principal-push-description">
+              Receba novidades sobre seus agendamentos.
+            </p>
+
+            <p id="principal-push-status" class="principal-push-status" role="status" aria-live="polite"></p>
+          </div>
+
+          <button type="button" id="principal-push-button" class="principal-push-button">
+            Ativar notificações
+          </button>
         </section>
 
         <!-- ==================================================
@@ -520,7 +549,7 @@
 
   <script type="module" src="vitrine.js?v=1.0.1" defer></script>
 
-  <script type="module" src="principal.js?v=1.1.0"></script>
+  <script type="module" src="principal.js?v=1.1.1"></script>
 
   <script src="app.js?v=2.0.0" defer></script>
 

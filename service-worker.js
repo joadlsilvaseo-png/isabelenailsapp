@@ -4,7 +4,7 @@
 // ======================================================
 
 const CACHE_PREFIX = "im-nails";
-const CACHE_VERSION = "v5";
+const CACHE_VERSION = "v6";
 const STATIC_CACHE = `${CACHE_PREFIX}-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `${CACHE_PREFIX}-runtime-${CACHE_VERSION}`;
 
@@ -41,36 +41,8 @@ const APP_SHELL = [
 ];
 
 // ======================================================
-// FIREBASE MESSAGING
+// WEB PUSH NATIVO - SEM FIREBASE MESSAGING
 // ======================================================
-
-importScripts(
-  "https://www.gstatic.com/firebasejs/12.14.0/firebase-app-compat.js",
-);
-
-importScripts(
-  "https://www.gstatic.com/firebasejs/12.14.0/firebase-messaging-compat.js",
-);
-
-let messaging = null;
-
-try {
-  firebase.initializeApp({
-    apiKey: "AIzaSyC3cBMaCIrF6af3KJpAnrkINErpobu5Ioc",
-    authDomain: "isabele-nails-app.firebaseapp.com",
-    projectId: "isabele-nails-app",
-    storageBucket: "isabele-nails-app.firebasestorage.app",
-    messagingSenderId: "311498866336",
-    appId: "1:311498866336:web:f063caa25cce715a4813c5",
-  });
-
-  messaging = firebase.messaging();
-} catch (error) {
-  console.warn(
-    "[Service Worker] Firebase Messaging não foi inicializado:",
-    error,
-  );
-}
 
 // ======================================================
 // INSTALAÇÃO
@@ -241,43 +213,41 @@ self.addEventListener("fetch", (event) => {
 // NOTIFICAÇÕES EM SEGUNDO PLANO
 // ======================================================
 
-if (messaging) {
-  messaging.onBackgroundMessage((payload) => {
-    /*
-     * Quando implementarmos o envio real,
-     * vamos priorizar mensagens data-only
-     * para evitar notificações duplicadas.
-     */
-    const title =
-      payload?.data?.title ||
-      payload?.notification?.title ||
-      "Isabele Mariana Nails";
+self.addEventListener("push", (event) => {
+  let payload = {};
 
-    const body = payload?.data?.body || payload?.notification?.body || "";
-
-    const notificationUrl = payload?.data?.url || "./meu-perfil.html";
-
-    const iconUrl = new URL("./assets/icon-192.png", self.registration.scope)
-      .href;
-
-    const badgeUrl = new URL("./assets/favicon.png", self.registration.scope)
-      .href;
-
-    const options = {
-      body,
-      icon: iconUrl,
-      badge: badgeUrl,
-      tag: payload?.data?.tag || "im-nails-notification",
-      renotify: false,
-      data: {
-        url: notificationUrl,
-        ...(payload?.data || {}),
-      },
+  try {
+    payload = event.data ? event.data.json() : {};
+  } catch (error) {
+    payload = {
+      body: event.data ? event.data.text() : "",
     };
+  }
 
-    return self.registration.showNotification(title, options);
-  });
-}
+  const title = String(payload.title || "Isabele Mariana Nails").slice(0, 100);
+
+  const body = String(
+    payload.body || "Você recebeu uma nova notificação.",
+  ).slice(0, 220);
+
+  const destination =
+    typeof payload.url === "string" &&
+    /^\.\/[a-zA-Z0-9/_-]+\.html$/.test(payload.url)
+      ? payload.url
+      : "./meu-perfil.html";
+
+  const options = {
+    body,
+    icon: new URL("./assets/icon-192.png", self.registration.scope).href,
+    badge: new URL("./assets/favicon.png", self.registration.scope).href,
+    tag: String(payload.tag || "isabele-nails"),
+    data: {
+      url: destination,
+    },
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
+});
 
 // ======================================================
 // CLIQUE NA NOTIFICAÇÃO

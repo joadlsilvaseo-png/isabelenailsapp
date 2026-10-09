@@ -963,6 +963,7 @@ async function inicializarAgendamento() {
       if (reagendarId) {
         payload.status = "reagendado";
         payload.reagendadoEm = serverTimestamp();
+        payload.reagendadoPor = user.uid;
       }
 
       try {

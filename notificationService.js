@@ -1,71 +1,178 @@
-import { app, db } from "./firebase-config.js";
+import { app } from "./firebase-config.js";
+
 import {
-  doc,
-  setDoc,
-  serverTimestamp,
-} from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
-import {
-  getMessaging,
-  getToken,
-  onMessage,
-} from "https://www.gstatic.com/firebasejs/12.14.0/firebase-messaging.js";
+  getAuth,
+  getIdToken,
+} from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
+
 import { trackEvent } from "./analytics.js";
 
-// Inicializa o Firebase Messaging
-const messaging = getMessaging(app);
+const auth = getAuth(app);
 
-/**
- * Configura Firebase Cloud Messaging para o usuário logado
- */
-export async function setupPushNotifications(userId) {
-  if (!("serviceWorker" in navigator)) {
-    console.warn("Service Worker não suportado neste navegador.");
+const API_PUSH = "/api/push";
+
+// ======================================================
+// CONVERTER CHAVE VAPID PARA FORMATO DO NAVEGADOR
+// ======================================================
+
+function converterChaveVapid(chavePublica) {
+  const padding = "=".repeat((4 - (chavePublica.length % 4)) % 4);
+
+  const base64 = (chavePublica + padding).replace(/-/g, "+").replace(/_/g, "/");
+
+  const dados = atob(base64);
+
+  return Uint8Array.from(dados, (caractere) => caractere.charCodeAt(0));
+}
+
+// ======================================================
+// VERIFICAR SE A INSCRICAO USA A CHAVE VAPID ATUAL
+// ======================================================
+
+function mesmaChaveVapid(inscricao, chaveAtual) {
+  const chaveExistente = inscricao.options?.applicationServerKey;
+
+  if (!chaveExistente) {
+    return false;
+  }
+
+  const bytesExistentes = new Uint8Array(chaveExistente);
+
+  return (
+    bytesExistentes.length === chaveAtual.length &&
+    bytesExistentes.every((valor, indice) => valor === chaveAtual[indice])
+  );
+}
+
+// ======================================================
+// CONFIGURAR WEB PUSH
+// ======================================================
+
+async function configurarWebPush(userId, solicitarPermissao = false) {
+  if (
+    !("serviceWorker" in navigator) ||
+    !("PushManager" in window) ||
+    !("Notification" in window)
+  ) {
+    console.warn("Web Push não suportado neste navegador.");
+    return null;
+  }
+
+  if (!window.isSecureContext) {
+    console.warn("Web Push exige HTTPS.");
     return null;
   }
 
   try {
-    // 1. Solicitar permissão
-    const permission = await Notification.requestPermission();
-    if (permission !== "granted") {
-      console.warn("Permissão de notificações negada pelo usuário.");
+    const usuario = auth.currentUser;
+
+    if (!usuario || (userId && usuario.uid !== userId)) {
+      console.warn("Usuário não autenticado para Web Push.");
       return null;
     }
 
-    // 2. Obter o Service Worker pronto
+    // Verifica permissão sem abrir uma janela automaticamente.
+    let permissao = Notification.permission;
+
+    if (permissao === "default" && solicitarPermissao) {
+      permissao = await Notification.requestPermission();
+    }
+
+    if (permissao !== "granted") {
+      console.info("Notificações ainda não autorizadas.");
+      return null;
+    }
+
+    // Utiliza o Service Worker existente do aplicativo.
     const registration = await navigator.serviceWorker.ready;
 
-    // 3. Obter Token FCM
-    const token = await getToken(messaging, {
-      serviceWorkerRegistration: registration,
+    // Busca a chave pública VAPID na nossa API.
+    const respostaChave = await fetch(`${API_PUSH}/public-key`, {
+      cache: "no-store",
     });
 
-    if (!token) {
-      console.warn("Nenhum token FCM gerado.");
-      return null;
+    if (!respostaChave.ok) {
+      throw new Error("Não foi possível obter a chave VAPID.");
     }
 
-    // 4. Salva no Firestore na nova coleção fcmTokens
-    await setDoc(doc(db, "fcmTokens", userId), {
-      token: token,
-      updatedAt: serverTimestamp(),
+    const { publicKey } = await respostaChave.json();
+
+    if (!publicKey) {
+      throw new Error("Chave pública VAPID não encontrada.");
+    }
+
+    const chaveVapid = converterChaveVapid(publicKey);
+
+    // Verifica se o navegador já possui uma inscrição.
+    let inscricao = await registration.pushManager.getSubscription();
+
+    // Substitui inscrições antigas que utilizavam outra chave.
+    if (inscricao && !mesmaChaveVapid(inscricao, chaveVapid)) {
+      const removida = await inscricao.unsubscribe();
+
+      if (!removida) {
+        throw new Error("Não foi possível atualizar a inscrição Push.");
+      }
+
+      inscricao = null;
+    }
+
+    // Cria a inscrição apenas se necessário.
+    if (!inscricao) {
+      inscricao = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: chaveVapid,
+      });
+    }
+
+    // Obtém um token válido da sessão Firebase Authentication.
+    const tokenFirebase = await getIdToken(usuario);
+
+    // Registra a inscrição no PostgreSQL por meio da API.
+    const resposta = await fetch(`${API_PUSH}/subscribe`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${tokenFirebase}`,
+      },
+      body: JSON.stringify(inscricao.toJSON()),
     });
 
-    // 5. Listener para mensagens em foreground
-    onMessage(messaging, (payload) => {
-      console.log("Mensagem recebida em foreground: ", payload);
-      // Exibe um alerta simples ou toast customizado
-      alert(`${payload.notification.title}: ${payload.notification.body}`);
-    });
+    if (!resposta.ok) {
+      throw new Error(
+        `Erro ao cadastrar dispositivo Push: HTTP ${resposta.status}`,
+      );
+    }
+
+    console.log("Dispositivo cadastrado no Web Push.");
 
     trackEvent("push_subscription_opt_in", {
-      user_id: userId,
+      user_id: usuario.uid,
       timestamp: new Date().toISOString(),
       status: "granted",
     });
 
-    return token;
-  } catch (error) {
-    console.error("Erro ao configurar FCM:", error);
+    return inscricao;
+  } catch (erro) {
+    console.error("Erro ao configurar Web Push:", erro);
     return null;
   }
+}
+
+// ======================================================
+// CONFIGURACAO AUTOMATICA
+// Para usuarios que ja concederam permissao
+// ======================================================
+
+export async function setupPushNotifications(userId) {
+  return configurarWebPush(userId, false);
+}
+
+// ======================================================
+// ATIVACAO MANUAL
+// Deve ser chamada pelo clique em um botao
+// ======================================================
+
+export async function ativarNotificacoes(userId) {
+  return configurarWebPush(userId, true);
 }

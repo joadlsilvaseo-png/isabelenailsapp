@@ -1,4 +1,7 @@
-import { setupPushNotifications } from "./notificationService.js";
+import {
+  setupPushNotifications,
+  ativarNotificacoes,
+} from "./notificationService.js";
 import { auth, db } from "./firebase-config.js";
 
 import {
@@ -606,6 +609,115 @@ function setupPrincipalNavigation() {
   updatePrincipalNavigationState();
 }
 /* ============================================================
+   ATIVAÇÃO DAS NOTIFICAÇÕES WEB PUSH
+   ============================================================ */
+
+async function configurarNotificacoesPrincipal(user) {
+  const painel = document.getElementById("principal-push-card");
+  const botao = document.getElementById("principal-push-button");
+  const descricao = document.getElementById("principal-push-description");
+  const status = document.getElementById("principal-push-status");
+
+  if (!painel || !botao || !descricao || !status) {
+    return;
+  }
+
+  const suportado =
+    "Notification" in window &&
+    "serviceWorker" in navigator &&
+    "PushManager" in window &&
+    window.isSecureContext;
+
+  if (!suportado) {
+    painel.hidden = true;
+    return;
+  }
+
+  painel.hidden = false;
+  botao.hidden = false;
+  status.textContent = "";
+
+  if (Notification.permission === "denied") {
+    descricao.textContent =
+      "As notificações estão bloqueadas nas configurações do navegador.";
+
+    botao.hidden = true;
+    return;
+  }
+
+  const autorizado = Notification.permission === "granted";
+
+  descricao.textContent = autorizado
+    ? "Estamos verificando a conexão deste dispositivo."
+    : "Receba avisos sobre seus agendamentos e atualizações.";
+
+  botao.textContent = autorizado ? "Verificando..." : "Ativar notificações";
+
+  botao.disabled = autorizado;
+
+  // O pedido de permissão acontece somente após o clique.
+  botao.onclick = async () => {
+    botao.disabled = true;
+    botao.textContent = "Ativando...";
+    status.textContent = "";
+
+    let inscricao = null;
+
+    try {
+      inscricao = await ativarNotificacoes(user.uid);
+    } catch (erro) {
+      console.warn("Falha ao ativar notificações:", erro);
+    }
+
+    if (inscricao) {
+      painel.hidden = true;
+      return;
+    }
+
+    if (Notification.permission === "denied") {
+      descricao.textContent =
+        "Autorize as notificações nas configurações do navegador.";
+
+      botao.hidden = true;
+      return;
+    }
+
+    botao.disabled = false;
+    botao.textContent = "Tentar novamente";
+
+    status.textContent =
+      Notification.permission === "granted"
+        ? "Permissão concedida, mas não foi possível conectar ao servidor."
+        : "Não foi possível ativar as notificações. Tente novamente.";
+  };
+
+  // Reaproveita a permissão de quem já autorizou notificações.
+  if (autorizado) {
+    let inscricao = null;
+
+    try {
+      inscricao = await setupPushNotifications(user.uid);
+    } catch (erro) {
+      console.warn("Falha ao restaurar notificações:", erro);
+    }
+
+    if (inscricao) {
+      painel.hidden = true;
+      return;
+    }
+
+    botao.disabled = false;
+    botao.textContent = "Tentar novamente";
+
+    descricao.textContent =
+      "Permissão concedida. Falta conectar este dispositivo.";
+
+    status.textContent =
+      "Não foi possível conectar ao servidor de notificações.";
+  }
+}
+
+/* ============================================================
    AUTENTICAÇÃO E PERMISSÃO
    ============================================================ */
 
@@ -639,11 +751,11 @@ async function handleAuthenticatedUser(user, elements) {
     }
 
     /*
-     * Mantém o token de notificação associado
-     * ao UID autenticado.
+     * Configura as notificações após identificar
+     * o perfil autenticado, sem bloquear a página.
      */
-    setupPushNotifications(user.uid).catch((error) => {
-      console.warn("Não foi possível configurar as notificações:", error);
+    configurarNotificacoesPrincipal(user).catch((error) => {
+      console.warn("Não foi possível preparar as notificações:", error);
     });
   } catch (error) {
     console.error("Erro ao carregar o perfil da Principal:", error);
