@@ -1,4 +1,4 @@
-﻿name: isabele-infra
+name: isabele-infra
 
 services:
   postgres:
@@ -35,6 +35,16 @@ services:
       PGPASSWORD: ${POSTGRES_PASSWORD:?Senha obrigatoria}
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:?Chave publica obrigatoria}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:?Chave privada obrigatoria}
+
+      # Firebase Admin SDK
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/firebase-admin.json
+
+      # Ativaremos somente após os testes
+      FIREBASE_WATCH_ENABLED: "false"
+      PUSH_WORKER_ENABLED: "false"
+
+    volumes:
+      - /opt/isabele-secrets/firebase-admin.json:/run/secrets/firebase-admin.json:ro
 
     depends_on:
       postgres:
