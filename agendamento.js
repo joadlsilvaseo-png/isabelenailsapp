@@ -757,6 +757,12 @@ async function inicializarAgendamento() {
 
     agendamentoOriginal = agendamentoOriginalSnap.data();
 
+    if (agendamentoOriginal.pixCobrancaId || agendamentoOriginal.pixPagamentoId) {
+      window.alert("Este atendimento tem sinal PIX. O reagendamento precisa de conciliação financeira pelo salão para evitar cobranças duplicadas. Entre em contato com a Isabele.");
+      botaoAgendar.disabled = true;
+      return;
+    }
+
     const observacoesOriginais = String(
       agendamentoOriginal.observacoes || agendamentoOriginal.observacao || "",
     ).trim();
@@ -932,6 +938,10 @@ async function inicializarAgendamento() {
         const calendarEventIdOriginal = String(
           agendamentoAnteriorSnap.data().calendarEventId || "",
         ).trim();
+
+        if (agendamentoAnteriorSnap.data().pixCobrancaId || agendamentoAnteriorSnap.data().pixPagamentoId) {
+          throw new Error("Atendimento com PIX exige conciliacao financeira antes do reagendamento.");
+        }
 
         if (!calendarEventIdOriginal) {
           throw new Error("Agendamento original sem calendarEventId.");
