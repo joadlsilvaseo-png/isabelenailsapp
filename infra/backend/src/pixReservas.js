@@ -245,15 +245,25 @@ export async function criarReservaPix(req, res, pool) {
 
       const valores = calcularValores(servico.preco, regra);
 
-      // Somente reservas sem cobranca podem expirar aqui.
-      // Reservas com cobranca exigem conciliacao financeira.
+      // Libera somente reservas sem pedido enviado ao MP.
+      // Antes de chamar a API externa, a cobranca devera
+      // mudar para pendente e exigir conciliacao.
       await conexao.query(`
-        UPDATE public.pix_reservas
+        UPDATE public.pix_reservas AS r
         SET estado = 'expirada', atualizado_em = NOW()
-        WHERE data_servico = $1
-          AND estado = 'reservada'
-          AND vence_em <= NOW()
-          AND cobranca_id IS NULL
+        WHERE r.data_servico = $1
+          AND r.estado = 'reservada'
+          AND r.vence_em <= NOW()
+          AND (
+            r.cobranca_id IS NULL
+            OR EXISTS (
+              SELECT 1
+              FROM public.pix_cobrancas AS c
+              WHERE c.id = r.cobranca_id
+                AND c.estado = 'criada'
+                AND c.mp_order_id IS NULL
+            )
+          )
       `, [data]);
 
       const conflito = await verificarConflitoFirestore(
@@ -269,9 +279,77 @@ export async function criarReservaPix(req, res, pool) {
         );
       }
 
-      const id = randomUUID();
+      const reservaId = randomUUID();
+      const cobrancaId = randomUUID();
+      const chaveIdempotencia = randomUUID();
 
-      const insercao = await conexao.query(`
+      const referenciaExterna =
+        `isabele_pix_${cobrancaId.replaceAll("-", "")}`;
+
+      const vencimento = await conexao.query(
+        "SELECT NOW() + ($1::integer * INTERVAL '1 minute') AS vence_em",
+        [minutos]
+      );
+
+      const venceEm = vencimento.rows[0].vence_em;
+
+      const percentual =
+        regra.tipo_sinal_padrao === "percentual"
+          ? Number(regra.percentual_padrao)
+          : null;
+
+      const valorFixo =
+        regra.tipo_sinal_padrao === "fixo"
+          ? Number(regra.valor_fixo_padrao_centavos)
+          : null;
+
+      const reservaDados = {
+        servicoId,
+        nomeServico: servico.nome || "Servico",
+        data,
+        horario,
+        duracaoMinutos: duracao
+      };
+
+      // Registra primeiro a cobranca e a chave de idempotencia.
+      await conexao.query(`
+        INSERT INTO public.pix_cobrancas (
+          id,
+          cliente_uid,
+          reserva_dados,
+          referencia_externa,
+          chave_idempotencia,
+          valor_total_centavos,
+          percentual_sinal,
+          valor_sinal_centavos,
+          valor_restante_centavos,
+          estado,
+          vence_em,
+          tipo_sinal,
+          valor_fixo_configurado_centavos
+        )
+        VALUES (
+          $1, $2, $3::jsonb, $4, $5,
+          $6, $7, $8, $9,
+          'criada', $10, $11, $12
+        )
+      `, [
+        cobrancaId,
+        uid,
+        JSON.stringify(reservaDados),
+        referenciaExterna,
+        chaveIdempotencia,
+        valores.valorTotalCentavos,
+        percentual,
+        valores.valorSinalCentavos,
+        valores.valorRestanteCentavos,
+        venceEm,
+        regra.tipo_sinal_padrao,
+        valorFixo
+      ]);
+
+      // Vincula o horario a cobranca na mesma transacao.
+      await conexao.query(`
         INSERT INTO public.pix_reservas (
           id,
           cliente_uid,
@@ -279,32 +357,35 @@ export async function criarReservaPix(req, res, pool) {
           data_servico,
           inicio_minuto,
           fim_minuto,
-          vence_em
+          vence_em,
+          cobranca_id
         )
         VALUES (
-          $1, $2, $3, $4, $5, $6,
-          NOW() + ($7::integer * INTERVAL '1 minute')
+          $1, $2, $3, $4, $5, $6, $7, $8
         )
-        RETURNING id, vence_em
       `, [
-        id,
+        reservaId,
         uid,
         servicoId,
         data,
         periodo.inicioMinuto,
         periodo.fimMinuto,
-        minutos
+        venceEm,
+        cobrancaId
       ]);
 
       resultado = {
-        reservaId: insercao.rows[0].id,
-        venceEm: insercao.rows[0].vence_em,
+        reservaId,
+        cobrancaId,
+        venceEm,
         servicoId,
         data,
         horario,
         duracaoMinutos: duracao,
         ...valores,
-        cobrancaCriada: false
+        cobrancaPreparada: true,
+        cobrancaCriada: false,
+        pedidoMercadoPagoCriado: false
       };
 
       await conexao.query("COMMIT");
