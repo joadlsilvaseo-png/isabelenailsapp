@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test": "node test/pixRegras.test.js",
     "start": "node src/server.js"
   },
   "dependencies": {
