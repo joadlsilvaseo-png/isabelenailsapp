@@ -9,6 +9,13 @@ import { getFirestore } from "firebase-admin/firestore";
 import { verificarUsuario } from "./pushSubscriptions.js";
 import { validarHorarioPix } from "./pixDisponibilidade.js";
 import { verificarConflitoFirestore } from "./pixAgendaFirestore.js";
+import { consultarPedidoPixTeste } from "./pixMercadoPago.js";
+import { validarRetornoPagamentoPix } from "./pixValidacaoPagamento.js";
+import {
+  encerrarCobrancaPixSemPagamento,
+  registrarCreditoPix
+} from "./pixConciliacao.js";
+import { efetivarAgendamentoPix } from "./pixEfetivacao.js";
 
 class ErroReserva extends Error {
   constructor(status, mensagem) {
@@ -147,6 +154,79 @@ function calcularValores(preco, regra) {
   };
 }
 
+async function reconciliarReservasVencidasDoDia(pool, data) {
+  if (process.env.PIX_TEST_ORDERS_ENABLED !== "true") return;
+
+  const consulta = await pool.query(`
+    SELECT
+      c.id,
+      c.cliente_uid,
+      c.mp_order_id,
+      c.referencia_externa,
+      c.valor_sinal_centavos,
+      r.id AS reserva_id
+    FROM public.pix_reservas r
+    JOIN public.pix_cobrancas c ON c.id = r.cobranca_id
+    WHERE r.data_servico = $1
+      AND r.estado = 'reservada'
+      AND r.vence_em <= NOW()
+      AND c.estado = 'pendente'
+      AND c.mp_order_id IS NOT NULL
+    ORDER BY r.vence_em
+    LIMIT 10
+  `, [data]);
+
+  await Promise.allSettled(consulta.rows.map(async (cobranca) => {
+    try {
+      const pedido = await consultarPedidoPixTeste(cobranca.mp_order_id);
+      const validacao = validarRetornoPagamentoPix(pedido, cobranca);
+
+      if (validacao.creditado) {
+        const credito = await registrarCreditoPix({
+          pool,
+          cobrancaId: cobranca.id,
+          uid: cobranca.cliente_uid,
+          pedido
+        });
+
+        // O ID estavel permite recuperar um documento ja criado antes
+        // de uma falha entre Firestore e PostgreSQL. Reserva vencida
+        // sem documento novo nunca e convertida em agendamento.
+        try {
+          await efetivarAgendamentoPix({
+            pool,
+            cobrancaId: cobranca.id,
+            uid: cobranca.cliente_uid
+          });
+        } catch (erro) {
+          if (!erro?.requerAnalise) throw erro;
+          await pool.query(`
+            UPDATE public.pix_reservas
+            SET estado = 'expirada', atualizado_em = NOW()
+            WHERE id = $1
+              AND estado = 'reservada'
+              AND vence_em <= NOW()
+          `, [cobranca.reserva_id]);
+        }
+        return credito;
+      }
+
+      if (["expirada", "cancelada"].includes(validacao.situacao)) {
+        await encerrarCobrancaPixSemPagamento({
+          pool,
+          cobrancaId: cobranca.id,
+          uid: cobranca.cliente_uid,
+          situacao: validacao.situacao
+        });
+      }
+    } catch (erro) {
+      // Se Mercado Pago estiver indisponivel, mantemos o bloqueio.
+      // Liberar sem confirmar o estado externo poderia duplicar horarios.
+      console.warn("[PIX Reserva] Nao foi possivel reconciliar pedido vencido:", erro.message);
+    }
+  }));
+}
+
 export async function criarReservaPix(req, res, pool) {
   let uid;
 
@@ -160,6 +240,14 @@ export async function criarReservaPix(req, res, pool) {
   try {
     const dados = await lerJson(req);
     const { servicoId, data, horario } = dados;
+    const nomeCliente =
+      typeof dados.nomeCliente === "string"
+        ? dados.nomeCliente.trim().slice(0, 120)
+        : "";
+
+    if (!nomeCliente) {
+      throw new ErroReserva(400, "Nome da cliente invalido");
+    }
 
     if (
       typeof servicoId !== "string" ||
@@ -199,6 +287,8 @@ export async function criarReservaPix(req, res, pool) {
     }
 
     validarDataFutura(data, horario);
+
+    await reconciliarReservasVencidasDoDia(pool, data);
 
     const conexao = await pool.connect();
     let resultado;
@@ -306,6 +396,7 @@ export async function criarReservaPix(req, res, pool) {
       const reservaDados = {
         servicoId,
         nomeServico: servico.nome || "Servico",
+        nomeCliente,
         data,
         horario,
         duracaoMinutos: duracao
