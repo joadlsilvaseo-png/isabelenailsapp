@@ -90,22 +90,63 @@ fi
 # do container registram o projeto, diretorio de trabalho e todos os -f usados.
 [[ -d "$APP_DIR" ]] || die "APP_DIR nao existe: $APP_DIR"
 APP_REAL="$(realpath "$APP_DIR")"
+BACKUP_ROOT_REAL="$(realpath "$BACKUP_ROOT")"
 mapfile -t ALL_API_CONTAINERS < <(docker ps -q --filter "label=com.docker.compose.service=api")
 API_CONTAINERS=()
+API_CONFIG_KINDS=()
+API_RECOVERY_DIRS=()
 for candidate in "${ALL_API_CONTAINERS[@]}"; do
+  candidate_project="$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.project" }}' "$candidate")"
+  candidate_service="$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.service" }}' "$candidate")"
+  [[ "$candidate_service" == "api" ]] || continue
   candidate_files="$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.project.config_files" }}' "$candidate")"
   candidate_workdir="$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}' "$candidate")"
   IFS=',' read -r -a candidate_file_list <<<"$candidate_files"
+  uses_original_compose=false
+  recovery_dir=""
   for candidate_file in "${candidate_file_list[@]}"; do
     candidate_real="$(realpath "$candidate_file" 2>/dev/null || realpath "$candidate_workdir/$candidate_file" 2>/dev/null || realpath "$APP_REAL/$candidate_file" 2>/dev/null || true)"
-    if [[ "$candidate_real" == "$APP_REAL/infra/compose.yaml" ]]; then
-      API_CONTAINERS+=("$candidate")
-      break
+    [[ -n "$candidate_real" && -f "$candidate_real" ]] || continue
+    [[ "$candidate_real" == "$APP_REAL/infra/compose.yaml" ]] && uses_original_compose=true
+    if [[ "$(basename "$candidate_real")" == "effective-before.yaml" ]]; then
+      possible_dir="$(dirname "$candidate_real")"
+      case "$candidate_real" in
+        "$BACKUP_ROOT_REAL"/pix-update-*/effective-before.yaml) recovery_dir="$possible_dir" ;;
+      esac
     fi
   done
+  recovery_overlay=false
+  if [[ -n "$recovery_dir" ]]; then
+    for candidate_file in "${candidate_file_list[@]}"; do
+      candidate_real="$(realpath "$candidate_file" 2>/dev/null || realpath "$candidate_workdir/$candidate_file" 2>/dev/null || realpath "$APP_REAL/$candidate_file" 2>/dev/null || true)"
+      [[ "$(dirname "$candidate_real")" == "$recovery_dir" ]] || continue
+      case "$(basename "$candidate_real")" in
+        restore-api.yaml|rollback-compose.yaml|update-compose.yaml) recovery_overlay=true ;;
+      esac
+    done
+  fi
+  config_kind=""
+  if [[ "$uses_original_compose" == true ]]; then
+    config_kind="original"
+  elif [[ -n "$recovery_dir" && "$recovery_overlay" == true && \
+      -s "$recovery_dir/compose-project" && -s "$recovery_dir/api-service" && \
+      -s "$recovery_dir/compose-working-dir" && \
+      "$(<"$recovery_dir/compose-project")" == "$candidate_project" && \
+      "$(<"$recovery_dir/api-service")" == "$candidate_service" && \
+      "$(realpath "$(<"$recovery_dir/compose-working-dir")" 2>/dev/null || true)" == \
+      "$(realpath "$candidate_workdir" 2>/dev/null || true)" ]]; then
+    config_kind="recovery"
+  fi
+  if [[ -n "$config_kind" ]]; then
+    API_CONTAINERS+=("$candidate")
+    API_CONFIG_KINDS+=("$config_kind")
+    API_RECOVERY_DIRS+=("$recovery_dir")
+  fi
 done
-[[ "${#API_CONTAINERS[@]}" -eq 1 ]] || die "Esperava um container api ativo usando $APP_REAL/infra/compose.yaml; encontrados ${#API_CONTAINERS[@]}. Nenhuma alteracao foi feita."
+[[ "${#API_CONTAINERS[@]}" -eq 1 ]] || die "Esperava um container api do projeto original ou de um snapshot de recuperacao validado; encontrados ${#API_CONTAINERS[@]}. Nenhuma alteracao foi feita."
 API_CONTAINER="${API_CONTAINERS[0]}"
+ACTIVE_CONFIG_KIND="${API_CONFIG_KINDS[0]}"
+API_RECOVERY_DIR="${API_RECOVERY_DIRS[0]}"
 PROJECT_NAME="$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.project" }}' "$API_CONTAINER")"
 API_SERVICE="$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.service" }}' "$API_CONTAINER")"
 PROJECT_WORKDIR="$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}' "$API_CONTAINER")"
@@ -121,19 +162,27 @@ for file in "${ORIGINAL_COMPOSE_FILES[@]}"; do
   [[ -f "$file" ]] || die "Arquivo Compose ativo ausente: $file"
 done
 
-# Estes caminhos sao conhecidos nesta instalacao. Se estiverem presentes, devem
-# constar nas labels do container; assim um override nao passa despercebido.
-for expected in \
+# Os Compose de origem são obrigatórios nas labels quando elas ainda apontam
+# para os arquivos originais. Após rollback, os labels podem apontar para o
+# snapshot/override do backup; nesse caso metadados + preflight integral validam
+# a identidade e a configuração em execução.
+KNOWN_COMPOSE_FILES=(
   "$APP_DIR/infra/compose.yaml" \
   "$APP_DIR/infra/compose.override.yaml" \
-  "/root/isabele-codex-pix-teste-20261010-125718.compose.yaml"; do
+  "/root/isabele-codex-pix-teste-20261010-125718.compose.yaml"
+)
+PRESERVE_COMPOSE_FILES=("${ORIGINAL_COMPOSE_FILES[@]}")
+for expected in "${KNOWN_COMPOSE_FILES[@]}"; do
   if [[ -f "$expected" ]]; then
     found=false
     for file in "${ORIGINAL_COMPOSE_FILES[@]}"; do
       file_real="$(realpath "$file" 2>/dev/null || realpath "$PROJECT_WORKDIR/$file" 2>/dev/null || realpath "$APP_REAL/$file" 2>/dev/null || true)"
       [[ "$file_real" == "$(realpath "$expected")" ]] && found=true
     done
-    [[ "$found" == true ]] || die "O arquivo Compose existente nao aparece na configuracao ativa: $expected"
+    if [[ "$ACTIVE_CONFIG_KIND" == "original" && "$found" != true ]]; then
+      die "O arquivo Compose existente nao aparece na configuracao ativa: $expected"
+    fi
+    if [[ "$found" != true ]]; then PRESERVE_COMPOSE_FILES+=("$expected"); fi
   fi
 done
 
@@ -143,6 +192,11 @@ mapfile -t DB_CONTAINERS < <(docker ps -q --filter "label=com.docker.compose.pro
 [[ "${#DB_CONTAINERS[@]}" -eq 1 ]] || die "Esperava um PostgreSQL ativo no projeto; encontrados ${#DB_CONTAINERS[@]}. Nenhuma alteracao foi feita."
 DB_CONTAINER="${DB_CONTAINERS[0]}"
 DB_SERVICE="$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.service" }}' "$DB_CONTAINER")"
+DB_PROJECT_NAME="$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.project" }}' "$DB_CONTAINER")"
+DB_PROJECT_WORKDIR="$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}' "$DB_CONTAINER")"
+[[ "$DB_SERVICE" == "postgres" && "$DB_PROJECT_NAME" == "$PROJECT_NAME" && \
+   "$(realpath "$DB_PROJECT_WORKDIR" 2>/dev/null || true)" == "$(realpath "$PROJECT_WORKDIR" 2>/dev/null || true)" ]] || \
+  die "O container PostgreSQL nao corresponde ao mesmo projeto/diretorio Compose da API."
 
 [[ "$MODE" == "apply" ]] || die "Modo invalido. Use start, apply ou rollback."
 
@@ -157,6 +211,7 @@ cd "$APP_DIR"
 echo "Inicio: $(date -Is)"
 echo "Branch alvo: $BRANCH"
 echo "Projeto Compose ativo: $PROJECT_NAME"
+echo "Origem dos labels Compose validada: $ACTIVE_CONFIG_KIND${API_RECOVERY_DIR:+ ($API_RECOVERY_DIR)}"
 echo "Arquivos Compose ativos: ${ORIGINAL_COMPOSE_FILES[*]}"
 echo "Servico ativo: $API_SERVICE; checkout local sera preservado."
 echo "Log persistente: $LOG_FILE"
@@ -173,7 +228,7 @@ printf '%s\n' "$CONFIG_FILES_LABEL" >"$BACKUP_DIR/compose-files-label"
 mkdir -m 700 "$BACKUP_DIR/compose-sources"
 : >"$BACKUP_DIR/compose-source-manifest.txt"
 index=0
-for file in "${ORIGINAL_COMPOSE_FILES[@]}"; do
+for file in "${PRESERVE_COMPOSE_FILES[@]}"; do
   index=$((index + 1))
   copy_name="$(printf '%02d' "$index")-$(basename "$file")"
   cp -- "$file" "$BACKUP_DIR/compose-sources/$copy_name"
@@ -182,8 +237,9 @@ for file in "${ORIGINAL_COMPOSE_FILES[@]}"; do
 done
 
 docker inspect "$API_CONTAINER" >"$BACKUP_DIR/api-container-before.json"
+docker inspect "$DB_CONTAINER" >"$BACKUP_DIR/db-container-before.json"
 docker inspect "${PROJECT_CONTAINERS[@]}" >"$BACKUP_DIR/project-containers-before.json"
-chmod 600 "$BACKUP_DIR/compose-source-manifest.txt" "$BACKUP_DIR/api-container-before.json" "$BACKUP_DIR/project-containers-before.json"
+chmod 600 "$BACKUP_DIR/compose-source-manifest.txt" "$BACKUP_DIR/api-container-before.json" "$BACKUP_DIR/db-container-before.json" "$BACKUP_DIR/project-containers-before.json"
 
 render_effective_compose() {
   local format="$1"
@@ -221,79 +277,97 @@ chmod 600 "$BACKUP_DIR"/effective-before.*
 
 # A renderizacao precisa refletir exatamente o processo ativo. O script aborta
 # antes de parar servicos se qualquer env, credencial ou volume nao corresponder.
-python3 - "$BACKUP_DIR/effective-before.json" "$BACKUP_DIR/api-container-before.json" "$PROJECT_NAME" <<'PY'
+python3 - "$BACKUP_DIR/effective-before.json" "$BACKUP_DIR/api-container-before.json" "$BACKUP_DIR/db-container-before.json" "$PROJECT_NAME" "$DB_SERVICE" <<'PY'
 import json, os, sys
-config_path, inspect_path, project = sys.argv[1:]
+config_path, api_inspect_path, db_inspect_path, project, db_service_name = sys.argv[1:]
 with open(config_path, encoding="utf-8") as f: config = json.load(f)
-with open(inspect_path, encoding="utf-8") as f: container = json.load(f)[0]
-service = config.get("services", {}).get("api")
-if not service:
-    raise SystemExit("Configuracao renderizada nao contem o servico api.")
-raw = service.get("environment") or {}
-if isinstance(raw, list):
-    env_cfg = dict(item.split("=", 1) if "=" in item else (item, None) for item in raw)
-else:
-    env_cfg = raw
-live_env = {}
-for item in container.get("Config", {}).get("Env", []) or []:
-    key, sep, value = item.partition("=")
-    if sep: live_env[key] = value
-mismatches = []
-for key, value in env_cfg.items():
-    # Cada variável declarada no Compose efetivo antigo precisa corresponder
-    # exatamente ao container em execução. Chaves sem valor só são aceitas se
-    # também estiverem ausentes no container.
-    if value is None:
-        if key in live_env:
+with open(api_inspect_path, encoding="utf-8") as f: api_container = json.load(f)[0]
+with open(db_inspect_path, encoding="utf-8") as f: db_container = json.load(f)[0]
+services = config.get("services", {})
+
+def env_map(raw):
+    raw = raw or {}
+    if isinstance(raw, list):
+        return dict(item.split("=", 1) if "=" in item else (item, None) for item in raw)
+    return raw
+
+def live_env_map(container):
+    result = {}
+    for item in container.get("Config", {}).get("Env", []) or []:
+        key, sep, value = item.partition("=")
+        if sep: result[key] = value
+    return result
+
+def check_env(service_name, container):
+    if service_name not in services:
+        raise SystemExit("Configuracao renderizada nao contem o servico " + service_name + ".")
+    expected = env_map(services[service_name].get("environment"))
+    actual = live_env_map(container)
+    mismatches = []
+    for key, value in expected.items():
+        # Cada variável declarada no Compose efetivo precisa corresponder
+        # exatamente ao container. Pass-through sem valor só passa se ausente.
+        if value is None:
+            if key in actual: mismatches.append(key)
+        elif key not in actual or actual[key] != str(value):
             mismatches.append(key)
-    elif key not in live_env or live_env[key] != str(value):
-        mismatches.append(key)
-if mismatches:
-    names = ", ".join(sorted(set(mismatches)))
-    raise SystemExit("Configuracao Compose nao corresponde ao container ativo (variaveis: " + names + "). Abortando sem alteracoes.")
+    if mismatches:
+        names = ", ".join(sorted(set(mismatches)))
+        raise SystemExit("Configuracao Compose diverge do container " + service_name + " (variaveis: " + names + "). Abortando sem alteracoes.")
+    return actual
+
+api_env = check_env("api", api_container)
+check_env(db_service_name, db_container)
+
+def normalized_mounts(service, container):
+    configured = []
+    for item in service.get("volumes", []) or []:
+        if isinstance(item, str):
+            parts = item.rsplit(":", 2)
+            if len(parts) == 1:
+                source, target, mode = "", parts[0], ""
+            elif len(parts) == 2:
+                source, target, mode = parts[0], parts[1], ""
+            else:
+                source, target, mode = parts
+            typ = "bind" if source.startswith("/") or source.startswith(".") else "volume"
+            ro = any("ro" in m.split(",") for m in mode)
+        else:
+            typ = item.get("type", "volume")
+            source = item.get("source", "")
+            target = item.get("target", "")
+            ro = bool(item.get("read_only", False))
+        if typ == "bind":
+            source = os.path.realpath(source)
+        elif typ == "volume" and source:
+            volume = (config.get("volumes", {}) or {}).get(source, {}) or {}
+            source = volume.get("name") or (source if volume.get("external") else f"{project}_{source}")
+        configured.append((target, typ, source, ro))
+    live = []
+    for item in container.get("Mounts", []) or []:
+        typ = item.get("Type", "")
+        source = os.path.realpath(item.get("Source", "")) if typ == "bind" else item.get("Name", "") if typ == "volume" else ""
+        live.append((item.get("Destination", ""), typ, source, not bool(item.get("RW", True))))
+    return sorted(configured), sorted(live)
+
+for service_name, container in (("api", api_container), (db_service_name, db_container)):
+    configured_mounts, live_mounts = normalized_mounts(services[service_name], container)
+    if configured_mounts != live_mounts:
+        raise SystemExit("Volumes do Compose renderizado divergem dos mounts do container " + service_name + ". Abortando sem alteracoes.")
+
+configured_db_image = services[db_service_name].get("image")
+live_db_image = db_container.get("Config", {}).get("Image")
+if configured_db_image and configured_db_image != live_db_image:
+    raise SystemExit("A imagem do PostgreSQL no Compose difere do container ativo. Abortando sem alteracoes.")
 
 # O commit 844398b antecede os novos flags/segredos de webhook. Eles não são
 # exigidos nem injetados: a implementação alvo usa test quando MP_ENVIRONMENT
 # está ausente e só habilita produção com PIX_PRODUCTION_ORDERS_ENABLED="true".
-if live_env.get("MP_ENVIRONMENT", "test").strip().lower() != "test":
+if api_env.get("MP_ENVIRONMENT", "test").strip().lower() != "test":
     raise SystemExit("O backend ativo nao esta em ambiente test; abortando sem alteracoes.")
-if live_env.get("PIX_PRODUCTION_ORDERS_ENABLED", "").strip().lower() == "true":
+if api_env.get("PIX_PRODUCTION_ORDERS_ENABLED", "").strip().lower() == "true":
     raise SystemExit("PIX de producao esta ativo na configuracao efetiva; abortando sem alteracoes.")
-
-# Confere mounts bind (Firebase/segredos e demais arquivos) e os destinos/tipos
-# de todos os volumes com o container atual.
-configured = []
-for item in service.get("volumes", []) or []:
-    if isinstance(item, str):
-        parts = item.rsplit(":", 2)
-        if len(parts) == 1:
-            source, target, mode = "", parts[0], ""
-        elif len(parts) == 2:
-            source, target, mode = parts[0], parts[1], ""
-        else:
-            source, target, mode = parts
-        typ = "bind" if source.startswith("/") or source.startswith(".") else "volume"
-        ro = any("ro" in m.split(",") for m in mode)
-    else:
-        typ = item.get("type", "volume")
-        source = item.get("source", "")
-        target = item.get("target", "")
-        ro = bool(item.get("read_only", False))
-    if typ == "bind":
-        source = os.path.realpath(source)
-    elif typ == "volume" and source:
-        volume = (config.get("volumes", {}) or {}).get(source, {}) or {}
-        resolved_name = volume.get("name") or (source if volume.get("external") else f"{project}_{source}")
-        source = resolved_name
-    configured.append((target, typ, source, ro))
-live = []
-for item in container.get("Mounts", []) or []:
-    typ = item.get("Type", "")
-    source = os.path.realpath(item.get("Source", "")) if typ == "bind" else item.get("Name", "") if typ == "volume" else ""
-    live.append((item.get("Destination", ""), typ, source, not bool(item.get("RW", True))))
-if sorted(configured) != sorted(live):
-    raise SystemExit("Volumes do Compose renderizado diferem dos mounts ativos. Abortando sem alteracoes.")
-print("Configuracao efetiva conferida: variaveis declaradas e mounts iguais ao container ativo; ambiente test e producao desativada.")
+print("Configuracao efetiva conferida para API e PostgreSQL: variaveis, identidade da imagem e volumes iguais aos containers ativos; ambiente test e producao desativada.")
 PY
 
 # Salva status/diff e arquivos nao rastreados; nada e limpo nem sobrescrito.
