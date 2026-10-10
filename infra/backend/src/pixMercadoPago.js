@@ -10,7 +10,11 @@ export function ambienteMercadoPagoAtual() {
 
 export function mercadoPagoHabilitado(ambiente = ambienteMercadoPagoAtual()) {
   if (ambiente === "test") return process.env.PIX_TEST_ORDERS_ENABLED === "true";
-  if (ambiente === "production") return process.env.PIX_PRODUCTION_ORDERS_ENABLED === "true";
+  if (ambiente === "production") {
+    return process.env.PIX_PRODUCTION_ORDERS_ENABLED === "true" &&
+      Boolean(process.env.MP_ACCESS_TOKEN_PRODUCTION?.trim()) &&
+      Boolean(process.env.MP_WEBHOOK_SECRET_PRODUCTION?.trim());
+  }
   return false;
 }
 
