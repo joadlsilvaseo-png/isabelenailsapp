@@ -6,7 +6,7 @@ Este roteiro é para uma execução única, iniciada manualmente pelo responsáv
 
 A instalação informada usa `/opt/isabele-nails/infra/compose.yaml`, o override local `/opt/isabele-nails/infra/compose.override.yaml` e o arquivo adicional `/root/isabele-codex-pix-teste-20261010-125718.compose.yaml`. O script identifica a configuração ativa pelas labels do container `api` e exige que cada arquivo conhecido existente conste nessa configuração. Ele também guarda todos os arquivos Compose ativos, a configuração renderizada, os ambientes dos containers, os mounts, o ID da imagem antiga, o estado/diff/untracked do checkout e um dump do PostgreSQL.
 
-A configuração efetiva renderizada pode conter senhas, tokens, chaves VAPID e referências Firebase. Os arquivos de backup ficam sob diretório `root` com permissões restritas. O script não escreve o conteúdo dos segredos no log. Antes de qualquer parada, compara as variáveis do Compose renderizado com o ambiente do container ativo e compara os mounts do Compose com os mounts reais (incluindo o arquivo Firebase). Se não conseguir reconstruir a mesma configuração, se faltar uma variável crítica, se algum volume divergir, se o PIX não estiver em `test` ou se a flag de produção não estiver explicitamente desligada, aborta sem parar serviços nem aplicar a migração.
+A configuração efetiva renderizada pode conter senhas, tokens, chaves VAPID e referências Firebase. Os arquivos de backup ficam sob diretório `root` com permissões restritas. O script não escreve o conteúdo dos segredos no log. Antes de qualquer parada, compara rigorosamente todas as variáveis declaradas no Compose efetivo com as variáveis do container ativo; uma declaração pass-through sem valor só é aceita se estiver ausente também no container. Compara ainda os mounts do Compose com os mounts reais (incluindo Firebase). Os quatro campos de webhook introduzidos após o commit implantado `844398b` não são exigidos nem criados pelo procedimento. Sem seus flags, o webhook/worker novo permanece desativado. Se a configuração efetiva antiga divergir do container, algum volume divergir, ou produção estiver selecionada/habilitada, o script aborta antes de parar serviços ou aplicar a migração.
 
 O override de atualização muda apenas o contexto de build do serviço `api`; mantém as variáveis e configurações renderizadas, incluindo PostgreSQL, Firebase, Push, Mercado Pago, volumes, portas, redes e políticas do Compose. O serviço PostgreSQL não é recriado. A cópia de trabalho em `/opt/isabele-nails` não recebe checkout, reset, stash ou limpeza. A imagem anterior e o snapshot efetivo são usados pelo rollback. A migração 010 e os dados ficam preservados no rollback; o dump não é restaurado automaticamente.
 
@@ -16,7 +16,7 @@ O override de atualização muda apenas o contexto de build do serviço `api`; m
 - Docker Compose v2, Git, `flock`, `curl`, Python 3, `realpath`, `tar` e `pg_dump` dentro do container PostgreSQL.
 - O serviço ativo precisa ter as labels padrão do Docker Compose com projeto, diretório de trabalho e lista dos arquivos `-f`.
 - Espaço livre para dump, snapshot de configuração, worktree e imagem nova.
-- O SSH deve usar a chave já configurada no `~/.ssh/config`, no `ssh-agent` ou no caminho padrão do OpenSSH. Nenhuma chave é copiada para o servidor por este roteiro.
+- Windows PowerShell com OpenSSH e a chave existente em `$env:USERPROFILE\.ssh\isabele_locaweb_ed25519`. Nenhuma chave é copiada para o servidor por este roteiro.
 
 ## Transferir e iniciar pelo Windows PowerShell
 
@@ -24,7 +24,9 @@ Abra o PowerShell na raiz de qualquer clone local do repositório. O bloco busca
 
 ```powershell
 $ErrorActionPreference = 'Stop'
-$VpsHost = "root@IP_OU_ALIAS_SSH"
+$VpsHost = 'root@177.153.68.33'
+$SshKey = Join-Path $env:USERPROFILE '.ssh\isabele_locaweb_ed25519'
+if (-not (Test-Path $SshKey)) { throw "Chave SSH não encontrada: $SshKey" }
 $Branch = 'codex/correcao-pix-20261010'
 git fetch origin "refs/heads/${Branch}:refs/remotes/origin/${Branch}"
 if ($LASTEXITCODE -ne 0) { throw 'Falha ao buscar a branch do PR.' }
@@ -33,9 +35,9 @@ git worktree add --detach $DeployDir "origin/$Branch"
 if ($LASTEXITCODE -ne 0) { throw 'Falha ao criar worktree temporario.' }
 try {
     $Script = Join-Path $DeployDir 'infra\scripts\atualizar-vps-pix.sh'
-    scp $Script "${VpsHost}:/tmp/atualizar-vps-pix.sh"
+    scp -i $SshKey $Script "${VpsHost}:/tmp/atualizar-vps-pix.sh"
     if ($LASTEXITCODE -ne 0) { throw 'Falha ao transferir o script.' }
-    ssh $VpsHost "sudo install -o root -g root -m 0750 /tmp/atualizar-vps-pix.sh /usr/local/sbin/atualizar-vps-pix && sudo env APP_DIR=/opt/isabele-nails bash /usr/local/sbin/atualizar-vps-pix start"
+    ssh -i $SshKey $VpsHost "sudo install -o root -g root -m 0750 /tmp/atualizar-vps-pix.sh /usr/local/sbin/atualizar-vps-pix && sudo env APP_DIR=/opt/isabele-nails bash /usr/local/sbin/atualizar-vps-pix start"
     if ($LASTEXITCODE -ne 0) { throw 'Falha ao iniciar o script na VPS.' }
 }
 finally {
@@ -46,27 +48,27 @@ finally {
 O segundo comando somente inicia o processo; ele informa PID e log persistente. Por padrão, logs ficam em `/var/log/isabele-nails-deploy/`. Consulte os mais recentes:
 
 ```powershell
-ssh $VpsHost "sudo ls -lt /var/log/isabele-nails-deploy"
+ssh -i $SshKey $VpsHost "sudo ls -lt /var/log/isabele-nails-deploy"
 ```
 
 Acompanhe o arquivo cujo nome foi informado pelo script:
 
 ```powershell
-ssh $VpsHost "sudo tail -f /var/log/isabele-nails-deploy/NOME_DO_LOG.log"
+ssh -i $SshKey $VpsHost "sudo tail -f /var/log/isabele-nails-deploy/NOME_DO_LOG.log"
 ```
 
 Use a versão do script atualizada junto ao PR. O script busca o commit mais recente de `codex/correcao-pix-20261010`, cria um worktree separado em `/opt/isabele-nails-releases/` e preserva o checkout existente.
 
 ## Etapas executadas pelo script
 
-1. Descobre a instância `api` ativa e os arquivos Compose que a criaram, incluindo os overrides local e adicional. Confere credenciais, flags, volumes, Firebase e demais variáveis efetivas contra o container.
+1. Descobre a instância `api` ativa e todos os arquivos Compose que a criaram, incluindo os overrides local e adicional. Compara todas as variáveis realmente declaradas no Compose antigo com o container ativo, e confere volumes, Firebase e demais mounts.
 2. Salva a configuração renderizada e os arquivos-fonte Compose com acesso restrito; registra alterações locais e imagem anterior.
 3. Gera dump PostgreSQL antes de parar qualquer serviço.
 4. Constrói o backend do commit mais recente em worktree isolado.
 5. Para somente `api`, aplica `infra/migrations/010_pix_webhook_ambientes.sql` com `ON_ERROR_STOP` e atualiza somente `api` usando o snapshot efetivo do Compose.
-6. Verifica `/health` e a conexão PostgreSQL. Registra a contagem da fila por ambiente.
+6. Confirma que o container foi recriado e que o container e a imagem têm o label de revisão igual ao commit Git alvo. Depois verifica `/health` e a conexão PostgreSQL e registra a contagem da fila por ambiente.
 
-A produção não é alterada para um valor presumido: se o backend ativo não estiver em `MP_ENVIRONMENT=test` e com `PIX_PRODUCTION_ORDERS_ENABLED=false` explícito, o script aborta antes de qualquer parada. As credenciais de teste/produção e os flags atuais são copiados exatamente do ambiente efetivo; nenhuma credencial é impressa ou enviada para serviços externos.
+A produção permanece desativada. O script aborta se `MP_ENVIRONMENT` estiver diferente de `test` ou se `PIX_PRODUCTION_ORDERS_ENABLED` estiver como `true`. Se `MP_ENVIRONMENT` estiver ausente, a implementação usa `test`; se a flag de produção estiver ausente, o backend não habilita pedidos de produção. Os novos flags `PIX_WEBHOOK_ENABLED` e `PIX_WEBHOOK_WORKER_ENABLED` não são injetados; ausentes, deixam o endpoint/worker de webhook desabilitados. Segredos de webhook ausentes continuam ausentes. As variáveis antigas declaradas e seus valores são preservados conforme o snapshot efetivo; nenhuma credencial é impressa ou enviada para serviços externos.
 
 ## Validação integrada, sem pagamentos reais
 
@@ -87,12 +89,13 @@ O script não cria Orders, não realiza pagamentos, não chama Google Apps Scrip
 Use o caminho `Backup e configuração efetiva anterior` registrado no log. O rollback pode ser solicitado mesmo que a API esteja indisponível, pois usa os arquivos no backup:
 
 ```powershell
-$VpsHost = "root@IP_OU_ALIAS_SSH"
+$VpsHost = 'root@177.153.68.33'
+$SshKey = Join-Path $env:USERPROFILE '.ssh\isabele_locaweb_ed25519'
 $Backup = "/opt/isabele-nails-backups/pix-update-DIRETORIO_INFORMADO_NO_LOG"
-ssh $VpsHost "sudo env APP_DIR=/opt/isabele-nails bash /usr/local/sbin/atualizar-vps-pix rollback $Backup"
+ssh -i $SshKey $VpsHost "sudo env APP_DIR=/opt/isabele-nails bash /usr/local/sbin/atualizar-vps-pix rollback $Backup"
 ```
 
-O comando sobe somente o serviço da API com a imagem anterior e a configuração efetiva salva, incluindo ambientes, credenciais, mounts Firebase, Push, Mercado Pago e demais opções do Compose. Depois confira healthcheck e logs. A migração 010 e o banco permanecem como estão. Restaurar o dump é uma operação separada, que exige análise e janela de manutenção para evitar apagar dados criados após o backup.
+O comando sobe somente o serviço da API com a imagem anterior e o snapshot renderizado da configuração efetiva anterior, incluindo todos os valores de ambiente, Firebase, Push, PostgreSQL, Mercado Pago, volumes, redes e opções do Compose. Os arquivos Compose fonte originais também ficam copiados no backup para auditoria; o rollback usa o snapshot efetivo, não tenta reconstituir a configuração a partir de arquivos que possam ter mudado. Depois confira healthcheck e logs. A migração 010 e o banco permanecem como estão. Restaurar o dump é uma operação separada, que exige análise e janela de manutenção para evitar apagar dados criados após o backup.
 
 ## PIX real em uma etapa futura
 
