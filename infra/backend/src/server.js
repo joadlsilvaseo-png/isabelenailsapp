@@ -11,6 +11,7 @@ import { emitirPixDaReserva } from "./pixPedidos.js";
 import { consultarStatusPagamentoPix } from "./pixConsultaPagamento.js";
 import { atenderWebhookPix } from "./pixWebhook.js";
 import { cotarSinalPix } from "./pixCotacao.js";
+import { iniciarWorkerPixCalendar } from "./pixCalendarWorker.js";
 
 const { Pool } = pg;
 
@@ -132,6 +133,10 @@ server.listen(PORT, "0.0.0.0", () => {
   console.log(`API Isabele Nails iniciada na porta ${PORT}`);
 
   iniciarWorkerPush(pool);
+
+  if (process.env.PIX_CALENDAR_WORKER_ENABLED === "true") {
+    iniciarWorkerPixCalendar(pool);
+  }
 
   iniciarMonitorAgendamentos(pool).catch((erro) => {
     console.error("Falha ao iniciar monitor de agendamentos:", erro);
