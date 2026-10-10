@@ -399,6 +399,8 @@ mkdir -p "$RELEASE_ROOT"
 git -C "$APP_DIR" worktree add --detach "$RELEASE_DIR" "$TARGET_COMMIT"
 MIGRATION="$RELEASE_DIR/infra/migrations/010_pix_webhook_ambientes.sql"
 [[ -f "$MIGRATION" ]] || die "Migracao 010 nao encontrada no commit alvo."
+MIGRATION_011="$RELEASE_DIR/infra/migrations/011_pix_polling_worker.sql"
+[[ -f "$MIGRATION_011" ]] || die "Migracao 011 nao encontrada no commit alvo."
 
 UPDATE_OVERRIDE="$BACKUP_DIR/update-compose.yaml"
 TARGET_IMAGE_TAG="isabele-nails-api:release-${TARGET_COMMIT}"
@@ -485,6 +487,91 @@ case "$MIGRATION_STATE" in
   *) die "Nao foi possivel determinar o estado da migracao 010 (resultado: $MIGRATION_STATE)." ;;
 esac
 
+# A migracao 011 adiciona a agenda persistente do polling. Detecta estado
+# completo, pre-migracao ou parcial antes de parar a API.
+MIGRATION_011_STATE_SQL="$BACKUP_DIR/migration-011-state.sql"
+cat >"$MIGRATION_011_STATE_SQL" <<'SQL'
+WITH state AS (
+  SELECT
+    to_regclass('public.pix_cobrancas') IS NOT NULL AS has_table,
+    EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'pix_cobrancas'
+        AND column_name = 'pix_polling_next_at'
+        AND is_nullable = 'YES'
+    ) AS has_next_at,
+    EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'pix_cobrancas'
+        AND column_name = 'pix_polling_attempts'
+        AND is_nullable = 'NO' AND column_default = '0'
+    ) AS has_attempts,
+    EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'pix_cobrancas'
+        AND column_name = 'pix_polling_lease_until' AND is_nullable = 'YES'
+    ) AS has_lease,
+    EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'pix_cobrancas'
+        AND column_name = 'pix_polling_last_error'
+    ) AS has_last_error,
+    EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'pix_polling_request_budget'
+        AND column_name = 'window_started_at'
+    ) AS has_budget_window,
+    EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'pix_polling_request_budget'
+        AND column_name = 'request_count'
+    ) AS has_budget_count,
+    EXISTS (
+      SELECT 1 FROM pg_constraint
+      WHERE conrelid = to_regclass('public.pix_cobrancas')
+        AND conname = 'pix_cobrancas_polling_attempts_check'
+        AND contype = 'c' AND pg_get_constraintdef(oid) LIKE '%pix_polling_attempts%'
+        AND pg_get_constraintdef(oid) LIKE '%>= 0%'
+    ) AS has_attempts_check,
+    EXISTS (
+      SELECT 1 FROM pg_index i
+      WHERE i.indexrelid = to_regclass('public.idx_pix_cobrancas_polling_due')
+        AND i.indisvalid
+        AND pg_get_indexdef(i.indexrelid) LIKE '%(mp_environment, pix_polling_next_at, criado_em)%'
+        AND pg_get_expr(i.indpred, i.indrelid) LIKE '%mp_order_id%'
+        AND pg_get_expr(i.indpred, i.indrelid) LIKE '%estado%'
+    ) AS has_due_index,
+    EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'pix_cobrancas'
+        AND column_name IN ('pix_polling_next_at', 'pix_polling_attempts', 'pix_polling_lease_until', 'pix_polling_last_error')
+    ) AS has_any_column,
+    EXISTS (
+      SELECT 1 FROM pg_constraint
+      WHERE conrelid = to_regclass('public.pix_cobrancas')
+        AND conname = 'pix_cobrancas_polling_attempts_check'
+    ) AS has_any_check,
+    to_regclass('public.pix_polling_request_budget') IS NOT NULL AS has_any_budget_table,
+    to_regclass('public.idx_pix_cobrancas_polling_due') IS NOT NULL AS has_any_index
+)
+SELECT CASE
+  WHEN NOT has_table THEN 'missing_table'
+  WHEN has_next_at AND has_attempts AND has_lease AND has_last_error AND has_budget_window AND has_budget_count AND has_attempts_check AND has_due_index THEN 'applied'
+  WHEN NOT has_any_column AND NOT has_any_check AND NOT has_any_budget_table AND NOT has_any_index THEN 'pending'
+  ELSE 'partial'
+END
+FROM state;
+SQL
+chmod 600 "$MIGRATION_011_STATE_SQL"
+MIGRATION_011_STATE="$(compose_snapshot exec -T "$DB_SERVICE" sh -lc 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At' <"$MIGRATION_011_STATE_SQL" | tr -d '\r\n')"
+case "$MIGRATION_011_STATE" in
+  applied) echo "Migracao 011 ja aplicada; sera preservada sem nova execucao." ;;
+  pending) echo "Migracao 011 pendente; sera aplicada uma vez nesta atualizacao." ;;
+  partial) die "Estado parcial da migracao 011; nenhuma migracao foi executada e a API nao sera parada." ;;
+  missing_table) die "Tabela pix_cobrancas ausente; nao e seguro aplicar a migracao 011." ;;
+  *) die "Nao foi possivel determinar o estado da migracao 011 (resultado: $MIGRATION_011_STATE)." ;;
+esac
+
 printf '%s\n' "$DB_CONTAINER" >"$BACKUP_DIR/db-container-id"
 compose_snapshot exec -T "$DB_SERVICE" sh -lc 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' >"$BACKUP_DIR/postgres-before.dump"
 [[ -s "$BACKUP_DIR/postgres-before.dump" ]] || die "Backup PostgreSQL vazio; atualizacao cancelada."
@@ -499,6 +586,7 @@ compose_snapshot build "$API_SERVICE"
 [[ "$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$TARGET_IMAGE_TAG" 2>/dev/null || true)" == "$TARGET_COMMIT" ]] || die "A imagem versionada nao foi construida com o commit alvo."
 API_STOPPED=false
 MIGRATION_APPLIED=false
+MIGRATION_011_APPLIED=false
 NEW_API_STARTED=false
 restore_old_api_on_error() {
   local rc=$?
@@ -521,8 +609,8 @@ EOF
     elif [[ "$API_STOPPED" == true ]]; then
       docker start "$API_CONTAINER" >/dev/null || true
     fi
-    if [[ "$MIGRATION_APPLIED" == true || "$MIGRATION_STATE" == applied ]]; then
-      echo "Migracao 010 aplicada e preservada; nenhum dado foi removido."
+    if [[ "$MIGRATION_APPLIED" == true || "$MIGRATION_STATE" == applied || "$MIGRATION_011_APPLIED" == true || "$MIGRATION_011_STATE" == applied ]]; then
+      echo "Migracoes 010/011 aplicadas e preservadas; nenhum dado foi removido."
     fi
     echo "Backup e configuracao efetiva anterior: $BACKUP_DIR"
   fi
@@ -537,6 +625,12 @@ if [[ "$MIGRATION_STATE" == pending ]]; then
   MIGRATION_APPLIED=true
 else
   echo "Pulando migracao 010 ja aplicada; banco e dados serao mantidos."
+fi
+if [[ "$MIGRATION_011_STATE" == pending ]]; then
+  compose_snapshot exec -T "$DB_SERVICE" sh -lc 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <"$MIGRATION_011"
+  MIGRATION_011_APPLIED=true
+else
+  echo "Pulando migracao 011 ja aplicada; banco e dados serao mantidos."
 fi
 NEW_API_STARTED=true
 compose_snapshot up -d --no-deps "$API_SERVICE"

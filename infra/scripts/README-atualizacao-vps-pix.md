@@ -1,6 +1,6 @@
 # Atualização controlada da VPS (PIX)
 
-Este roteiro é para uma execução única, iniciada manualmente pelo responsável. O script não foi executado nesta revisão e a VPS não foi acessada. A migração 010 já foi aplicada na instalação atual; o script verifica o catálogo PostgreSQL e pula a migração quando a estrutura esperada está presente. Não cria cobranças.
+Este roteiro é para uma execução única, iniciada manualmente pelo responsável. O script não foi executado nesta revisão e a VPS não foi acessada. As migrações 010 e 011 são verificadas pelo catálogo PostgreSQL; o script pula cada migração já aplicada e aborta se encontrar estado parcial. Não cria cobranças.
 
 ## O que o script verifica e preserva
 
@@ -10,7 +10,7 @@ A configuração efetiva renderizada pode conter senhas, tokens, chaves VAPID e 
 
 O override de atualização muda o contexto de build e atribui à API uma referência imutável `isabele-nails-api:release-<commit>`; os labels da imagem e do container registram o SHA implantado. O Compose principal também declara a referência local `isabele-nails-api:local`. O Dockerfile copia os arquivos do backend com dono `node` e garante a propriedade de `/app`, incluindo `package.json` e `node_modules`, antes de executar como usuário não root.
 
-O restante da configuração renderizada permanece igual, incluindo variáveis, credenciais, PostgreSQL, Firebase, Push, Mercado Pago, volumes, portas, redes e políticas do Compose. O serviço PostgreSQL não é recriado. A cópia de trabalho em `/opt/isabele-nails` não recebe checkout, reset, stash ou limpeza. Antes do build, o script atribui à imagem anterior uma tag exclusiva guardada no backup; tanto o rollback automático quanto o manual usam essa referência persistente, sem depender de um ID `sha256` que possa deixar de estar disponível. A migração 010 e os dados ficam preservados no rollback; o dump não é restaurado automaticamente.
+O restante da configuração renderizada permanece igual, incluindo variáveis, credenciais, PostgreSQL, Firebase, Push, Mercado Pago, volumes, portas, redes e políticas do Compose. O serviço PostgreSQL não é recriado. A cópia de trabalho em `/opt/isabele-nails` não recebe checkout, reset, stash ou limpeza. Antes do build, o script atribui à imagem anterior uma tag exclusiva guardada no backup; tanto o rollback automático quanto o manual usam essa referência persistente, sem depender de um ID `sha256` que possa deixar de estar disponível. As migrações 010/011 e os dados ficam preservados no rollback; o dump não é restaurado automaticamente.
 
 ## Requisitos antes de executar
 
@@ -72,10 +72,10 @@ Use a versão do script atualizada junto ao PR. O script busca o commit mais rec
 2. Salva a configuração renderizada e os arquivos-fonte Compose com acesso restrito; registra alterações locais e imagem anterior.
 3. Gera dump PostgreSQL antes de parar qualquer serviço.
 4. Constrói o backend do commit mais recente em worktree isolado.
-5. Detecta a migração 010 pelo estado da tabela, coluna, constraints, chave primária e índice. Se já estiver aplicada, não executa o SQL novamente. Se estiver pendente, aplica uma vez com `ON_ERROR_STOP`; estado parcial interrompe o processo antes da parada da API. Atualiza somente `api` usando o snapshot efetivo do Compose.
+5. Detecta as migrações 010 e 011 pela estrutura de tabelas, colunas, constraints e índices. Se já estiverem aplicadas, não executa o SQL novamente. Se estiverem pendentes, aplica uma vez com `ON_ERROR_STOP`; estado parcial interrompe o processo antes da parada da API. Atualiza somente `api` usando o snapshot efetivo do Compose.
 6. Confirma que o container foi recriado com a referência de imagem versionada e que o container e a imagem têm label de revisão igual ao commit Git alvo. Depois verifica `/health` e a conexão PostgreSQL e registra a contagem da fila por ambiente.
 
-A produção permanece desativada. O script aborta se `MP_ENVIRONMENT` estiver diferente de `test` ou se `PIX_PRODUCTION_ORDERS_ENABLED` estiver como `true`. Se `MP_ENVIRONMENT` estiver ausente, a implementação usa `test`; se a flag de produção estiver ausente, o backend não habilita pedidos de produção. Os novos flags `PIX_WEBHOOK_ENABLED` e `PIX_WEBHOOK_WORKER_ENABLED` não são injetados; ausentes, deixam o endpoint/worker de webhook desabilitados. Segredos de webhook ausentes continuam ausentes. As variáveis antigas declaradas e seus valores são preservados conforme o snapshot efetivo; nenhuma credencial é impressa ou enviada para serviços externos.
+A produção permanece desativada. O script aborta se `MP_ENVIRONMENT` estiver diferente de `test` ou se `PIX_PRODUCTION_ORDERS_ENABLED` estiver como `true`. Se `MP_ENVIRONMENT` estiver ausente, a implementação usa `test`; se a flag de produção estiver ausente, o backend não habilita pedidos de produção. O polling exige explicitamente `PIX_POLLING_WORKER_ENABLED=true`; o valor padrão é `false`. A atualização não habilita o worker automaticamente. Os flags `PIX_WEBHOOK_ENABLED` e `PIX_WEBHOOK_WORKER_ENABLED` continuam preservados como estavam; não são desativados nem usados como condição do polling. Segredos de webhook ausentes continuam ausentes. As variáveis antigas declaradas e seus valores são preservados conforme o snapshot efetivo; nenhuma credencial é impressa ou enviada para serviços externos.
 
 ## Validação integrada, sem pagamentos reais
 
@@ -86,8 +86,13 @@ Depois do healthcheck, use apenas contas e credenciais de teste do Mercado Pago:
 3. No sandbox, crie uma Order de teste e use o mecanismo de aprovação de teste do Mercado Pago. Não use pagador nem credenciais de produção.
 4. Confirme aprovação única, reserva, confirmação automática e dashboard.
 5. Confirme notificações para cliente e profissional pelos canais de teste disponíveis.
-6. Confirme webhook/worker, retry e ausência de duplicações com eventos repetidos de teste. Se as credenciais de teste necessárias não estiverem presentes ou a URL pública não estiver pronta, registre validação pendente; não substitua a configuração por defaults.
-7. Confirme que a configuração ativa continua em `test` e que produção segue desligada.
+6. Após autorização separada, ative `PIX_POLLING_WORKER_ENABLED=true` somente no ambiente de teste, com `PIX_PRODUCTION_ORDERS_ENABLED=false`, e reinicie apenas o serviço da API por um procedimento revisado. Acompanhe os logs `[PIX Polling]` para contagem de elegíveis, consultas, conciliações, erros, análises pendentes e próxima tentativa; os logs não imprimem IDs, nomes, tokens nem assinaturas.
+7. Crie uma Order de teste e aprove o PIX no sandbox. Feche o navegador imediatamente após a emissão. Confirme no backend/PostgreSQL a mudança para paga, no Firestore o documento determinístico confirmado, e as notificações existentes para cliente e profissional. Verifique que uma consulta posterior do status não duplica crédito, agendamento ou Push. Não use pagamentos reais.
+8. Confirme `MP_ENVIRONMENT=test` e `PIX_PRODUCTION_ORDERS_ENABLED=false`. O webhook permanece intacto até comprovarmos o fluxo de polling; só depois de validação real autorizada avaliaremos desativar seus flags.
+
+O worker seleciona apenas Orders pendentes com `mp_order_id`, ambiente habilitado, horário de próxima consulta vencido e dentro do horizonte de reconciliação (72 horas por padrão). Ordens pagas com agendamento ainda não efetivado entram somente em uma retomada local, sem novo GET ao Mercado Pago. Ordens canceladas, encerradas e finalizadas ficam fora da seleção. Um lease de 120 segundos, `FOR UPDATE SKIP LOCKED` e advisory lock por cobrança reduzem trabalho concorrente; um lock global permite apenas um ciclo do worker entre réplicas. A consulta externa ocorre fora de transação PostgreSQL. O agendamento usa intervalos adaptativos (30 segundos no início, 60 segundos após cinco minutos, 120 segundos depois da reserva e 300 segundos em reconciliação mais antiga) com backoff e jitter em falhas. A janela global no PostgreSQL limita também consultas simultâneas ao endpoint `/pix/status`; o padrão local é 12 consultas por minuto e respeita o `Retry-After` do Mercado Pago. Os limites efetivos da API são definidos por conta/aplicação, portanto 12/min é uma proteção conservadora configurável, não uma garantia do limite contratado.
+
+O horizonte de 72 horas evita polling infinito e não libera reservas com pagamento inconclusivo. Um pagamento aprovado depois de a reserva perder validade é creditado de modo idempotente e encaminhado à análise financeira existente; a rotina não cria um novo horário. Depois do horizonte, uma cobrança ainda pendente deixa de ser consultada automaticamente e exige reconciliação operacional; cobranças antigas não entram retroativamente na primeira ativação. A tabela de quota e os leases são locais ao PostgreSQL e se recuperam após reinício/expiração do lease.
 
 O script não cria Orders, não realiza pagamentos, não chama Google Apps Script e não publica o frontend. Com o PR aberto, valide a interface pelo preview já disponível e apontado para backend de teste.
 
@@ -102,11 +107,11 @@ $Backup = "/opt/isabele-nails-backups/pix-update-DIRETORIO_INFORMADO_NO_LOG"
 ssh -i $SshKey $VpsHost "sudo env APP_DIR=/opt/isabele-nails bash /usr/local/sbin/atualizar-vps-pix rollback $Backup"
 ```
 
-O comando sobe somente o serviço da API com a tag persistente da imagem anterior e o snapshot renderizado da configuração efetiva anterior, incluindo todos os valores de ambiente, Firebase, Push, PostgreSQL, Mercado Pago, volumes, redes e opções do Compose. Os arquivos Compose fonte originais também ficam copiados no backup para auditoria; o rollback usa o snapshot efetivo, não tenta reconstituir a configuração a partir de arquivos que possam ter mudado. Depois confira healthcheck e logs. A migração 010 e o banco permanecem como estão. Restaurar o dump é uma operação separada, que exige análise e janela de manutenção para evitar apagar dados criados após o backup.
+O comando sobe somente o serviço da API com a tag persistente da imagem anterior e o snapshot renderizado da configuração efetiva anterior, incluindo todos os valores de ambiente, Firebase, Push, PostgreSQL, Mercado Pago, volumes, redes e opções do Compose. Os arquivos Compose fonte originais também ficam copiados no backup para auditoria; o rollback usa o snapshot efetivo, não tenta reconstituir a configuração a partir de arquivos que possam ter mudado. Depois confira healthcheck e logs. As migrações 010/011 e o banco permanecem como estão; rollback de código não desfaz schema. Restaurar o dump é uma operação separada, que exige análise e janela de manutenção para evitar apagar dados criados após o backup.
 
 ## PIX real em uma etapa futura
 
-Este procedimento não ativa produção. Antes de qualquer ativação separada:
+Este procedimento não ativa produção. A primeira validação futura do worker deve ativar somente o polling de teste. Antes de qualquer ativação de PIX real:
 
 - Conta Mercado Pago habilitada para produção e credenciais emitidas para o aplicativo correto.
 - Chave PIX cadastrada na conta beneficiária correta.

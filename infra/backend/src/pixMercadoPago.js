@@ -1,5 +1,14 @@
 const URL_MP = "https://api.mercadopago.com";
 
+export class ErroMercadoPago extends Error {
+  constructor(status, retryAfterSeconds) {
+    super(`Falha na API do Mercado Pago: HTTP ${status}`);
+    this.name = "ErroMercadoPago";
+    this.status = status;
+    this.retryAfterSeconds = retryAfterSeconds;
+  }
+}
+
 export function ambienteMercadoPagoAtual() {
   const ambiente = (process.env.MP_ENVIRONMENT || "test").trim().toLowerCase();
   if (!["test", "production"].includes(ambiente)) {
@@ -12,10 +21,16 @@ export function mercadoPagoHabilitado(ambiente = ambienteMercadoPagoAtual()) {
   if (ambiente === "test") return process.env.PIX_TEST_ORDERS_ENABLED === "true";
   if (ambiente === "production") {
     return process.env.PIX_PRODUCTION_ORDERS_ENABLED === "true" &&
-      Boolean(process.env.MP_ACCESS_TOKEN_PRODUCTION?.trim()) &&
-      Boolean(process.env.MP_WEBHOOK_SECRET_PRODUCTION?.trim());
+      Boolean(process.env.MP_ACCESS_TOKEN_PRODUCTION?.trim());
   }
   return false;
+}
+
+function tokenValido(token, ambiente) {
+  if (!token) return false;
+  return ambiente === "test"
+    ? /^(APP_USR-|TEST-)/.test(token)
+    : token.startsWith("APP_USR-");
 }
 
 function obterToken(ambiente) {
@@ -23,7 +38,7 @@ function obterToken(ambiente) {
     ? "MP_ACCESS_TOKEN_PRODUCTION"
     : "MP_ACCESS_TOKEN_TEST";
   const token = process.env[nome]?.trim();
-  if (!token || !token.startsWith("APP_USR-")) {
+  if (!tokenValido(token, ambiente)) {
     throw new Error(`Credencial do Mercado Pago ausente para ${ambiente}`);
   }
   return token;
@@ -57,12 +72,32 @@ async function requisitarMercadoPago(caminho, opcoes = {}, ambiente = ambienteMe
   const headers = { Authorization: `Bearer ${token}`, Accept: "application/json" };
   if (opcoes.corpo) headers["Content-Type"] = "application/json";
   if (opcoes.idempotencia) headers["X-Idempotency-Key"] = opcoes.idempotencia;
-  const resposta = await fetch(`${URL_MP}${caminho}`, {
-    method: opcoes.metodo || "GET", headers,
-    ...(opcoes.corpo ? { body: JSON.stringify(opcoes.corpo) } : {}),
-    signal: AbortSignal.timeout(15000)
-  });
-  if (!resposta.ok) throw new Error(`Falha na API do Mercado Pago: HTTP ${resposta.status}`);
+  let resposta;
+  try {
+    resposta = await fetch(`${URL_MP}${caminho}`, {
+      method: opcoes.metodo || "GET", headers,
+      ...(opcoes.corpo ? { body: JSON.stringify(opcoes.corpo) } : {}),
+      signal: AbortSignal.timeout(15000)
+    });
+  } catch (erro) {
+    // O erro é tipado sem incorporar a URL autenticada, headers ou token.
+    const falha = new Error("Falha de rede ao consultar Mercado Pago");
+    falha.name = erro?.name === "AbortError" || erro?.name === "TimeoutError" ? "TimeoutError" : "ErroRedeMercadoPago";
+    falha.code = erro?.code;
+    throw falha;
+  }
+  if (!resposta.ok) {
+    const retryHeader = resposta.headers?.get?.("retry-after");
+    let retryAfterSeconds = Number(retryHeader);
+    if (!Number.isFinite(retryAfterSeconds) && retryHeader) {
+      const instante = Date.parse(retryHeader);
+      if (Number.isFinite(instante)) retryAfterSeconds = Math.max(0, (instante - Date.now()) / 1000);
+    }
+    throw new ErroMercadoPago(
+      resposta.status,
+      Number.isFinite(retryAfterSeconds) ? Math.min(2147483647, retryAfterSeconds) : undefined,
+    );
+  }
   return resposta.json();
 }
 
@@ -91,6 +126,76 @@ export async function criarPedidoPix(dados, ambiente = ambienteMercadoPagoAtual(
 export async function consultarPedidoPix(pedidoId, ambiente = ambienteMercadoPagoAtual()) {
   if (typeof pedidoId !== "string" || !/^[A-Za-z0-9_-]{1,128}$/.test(pedidoId)) throw new Error("Identificador do pedido invalido");
   return resumirPedido(await requisitarMercadoPago(`/v1/orders/${encodeURIComponent(pedidoId)}`, {}, ambiente));
+}
+
+export async function consultarPedidoPixComLock(pool, pedidoId, ambiente = ambienteMercadoPagoAtual(), consulta = consultarPedidoPix) {
+  const conexao = await pool.connect();
+  const chave = `${ambiente}:${pedidoId}`;
+  let bloqueado = false;
+  try {
+    const resultado = await conexao.query(
+      "SELECT pg_try_advisory_lock(hashtextextended($1, 0)) AS adquirido",
+      [chave],
+    );
+    bloqueado = resultado.rows[0]?.adquirido === true;
+    if (!bloqueado) {
+      const erro = new Error("Consulta da cobrança já está em andamento");
+      erro.code = "PIX_CONSULTA_EM_ANDAMENTO";
+      throw erro;
+    }
+    await aguardarQuotaGlobalMercadoPago(conexao);
+    return await consulta(pedidoId, ambiente);
+  } finally {
+    if (bloqueado) {
+      await conexao.query(
+        "SELECT pg_advisory_unlock(hashtextextended($1, 0))",
+        [chave],
+      ).catch(() => {});
+    }
+    conexao.release();
+  }
+}
+
+async function aguardarQuotaGlobalMercadoPago(conexao) {
+  const limite = Number.parseInt(process.env.PIX_POLLING_MAX_REQUESTS_PER_MINUTE || "12", 10);
+  const requestsPorMinuto = Number.isInteger(limite) ? Math.max(1, Math.min(60, limite)) : 12;
+  while (true) {
+    let aguardarMs = 0;
+    try {
+      await conexao.query("BEGIN");
+      const resultado = await conexao.query(`
+        SELECT window_started_at, request_count
+        FROM public.pix_polling_request_budget
+        WHERE id = 1
+        FOR UPDATE
+      `);
+      const janela = resultado.rows[0];
+      if (!janela) throw new Error("Quota global Mercado Pago não inicializada");
+      const iniciouEm = new Date(janela.window_started_at).getTime();
+      const agora = Date.now();
+      if (!Number.isFinite(iniciouEm) || agora - iniciouEm >= 60000) {
+        await conexao.query(`
+          UPDATE public.pix_polling_request_budget
+          SET window_started_at = NOW(), request_count = 1
+          WHERE id = 1
+        `);
+      } else if (Number(janela.request_count) < requestsPorMinuto) {
+        await conexao.query(`
+          UPDATE public.pix_polling_request_budget
+          SET request_count = request_count + 1
+          WHERE id = 1
+        `);
+      } else {
+        aguardarMs = Math.max(100, 60000 - (agora - iniciouEm));
+      }
+      await conexao.query("COMMIT");
+    } catch (erro) {
+      await conexao.query("ROLLBACK").catch(() => {});
+      throw erro;
+    }
+    if (!aguardarMs) return;
+    await new Promise((resolve) => setTimeout(resolve, aguardarMs));
+  }
 }
 
 // Compatibilidade com chamadas antigas enquanto todas as rotas usam ambiente explícito.

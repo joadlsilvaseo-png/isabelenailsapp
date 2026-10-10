@@ -14,6 +14,7 @@ import { cotarSinalPix } from "./pixCotacao.js";
 import { iniciarWorkerPixCalendar } from "./pixCalendarWorker.js";
 import { atenderConfirmacaoAgendamentoPix } from "./pixAgendamentoConfirmacao.js";
 import { iniciarWorkerPixWebhook } from "./pixWebhookWorker.js";
+import { iniciarWorkerPixPolling } from "./pixPollingWorker.js";
 
 const { Pool } = pg;
 
@@ -144,6 +145,10 @@ server.listen(PORT, "0.0.0.0", () => {
   if (process.env.PIX_WEBHOOK_ENABLED === "true" && process.env.PIX_WEBHOOK_WORKER_ENABLED === "true") {
     iniciarWorkerPixWebhook(pool);
   }
+
+  // O polling permanece desativado até PIX_POLLING_WORKER_ENABLED=true.
+  // Quando ativado, confirma pagamentos sem depender do navegador.
+  iniciarWorkerPixPolling(pool);
 
   if (process.env.PIX_CALENDAR_WORKER_ENABLED === "true") {
     iniciarWorkerPixCalendar(pool);

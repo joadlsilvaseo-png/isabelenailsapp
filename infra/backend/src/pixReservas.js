@@ -11,7 +11,7 @@ import { validarHorarioPix } from "./pixDisponibilidade.js";
 import { verificarConflitoFirestore } from "./pixAgendaFirestore.js";
 import {
   ambienteMercadoPagoAtual,
-  consultarPedidoPix,
+  consultarPedidoPixComLock,
   mercadoPagoHabilitado
 } from "./pixMercadoPago.js";
 import { validarRetornoPagamentoPix } from "./pixValidacaoPagamento.js";
@@ -183,7 +183,7 @@ async function reconciliarReservasVencidasDoDia(pool, data) {
     try {
       const ambiente = cobranca.mp_environment || "test";
       if (!mercadoPagoHabilitado(ambiente)) return;
-      const pedido = await consultarPedidoPix(cobranca.mp_order_id, ambiente);
+      const pedido = await consultarPedidoPixComLock(pool, cobranca.mp_order_id, ambiente);
       const validacao = validarRetornoPagamentoPix(pedido, cobranca);
 
       if (validacao.creditado) {
@@ -297,7 +297,11 @@ export async function criarReservaPix(req, res, pool) {
 
     validarDataFutura(data, horario);
 
-    await reconciliarReservasVencidasDoDia(pool, data);
+    // Com o worker ativo, o acompanhamento das Orders vencidas ocorre pela
+    // fila persistente; evita uma segunda consulta concorrente no fluxo de reserva.
+    if (process.env.PIX_POLLING_WORKER_ENABLED !== "true") {
+      await reconciliarReservasVencidasDoDia(pool, data);
+    }
 
     const conexao = await pool.connect();
     let resultado;

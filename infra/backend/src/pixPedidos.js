@@ -9,7 +9,7 @@ import { verificarUsuario } from "./pushSubscriptions.js";
 
 import {
   criarPedidoPix,
-  consultarPedidoPix,
+  consultarPedidoPixComLock,
   mercadoPagoHabilitado
 } from "./pixMercadoPago.js";
 
@@ -279,15 +279,23 @@ export async function emitirPixDaReserva(req, res, pool) {
           emailPagador: cobranca.reserva_dados.emailPagador,
           prazoMinutos: 30
         }, cobranca.mp_environment)
-      : await consultarPedidoPix(cobranca.mp_order_id, cobranca.mp_environment);
+      : await consultarPedidoPixComLock(pool, cobranca.mp_order_id, cobranca.mp_environment);
 
     conferirPedido(pedido, cobranca);
 
     if (emitir) {
+      const intervaloPolling = Number.parseInt(process.env.PIX_POLLING_INITIAL_INTERVAL_SECONDS || "30", 10);
+      const proximaConsultaEmSegundos = Number.isInteger(intervaloPolling)
+        ? Math.max(15, Math.min(900, intervaloPolling))
+        : 30;
       const atualizado = await pool.query(`
         UPDATE public.pix_cobrancas
         SET
           mp_order_id = $2,
+          pix_polling_next_at = NOW() + ($3 * INTERVAL '1 second'),
+          pix_polling_attempts = 0,
+          pix_polling_lease_until = NULL,
+          pix_polling_last_error = NULL,
           atualizado_em = NOW()
         WHERE id = $1
           AND estado = 'pendente'
@@ -296,7 +304,7 @@ export async function emitirPixDaReserva(req, res, pool) {
             OR mp_order_id = $2
           )
         RETURNING id
-      `, [cobranca.id, pedido.pedidoId]);
+      `, [cobranca.id, pedido.pedidoId, proximaConsultaEmSegundos]);
 
       if (atualizado.rowCount !== 1) {
         throw new Error(

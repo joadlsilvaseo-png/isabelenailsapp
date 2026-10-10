@@ -1,4 +1,4 @@
-import { consultarPedidoPix } from "./pixMercadoPago.js";
+import { consultarPedidoPixComLock } from "./pixMercadoPago.js";
 import { processarProximaNotificacaoPix } from "./pixWebhookFila.js";
 import { validarRetornoPagamentoPix } from "./pixValidacaoPagamento.js";
 import { encerrarCobrancaPixSemPagamento, registrarCreditoPix, registrarEstornoPix } from "./pixConciliacao.js";
@@ -14,7 +14,8 @@ async function atualizarMarcadorFirestore(agendamentoId, dados) {
 }
 
 export async function processarOrderNotificada(pool, pedidoId, ambiente, dependencias = {}) {
-  const consultarPedido = dependencias.consultarPedido || consultarPedidoPix;
+  const consultarPedido = dependencias.consultarPedido ||
+    ((id, env) => consultarPedidoPixComLock(pool, id, env));
   const pedido = await consultarPedido(pedidoId, ambiente);
   const consulta = await pool.query(`SELECT c.* FROM public.pix_cobrancas c
     WHERE c.mp_order_id = $1 AND c.mp_environment = $2`, [pedidoId, ambiente]);
@@ -28,33 +29,41 @@ export async function processarOrderNotificada(pool, pedidoId, ambiente, depende
     const conciliacao = await (dependencias.registrarCredito || registrarCreditoPix)({
       pool, cobrancaId: cobranca.id, uid: cobranca.cliente_uid, pedido
     });
+    let finalizacao = conciliacao;
     if (["pago_aguardando_agendamento", "agendamento_confirmado", "pago_requer_analise"].includes(conciliacao.situacao)) {
       try {
-        await (dependencias.efetivarAgendamento || efetivarAgendamentoPix)({
+        finalizacao = await (dependencias.efetivarAgendamento || efetivarAgendamentoPix)({
           pool, cobrancaId: cobranca.id, uid: cobranca.cliente_uid
         });
       } catch (erro) {
         if (!erro?.requerAnalise) throw erro;
-        console.error("[PIX Webhook Worker] Pagamento creditado requer conciliacao:", cobranca.id);
+        console.error("[PIX Webhook Worker] Pagamento creditado requer conciliacao manual.");
+        finalizacao = { situacao: "pago_requer_analise", agendamentoConfirmado: false };
       }
     }
-    return { concluido: true };
+    return {
+      concluido: true,
+      situacao: finalizacao?.situacao ||
+        (finalizacao?.agendamentoConfirmado ? "agendamento_confirmado" : conciliacao.situacao),
+      pagamentoCreditado: true,
+      agendamentoConfirmado: finalizacao?.agendamentoConfirmado === true,
+    };
   }
   if (["expirada", "cancelada", "recusada"].includes(resultado.situacao)) {
     await (dependencias.encerrarCobranca || encerrarCobrancaPixSemPagamento)({
       pool, cobrancaId: cobranca.id, uid: cobranca.cliente_uid, situacao: resultado.situacao
     });
-    return { concluido: true };
+    return { concluido: true, situacao: resultado.situacao };
   }
   if (resultado.situacao === "estornada") {
     await (dependencias.registrarEstorno || registrarEstornoPix)({
       pool, cobrancaId: cobranca.id, pedido,
       atualizarFirestore: dependencias.atualizarFirestore || atualizarMarcadorFirestore
     });
-    return { concluido: true };
+    return { concluido: true, situacao: resultado.situacao };
   }
   if (resultado.situacao === "revisao_financeira") {
-    return { concluido: true };
+    return { concluido: true, situacao: resultado.situacao };
   }
   return { concluido: false, tentarNovamenteEmSegundos: 180 };
 }
@@ -67,7 +76,7 @@ export function iniciarWorkerPixWebhook(pool, processarOrder = (id, env) => proc
         const resultado = await processarProximaNotificacaoPix(pool, processarOrder);
         if (resultado.situacao === "vazia") await pausar(1500);
       } catch (erro) {
-        console.error("[PIX Webhook Worker] Falha temporaria:", erro.message);
+        console.error("[PIX Webhook Worker] Falha temporaria; detalhes sensíveis omitidos.");
         await pausar(3000);
       }
     }

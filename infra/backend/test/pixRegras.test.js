@@ -20,9 +20,10 @@ import {
 import { consultarStatusPagamentoPix } from "../src/pixConsultaPagamento.js";
 import { validarRetornoPagamentoPix } from "../src/pixValidacaoPagamento.js";
 import { processarProximaSincronizacaoCalendar, montarPayloadCalendar, enviarEventoCalendar } from "../src/pixCalendarWorker.js";
-import { ambienteMercadoPagoAtual, criarPedidoPix, mercadoPagoHabilitado, montarPedidoPix } from "../src/pixMercadoPago.js";
+import { ambienteMercadoPagoAtual, consultarPedidoPix, consultarPedidoPixComLock, criarPedidoPix, mercadoPagoHabilitado, montarPedidoPix } from "../src/pixMercadoPago.js";
 import { identificarNotificacoesAgendamento } from "../src/agendaNotificacoes.js";
 import { processarOrderNotificada } from "../src/pixWebhookWorker.js";
+import { configuracaoPixPolling, processarCicloPixPolling, reservarCobrancasElegiveis, segundosProximaConsulta } from "../src/pixPollingWorker.js";
 import { processarProximaNotificacaoPix } from "../src/pixWebhookFila.js";
 import { atenderWebhookPix, validarAssinaturaWebhookPix } from "../src/pixWebhook.js";
 import { pagamentoPixConfirmadoManualmente } from "../src/pixRegrasConfirmacao.js";
@@ -469,16 +470,20 @@ test("ambientes Mercado Pago são separados e produção fica desativada por pad
   try {
     delete process.env.MP_ENVIRONMENT;
     delete process.env.PIX_PRODUCTION_ORDERS_ENABLED;
+    delete process.env.MP_ACCESS_TOKEN_PRODUCTION;
     process.env.PIX_TEST_ORDERS_ENABLED = "true";
     assert.equal(ambienteMercadoPagoAtual(), "test");
     assert.equal(mercadoPagoHabilitado("test"), true);
     assert.equal(mercadoPagoHabilitado("production"), false);
     process.env.PIX_PRODUCTION_ORDERS_ENABLED = "true";
-    assert.equal(mercadoPagoHabilitado("production"), false, "produção exige token e segredo do webhook");
+    assert.equal(mercadoPagoHabilitado("production"), false, "produção exige o token de produção");
+    process.env.MP_ACCESS_TOKEN_PRODUCTION = "APP_USR-production-token";
+    assert.equal(mercadoPagoHabilitado("production"), true, "polling de produção não depende de segredo de webhook");
     const dados = { valorCentavos: 2000, referenciaExterna: "isabele_pix_123", chaveIdempotencia: "6d8f562d-5e85-4bc8-9705-932158e7c2a9", emailPagador: "cliente@example.com" };
     assert.equal(montarPedidoPix({ ...dados, ambiente: "test" }).payer.first_name, "APRO");
     assert.equal("first_name" in montarPedidoPix({ ...dados, ambiente: "production" }).payer, false);
     process.env.MP_ENVIRONMENT = "production";
+    process.env.PIX_PRODUCTION_ORDERS_ENABLED = "false";
     assert.equal(mercadoPagoHabilitado(), false);
   } finally {
     for (const chave of Object.keys(process.env)) if (!(chave in envAnterior)) delete process.env[chave];
@@ -695,9 +700,303 @@ test("Order aprovada recebida pelo webhook concilia e efetiva sem depender do na
     registrarCredito: async () => { creditos++; return { situacao: "pago_aguardando_agendamento" }; },
     efetivarAgendamento: async () => { efetivacoes++; return { agendamentoConfirmado: true }; }
   });
-  assert.deepEqual(resultado, { concluido: true });
+  assert.deepEqual(resultado, {
+    concluido: true,
+    situacao: "agendamento_confirmado",
+    pagamentoCreditado: true,
+    agendamentoConfirmado: true,
+  });
   assert.equal(creditos, 1);
   assert.equal(efetivacoes, 1);
+});
+
+test("polling consulta Order aprovada no backend e confirma sem webhook ou navegador", async () => {
+  const envAnterior = { ...process.env };
+  const cobranca = {
+    id: cobrancaBase.id,
+    cliente_uid: cobrancaBase.cliente_uid,
+    mp_environment: "test",
+    mp_order_id: cobrancaBase.mp_order_id,
+    estado: "pendente",
+    pix_polling_attempts: 1,
+    criado_em: new Date(Date.now() - 30000).toISOString(),
+    vence_em: new Date(Date.now() + 60000).toISOString(),
+  };
+  let credito = 0;
+  let efetivacao = 0;
+  let consultaOrder = 0;
+  const atualizacoes = [];
+  const pool = {
+    async query(sql, parametros = []) {
+      const consulta = sql.replace(/\s+/g, " ").trim().toLowerCase();
+      if (consulta.startsWith("select c.* from public.pix_cobrancas")) {
+        consultaOrder += 1;
+        return { rows: [{ ...cobrancaBase, mp_environment: "test" }] };
+      }
+      throw new Error(`SQL nao previsto no teste: ${consulta}`);
+    },
+  };
+
+  try {
+    process.env.PIX_TEST_ORDERS_ENABLED = "true";
+    process.env.PIX_PRODUCTION_ORDERS_ENABLED = "false";
+    process.env.MP_ACCESS_TOKEN_TEST = "APP_USR-test-token";
+    delete process.env.MP_ACCESS_TOKEN_PRODUCTION;
+
+    const lote = await processarCicloPixPolling(pool, {
+      config: { habilitado: true, ambientes: ["test"], limiteLote: 5, limitePorMinuto: 60, horizonteHoras: 72 },
+      adquirirLock: async () => ({}),
+      liberarLock: async () => {},
+      reservar: async (db, config) => {
+        assert.deepEqual(config.ambientes, ["test"]);
+        return [cobranca];
+      },
+      salvarResultado: async (_db, _cobranca, resultado) => atualizacoes.push(resultado),
+      processarOrder: (id, ambiente) => processarOrderNotificada(pool, id, ambiente, {
+        consultarPedido: async () => aprovado,
+        registrarCredito: async () => {
+          credito += 1;
+          return { situacao: "pago_aguardando_agendamento" };
+        },
+        efetivarAgendamento: async () => {
+          efetivacao += 1;
+          return { agendamentoConfirmado: true };
+        },
+      }),
+    });
+
+    assert.equal(lote.situacao, "processado");
+    assert.equal(lote.elegiveis, 1);
+    assert.equal(lote.consultas, 1);
+    assert.equal(lote.conciliadas, 1);
+    assert.equal(consultaOrder, 1);
+    assert.equal(credito, 1);
+    assert.equal(efetivacao, 1);
+    assert.deepEqual(atualizacoes, [{ proximaEmSegundos: null, erro: null }]);
+  } finally {
+    for (const chave of Object.keys(process.env)) if (!(chave in envAnterior)) delete process.env[chave];
+    Object.assign(process.env, envAnterior);
+  }
+});
+
+test("polling reprograma Orders pendentes, respeita Retry-After e limita erros", async () => {
+  const envAnterior = { ...process.env };
+  const atualizacoes = [];
+  const ordem = {
+    id: cobrancaBase.id,
+    cliente_uid: cobrancaBase.cliente_uid,
+    mp_environment: "test",
+    mp_order_id: cobrancaBase.mp_order_id,
+    estado: "pendente",
+    pix_polling_attempts: 4,
+    criado_em: new Date(Date.now() - 900000).toISOString(),
+    vence_em: new Date(Date.now() - 600000).toISOString(),
+  };
+
+  try {
+    process.env.PIX_TEST_ORDERS_ENABLED = "true";
+    process.env.PIX_PRODUCTION_ORDERS_ENABLED = "false";
+    process.env.MP_ACCESS_TOKEN_TEST = "APP_USR-test-token";
+    const lote = await processarCicloPixPolling({}, {
+      config: { habilitado: true, ambientes: ["test"], limiteLote: 5, limitePorMinuto: 60, horizonteHoras: 72 },
+      adquirirLock: async () => ({}),
+      liberarLock: async () => {},
+      reservar: async () => [ordem],
+      salvarResultado: async (_pool, _ordem, resultado) => atualizacoes.push(resultado),
+      processarOrder: async () => { throw Object.assign(new Error("429"), { status: 429, retryAfterSeconds: 47 }); },
+    });
+    assert.equal(lote.erros, 1, "erro é categorizado e remarcado");
+    assert.equal(lote.consultas, 1);
+    assert.equal(atualizacoes.length, 1);
+    assert.equal(atualizacoes[0].proximaEmSegundos, 47, "Retry-After não é encurtado");
+    assert.equal(atualizacoes[0].erro, "rate_limited");
+  } finally {
+    for (const chave of Object.keys(process.env)) if (!(chave in envAnterior)) delete process.env[chave];
+    Object.assign(process.env, envAnterior);
+  }
+});
+
+test("Mercado Pago 429 honra Retry-After, HTTP 5xx e timeout são recuperáveis", async () => {
+  const anterior = { ...process.env };
+  const fetchAnterior = globalThis.fetch;
+  try {
+    process.env.PIX_TEST_ORDERS_ENABLED = "true";
+    process.env.MP_ACCESS_TOKEN_TEST = "APP_USR-test-token";
+    globalThis.fetch = async () => ({
+      ok: false,
+      status: 429,
+      headers: { get: (nome) => nome === "retry-after" ? "37" : null },
+    });
+    await assert.rejects(consultarPedidoPix("order-429", "test"), (erro) => {
+      assert.equal(erro.status, 429);
+      assert.equal(erro.retryAfterSeconds, 37);
+      return true;
+    });
+
+    globalThis.fetch = async () => ({ ok: false, status: 503, headers: { get: () => null } });
+    await assert.rejects(consultarPedidoPix("order-503", "test"), (erro) => erro.status === 503);
+
+    globalThis.fetch = async () => { throw new DOMException("request timed out", "TimeoutError"); };
+    await assert.rejects(consultarPedidoPix("order-timeout", "test"), (erro) => erro.name === "TimeoutError");
+  } finally {
+    globalThis.fetch = fetchAnterior;
+    for (const chave of Object.keys(process.env)) if (!(chave in anterior)) delete process.env[chave];
+    Object.assign(process.env, anterior);
+  }
+});
+
+test("worker desligado por padrão e fila vazia não consultam Orders", async () => {
+  const anterior = { ...process.env };
+  let reservas = 0;
+  try {
+    delete process.env.PIX_POLLING_WORKER_ENABLED;
+    process.env.PIX_TEST_ORDERS_ENABLED = "true";
+    process.env.PIX_PRODUCTION_ORDERS_ENABLED = "false";
+    process.env.MP_ACCESS_TOKEN_TEST = "APP_USR-test-token";
+    process.env.MP_ACCESS_TOKEN_PRODUCTION = "APP_USR-production-token";
+    assert.equal(configuracaoPixPolling().habilitado, false);
+    assert.deepEqual(configuracaoPixPolling().ambientes, ["test"]);
+
+    const desabilitado = await processarCicloPixPolling({}, { config: { habilitado: false, ambientes: ["test"] } });
+    assert.equal(desabilitado.situacao, "desabilitado");
+
+    const vazio = await processarCicloPixPolling({}, {
+      config: { habilitado: true, ambientes: ["test"], limiteLote: 5, limitePorMinuto: 60, horizonteHoras: 72 },
+      adquirirLock: async () => ({}), liberarLock: async () => {},
+      reservar: async () => { reservas += 1; return []; },
+      processarOrder: async () => assert.fail("fila vazia não chama Mercado Pago"),
+    });
+    assert.equal(vazio.consultas, 0);
+    assert.equal(vazio.elegiveis, 0);
+    assert.equal(reservas, 1);
+  } finally {
+    for (const chave of Object.keys(process.env)) if (!(chave in anterior)) delete process.env[chave];
+    Object.assign(process.env, anterior);
+  }
+});
+
+test("pagamento já creditado retoma apenas a efetivação local, sem nova consulta", async () => {
+  const atualizacoes = [];
+  let efetivacoes = 0;
+  const paga = {
+    id: cobrancaBase.id, cliente_uid: cobrancaBase.cliente_uid,
+    mp_environment: "test", mp_order_id: cobrancaBase.mp_order_id,
+    estado: "paga", pix_polling_attempts: 2,
+    criado_em: new Date(0).toISOString(), vence_em: new Date(0).toISOString(),
+  };
+  const resultado = await processarCicloPixPolling({}, {
+    config: { habilitado: true, ambientes: ["test"], limiteLote: 5, limitePorMinuto: 60, horizonteHoras: 72 },
+    adquirirLock: async () => ({}), liberarLock: async () => {},
+    reservar: async () => [paga],
+    salvarResultado: async (_pool, _cobranca, dado) => atualizacoes.push(dado),
+    processarOrder: async () => assert.fail("cobrança paga não consulta Mercado Pago"),
+    efetivarAgendamento: async () => { efetivacoes += 1; return { agendamentoConfirmado: true }; },
+  });
+  assert.equal(resultado.consultas, 0);
+  assert.equal(resultado.recuperacoesLocais, 1);
+  assert.equal(resultado.conciliadas, 1);
+  assert.equal(efetivacoes, 1);
+  assert.deepEqual(atualizacoes[0], { proximaEmSegundos: null, erro: null });
+});
+
+test("pagamento tardio é creditado, não cria novo horário e sai do polling para análise", async () => {
+  const atualizacoes = [];
+  const pendente = {
+    id: cobrancaBase.id, cliente_uid: cobrancaBase.cliente_uid,
+    mp_environment: "test", mp_order_id: cobrancaBase.mp_order_id,
+    estado: "pendente", pix_polling_attempts: 5,
+    criado_em: new Date(Date.now() - 3600000).toISOString(),
+    vence_em: new Date(Date.now() - 1800000).toISOString(),
+  };
+  const pool = { query: async () => ({ rows: [{ ...cobrancaBase, mp_environment: "test" }] }) };
+  let creditado = false;
+  let tentouCriarAgendamento = false;
+  const resultado = await processarCicloPixPolling(pool, {
+    config: { habilitado: true, ambientes: ["test"], limiteLote: 5, limitePorMinuto: 60, horizonteHoras: 72 },
+    adquirirLock: async () => ({}), liberarLock: async () => {},
+    reservar: async () => [pendente],
+    salvarResultado: async (_pool, _charge, dado) => atualizacoes.push(dado),
+    processarOrder: (id, ambiente) => processarOrderNotificada(pool, id, ambiente, {
+      consultarPedido: async () => aprovado,
+      registrarCredito: async () => { creditado = true; return { situacao: "pago_requer_analise" }; },
+      efetivarAgendamento: async () => {
+        tentouCriarAgendamento = true;
+        throw Object.assign(new Error("reserva vencida"), { requerAnalise: true });
+      },
+    }),
+  });
+  assert.equal(creditado, true);
+  assert.equal(tentouCriarAgendamento, true);
+  assert.equal(resultado.conciliadas, 1);
+  assert.equal(resultado.aguardandoAnalise, 1);
+  assert.deepEqual(atualizacoes[0], { proximaEmSegundos: null, erro: null });
+});
+
+test("seleção de polling é limitada, usa lease e ignora cobranças finalizadas/antigas", async () => {
+  let consulta;
+  const pool = { async query(sql, parametros) { consulta = { sql: sql.replace(/\s+/g, " ").toLowerCase(), parametros }; return { rows: [] }; } };
+  await reservarCobrancasElegiveis(pool, {
+    limiteLote: 3, ambientes: ["test"], horizonteHoras: 72,
+  });
+  assert.match(consulta.sql, /limit \$1 for update of c skip locked/);
+  assert.match(consulta.sql, /pix_polling_next_at <= now\(\)/);
+  assert.match(consulta.sql, /pix_polling_lease_until is null or c\.pix_polling_lease_until <= now\(\)/);
+  assert.match(consulta.sql, /c\.estado = 'pendente'/);
+  assert.match(consulta.sql, /c\.estado = 'paga'/);
+  assert.doesNotMatch(consulta.sql, /c\.estado = 'expirada'/);
+  assert.deepEqual(consulta.parametros, [3, 120, ["test"], 72]);
+});
+
+test("intervalo adaptativo cresce após a expiração da reserva", () => {
+  const base = Date.now();
+  const config = { intervaloInicialSegundos: 30, intervaloAposReservaSegundos: 120, intervaloAntigoSegundos: 300, intervaloFinalSegundos: 1800 };
+  assert.equal(segundosProximaConsulta({ criado_em: new Date(base - 60000), vence_em: new Date(base + 60000), agora: base, config }), 30);
+  assert.equal(segundosProximaConsulta({ criado_em: new Date(base - 3600000), vence_em: new Date(base - 60000), agora: base, config }), 120);
+  assert.equal(segundosProximaConsulta({ criado_em: new Date(base - 43200000), vence_em: new Date(base - 43000000), agora: base, config }), 300);
+});
+
+test("consultas ao Mercado Pago usam lock por Order e só uma chamada simultânea", async () => {
+  let ordemBloqueada = false;
+  let chamadasMercadoPago = 0;
+  let liberarConsulta;
+  const consultaPausada = new Promise((resolve) => { liberarConsulta = resolve; });
+  const pool = {
+    async connect() {
+      return {
+        async query(sql) {
+          if (sql.includes("pg_try_advisory_lock")) {
+            if (ordemBloqueada) return { rows: [{ adquirido: false }] };
+            ordemBloqueada = true;
+            return { rows: [{ adquirido: true }] };
+          }
+          if (sql.includes("SELECT window_started_at")) {
+            return { rows: [{ window_started_at: new Date(), request_count: 0 }] };
+          }
+          if (sql.includes("pg_advisory_unlock")) {
+            ordemBloqueada = false;
+            return { rows: [{ pg_advisory_unlock: true }] };
+          }
+          return { rows: [] };
+        },
+        release() {},
+      };
+    },
+  };
+  const consulta = async () => {
+    chamadasMercadoPago += 1;
+    await consultaPausada;
+    return aprovado;
+  };
+
+  const primeira = consultarPedidoPixComLock(pool, "order-1", "test", consulta);
+  await new Promise((resolve) => setImmediate(resolve));
+  await assert.rejects(
+    consultarPedidoPixComLock(pool, "order-1", "test", consulta),
+    (erro) => erro.code === "PIX_CONSULTA_EM_ANDAMENTO",
+  );
+  liberarConsulta();
+  assert.equal(await primeira, aprovado);
+  assert.equal(chamadasMercadoPago, 1);
 });
 
 test("Order pendente reprograma webhook sem confirmar agendamento", async () => {

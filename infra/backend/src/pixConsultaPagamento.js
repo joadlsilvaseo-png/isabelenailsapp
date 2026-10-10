@@ -1,6 +1,6 @@
 import {
   ambienteMercadoPagoAtual,
-  consultarPedidoPix,
+  consultarPedidoPixComLock,
   mercadoPagoHabilitado
 } from "./pixMercadoPago.js";
 import { validarRetornoPagamentoPix } from "./pixValidacaoPagamento.js";
@@ -26,7 +26,8 @@ export async function consultarStatusPagamentoPix(req, res, pool, dependencias =
     const modulo = await import("./pushSubscriptions.js");
     return modulo.verificarUsuario(requisicao);
   });
-  const consultarPedido = dependencias.consultarPedido || consultarPedidoPix;
+  const consultarPedido = dependencias.consultarPedido ||
+    ((id, ambiente) => consultarPedidoPixComLock(pool, id, ambiente));
   const validarPagamento = dependencias.validarPagamento || validarRetornoPagamentoPix;
   const registrarCredito = dependencias.registrarCredito || registrarCreditoPix;
   const efetivarAgendamento = dependencias.efetivarAgendamento || efetivarAgendamentoPix;
@@ -207,7 +208,16 @@ export async function consultarStatusPagamentoPix(req, res, pool, dependencias =
         : "Pagamento ainda nao confirmado."
     });
   } catch (erro) {
-    console.error("[PIX Status]", erro.message);
+    if (erro?.code === "PIX_CONSULTA_EM_ANDAMENTO") {
+      responder(res, 202, {
+        situacao: "consulta_em_andamento",
+        pagamentoCreditado: false,
+        agendamentoConfirmado: false,
+        mensagem: "A confirmação está sendo verificada pelo servidor."
+      });
+      return;
+    }
+    console.error("[PIX Status] Falha ao consultar; detalhes sensíveis omitidos.");
 
     responder(res, 503, {
       erro: "Nao foi possivel verificar o pagamento"
