@@ -1,6 +1,7 @@
 import { initializeApp, applicationDefault, getApps } from "firebase-admin/app";
 
 import { getFirestore } from "firebase-admin/firestore";
+import { identificarNotificacoesAgendamento } from "./agendaNotificacoes.js";
 
 const PROJECT_ID = "isabele-nails-app";
 
@@ -39,95 +40,14 @@ function extrairEstado(documento) {
     servico: texto(dados.servico || dados.nomeServico || dados.servicoNome),
 
     reagendadoPor: texto(dados.reagendadoPor),
+    nomeCliente: texto(dados.nomeCliente),
+    origemPagamento: texto(dados.origemPagamento),
   };
 }
 
 // ======================================================
 // IDENTIFICAR O TIPO DE NOTIFICAÇÃO
 // ======================================================
-
-function identificarEvento(anterior, atual) {
-  const detalhes = [
-    atual.servico || "Atendimento",
-    atual.data,
-    atual.horario ? `às ${atual.horario}` : "",
-  ]
-    .filter(Boolean)
-    .join(" ");
-
-  if (!anterior) {
-    return {
-      tipo: "novo_agendamento",
-      destinatario: "admin",
-      titulo: "Novo agendamento",
-      mensagem: `Uma nova reserva foi realizada: ${detalhes}.`,
-      destino: "./admin-agendamentos.html",
-    };
-  }
-
-  const statusAnterior = normalizarStatus(anterior.status);
-
-  const statusMudou = statusAnterior !== atual.status;
-
-  const dataMudou =
-    texto(anterior.data_agendamento) !== atual.data ||
-    texto(anterior.horario) !== atual.horario;
-
-  if (atual.status.startsWith("cancelado") && statusMudou) {
-    const canceladoPelaCliente = atual.status === "cancelado_cliente";
-
-    return {
-      tipo: canceladoPelaCliente
-        ? "cancelamento_cliente"
-        : "cancelamento_profissional",
-
-      destinatario: canceladoPelaCliente ? "admin" : "cliente",
-
-      titulo: "Agendamento cancelado",
-
-      mensagem: `O agendamento de ${atual.servico || "atendimento"} foi cancelado.`,
-
-      destino: canceladoPelaCliente
-        ? "./admin-agendamentos.html"
-        : "./meu-perfil.html",
-    };
-  }
-
-  if (atual.status === "reagendado" && (statusMudou || dataMudou)) {
-    const feitoPelaCliente =
-      atual.reagendadoPor && atual.reagendadoPor === atual.clienteId;
-
-    return {
-      tipo: "reagendamento",
-
-      destinatario: feitoPelaCliente ? "admin" : "cliente",
-
-      titulo: "Agendamento reagendado",
-
-      mensagem: `Nova data do atendimento: ${detalhes}.`,
-
-      destino: feitoPelaCliente
-        ? "./admin-agendamentos.html"
-        : "./meu-perfil.html",
-    };
-  }
-
-  if (atual.status === "confirmado" && statusMudou) {
-    return {
-      tipo: "confirmacao",
-
-      destinatario: "cliente",
-
-      titulo: "Agendamento confirmado",
-
-      mensagem: `Seu atendimento foi confirmado: ${detalhes}.`,
-
-      destino: "./meu-perfil.html",
-    };
-  }
-
-  return null;
-}
 
 // ======================================================
 // CONSULTAR ADMINISTRADORAS ATIVAS
@@ -227,24 +147,23 @@ async function processarAgendamento(
 
     // Na primeira instalação, apenas importa as reservas
     // existentes sem gerar notificações antigas.
-    const evento = importacaoInicial
-      ? null
-      : identificarEvento(anterior, atual);
+    const eventos = importacaoInicial
+      ? []
+      : identificarNotificacoesAgendamento(anterior, atual);
 
-    if (!evento) {
+    if (!eventos.length) {
       await conexao.query("COMMIT");
       return;
     }
 
-    const destinatarios =
-      evento.destinatario === "admin"
+    for (const evento of eventos) {
+      const destinatarios = evento.destinatario === "admin"
         ? await obterAdministradoras(firestore)
         : [atual.clienteId];
 
-    for (const uid of new Set(destinatarios.filter(Boolean))) {
-      const chaveEvento = `${atual.id}:${versao}:${evento.tipo}:${uid}`;
-
-      await conexao.query(
+      for (const uid of new Set(destinatarios.filter(Boolean))) {
+        const chaveEvento = `${atual.id}:${versao}:${evento.tipo}:${uid}`;
+        await conexao.query(
         `
         INSERT INTO public.push_entregas (
           chave_evento,
@@ -267,12 +186,13 @@ async function processarAgendamento(
           evento.mensagem,
           evento.destino,
         ],
-      );
+        );
+      }
     }
 
     await conexao.query("COMMIT");
 
-    console.log("[AgendaMonitor] Evento registrado:", evento.tipo, atual.id);
+    console.log("[AgendaMonitor] Eventos registrados:", eventos.length, atual.id);
   } catch (erro) {
     await conexao.query("ROLLBACK");
     throw erro;
