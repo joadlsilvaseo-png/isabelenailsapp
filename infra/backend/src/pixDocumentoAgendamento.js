@@ -2,6 +2,17 @@ const STATUS_OCUPADOS = new Set([
   "agendado", "reagendado", "confirmado"
 ]);
 
+export function obterDuracaoAgendamentoPix(valor) {
+  // Compatibilidade com documentos legados que nao gravavam duracao.
+  if (valor === null || valor === undefined || valor === "") return 90;
+
+  const duracao = Number(valor);
+  if (!Number.isSafeInteger(duracao) || duracao <= 0 || duracao > 1440) {
+    throw new Error("Agendamento ativo com duracao invalida");
+  }
+  return duracao;
+}
+
 export function encontrarConflitoAgendamentoPix(registros, inicio, fim) {
   for (const registro of registros) {
     if (!STATUS_OCUPADOS.has(registro.status)) continue;
@@ -14,15 +25,7 @@ export function encontrarConflitoAgendamentoPix(registros, inicio, fim) {
 
     const [h, m] = horario.split(":").map(Number);
     const comeco = h * 60 + m;
-    const duracao = Number(registro.duracao) || 90;
-
-    if (
-      !Number.isFinite(duracao) ||
-      duracao <= 0 ||
-      duracao > 1440
-    ) {
-      throw new Error("Agendamento ativo com duracao invalida");
-    }
+    const duracao = obterDuracaoAgendamentoPix(registro.duracao);
 
     if (inicio < comeco + duracao && fim > comeco) {
       return true;
