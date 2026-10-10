@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createHmac } from "node:crypto";
 
 import {
   encerrarCobrancaPixSemPagamento,
@@ -23,6 +24,7 @@ import { ambienteMercadoPagoAtual, criarPedidoPix, mercadoPagoHabilitado, montar
 import { identificarNotificacoesAgendamento } from "../src/agendaNotificacoes.js";
 import { processarOrderNotificada } from "../src/pixWebhookWorker.js";
 import { processarProximaNotificacaoPix } from "../src/pixWebhookFila.js";
+import { atenderWebhookPix, validarAssinaturaWebhookPix } from "../src/pixWebhook.js";
 import { pagamentoPixConfirmadoManualmente } from "../src/pixRegrasConfirmacao.js";
 import { atenderConfirmacaoAgendamentoPix } from "../src/pixAgendamentoConfirmacao.js";
 
@@ -199,6 +201,31 @@ function respostaJson() {
     corpo: null,
     writeHead(status) { this.status = status; },
     end(corpo) { this.corpo = JSON.parse(corpo); },
+  };
+}
+
+function assinarNotificacaoOrder({ pedidoId, requisicaoId, segredo, ts = String(Date.now()) }) {
+  const manifesto = `id:${pedidoId};request-id:${requisicaoId};ts:${ts};`;
+  const v1 = createHmac("sha256", segredo).update(manifesto).digest("hex");
+  return `ts=${ts},v1=${v1}`;
+}
+
+function requestWebhookOrder({ pedidoId, segredo, requisicaoId = "2066ca19-c6f1-498a-be75-1923005edd06", ts, liveMode = false }) {
+  const dados = {
+    action: "order.processed",
+    api_version: "v1",
+    application_id: "8920176425844272",
+    data: { id: pedidoId, status: "processed", status_detail: "accredited" },
+    live_mode: liveMode,
+    type: "order"
+  };
+  return {
+    url: `/pix/webhook?data.id=${encodeURIComponent(pedidoId)}&type=order`,
+    headers: {
+      "x-signature": assinarNotificacaoOrder({ pedidoId, requisicaoId, segredo, ts }),
+      "x-request-id": requisicaoId
+    },
+    async *[Symbol.asyncIterator]() { yield Buffer.from(JSON.stringify(dados)); }
   };
 }
 
@@ -684,6 +711,103 @@ test("Order pendente reprograma webhook sem confirmar agendamento", async () => 
   });
   assert.equal(resultado.concluido, false);
   assert.equal(efetivacoes, 0);
+});
+
+test("HMAC da Orders API preserva a caixa original do data.id", () => {
+  const pedidoId = "ORDTST01M4KT8RWNNA1QFP0E6M37VVFQ";
+  const requisicaoId = "2066ca19-c6f1-498a-be75-1923005edd06";
+  const segredo = "segredo-de-webhook-de-teste-local";
+  const ts = "1742505638683";
+  const assinaturaValida = assinarNotificacaoOrder({ pedidoId, requisicaoId, segredo, ts });
+  const assinaturaComIdNormalizado = assinarNotificacaoOrder({ pedidoId: pedidoId.toLowerCase(), requisicaoId, segredo, ts });
+
+  assert.equal(validarAssinaturaWebhookPix({ assinatura: assinaturaValida, requisicaoId, pedidoId, segredo }), true);
+  assert.equal(validarAssinaturaWebhookPix({ assinatura: assinaturaComIdNormalizado, requisicaoId, pedidoId, segredo }), false);
+  assert.equal(validarAssinaturaWebhookPix({ assinatura: assinaturaValida, requisicaoId, pedidoId: null, segredo }), false);
+  assert.equal(validarAssinaturaWebhookPix({ assinatura: assinaturaValida, requisicaoId: null, pedidoId, segredo }), false);
+  assert.equal(validarAssinaturaWebhookPix({ assinatura: null, requisicaoId, pedidoId, segredo }), false);
+  assert.equal(validarAssinaturaWebhookPix({ assinatura: "ts=inválido,v1=abc", requisicaoId, pedidoId, segredo }), false);
+});
+
+test("webhook Orders de teste assinado persiste na inbox e repeticoes permanecem idempotentes", async () => {
+  const anterior = { ...process.env };
+  const segredo = "segredo-de-webhook-de-teste-local";
+  const inbox = new Map();
+  const chamadas = [];
+  process.env.PIX_WEBHOOK_ENABLED = "true";
+  process.env.PIX_TEST_ORDERS_ENABLED = "true";
+  process.env.PIX_PRODUCTION_ORDERS_ENABLED = "false";
+  process.env.MP_WEBHOOK_SECRET_TEST = segredo;
+  delete process.env.MP_WEBHOOK_SECRET_PRODUCTION;
+  const pool = {
+    async query(sql, parametros) {
+      chamadas.push({ sql, parametros });
+      const chave = `${parametros[0]}:${parametros[1]}`;
+      inbox.set(chave, { ambiente: parametros[0], pedidoId: parametros[1] });
+      return { rowCount: 1 };
+    }
+  };
+
+  try {
+    for (let i = 0; i < 2; i += 1) {
+      const req = requestWebhookOrder({
+        pedidoId: "ORDTST01M4KT8RWNNA1QFP0E6M37VVFQ",
+        segredo,
+        requisicaoId: `req-test-${i}`,
+        ts: String(1742505638683 + i)
+      });
+      const res = respostaJson();
+      await atenderWebhookPix(req, res, pool);
+      assert.equal(res.status, 200);
+      assert.deepEqual(res.corpo, { recebido: true });
+    }
+
+    assert.equal(chamadas.length, 2);
+    assert.equal(inbox.size, 1);
+    assert.equal(inbox.get("test:ORDTST01M4KT8RWNNA1QFP0E6M37VVFQ").ambiente, "test");
+    assert.match(chamadas[0].sql, /ON CONFLICT \(mp_environment, mp_order_id\)/i);
+  } finally {
+    for (const chave of Object.keys(process.env)) if (!(chave in anterior)) delete process.env[chave];
+    Object.assign(process.env, anterior);
+  }
+});
+
+test("webhook rejeita assinatura de segredo diferente e Order live no ambiente de teste", async () => {
+  const anterior = { ...process.env };
+  const segredoTeste = "segredo-de-webhook-de-teste-local";
+  let persistencias = 0;
+  process.env.PIX_WEBHOOK_ENABLED = "true";
+  process.env.PIX_TEST_ORDERS_ENABLED = "true";
+  process.env.PIX_PRODUCTION_ORDERS_ENABLED = "false";
+  process.env.MP_WEBHOOK_SECRET_TEST = segredoTeste;
+  delete process.env.MP_WEBHOOK_SECRET_PRODUCTION;
+  const pool = { async query() { persistencias += 1; return { rowCount: 1 }; } };
+
+  try {
+    const assinaturaErrada = requestWebhookOrder({
+      pedidoId: "ORDTST01M4KT8RWNNA1QFP0E6M37VVFQ", segredo: "outro-segredo",
+      ts: "1742505638683"
+    });
+    const respostaAssinatura = respostaJson();
+    const logAnterior = console.warn;
+    console.warn = () => {};
+    try { await atenderWebhookPix(assinaturaErrada, respostaAssinatura, pool); }
+    finally { console.warn = logAnterior; }
+    assert.equal(respostaAssinatura.status, 401);
+
+    const pedidoProducao = requestWebhookOrder({
+      pedidoId: "ORDTST01M4KT8RWNNA1QFP0E6M37VVFQ", segredo: segredoTeste,
+      ts: "1742505638684", liveMode: true
+    });
+    const respostaProducao = respostaJson();
+    await atenderWebhookPix(pedidoProducao, respostaProducao, pool);
+    assert.equal(respostaProducao.status, 400);
+    assert.equal(respostaProducao.corpo.erro, "Ambiente da notificacao divergente");
+    assert.equal(persistencias, 0);
+  } finally {
+    for (const chave of Object.keys(process.env)) if (!(chave in anterior)) delete process.env[chave];
+    Object.assign(process.env, anterior);
+  }
 });
 
 test("webhook fila preserva ambiente e agenda nova tentativa apos falha temporaria", async () => {
