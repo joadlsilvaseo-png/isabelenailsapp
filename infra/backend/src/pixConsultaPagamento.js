@@ -1,6 +1,7 @@
 import { verificarUsuario } from "./pushSubscriptions.js";
 import { consultarPedidoPixTeste } from "./pixMercadoPago.js";
 import { validarRetornoPagamentoPix } from "./pixValidacaoPagamento.js";
+import { registrarCreditoPix } from "./pixConciliacao.js";
 
 function responder(res, codigo, dados) {
   res.writeHead(codigo, {
@@ -66,6 +67,7 @@ export async function consultarStatusPagamentoPix(req, res, pool) {
 
     const consulta = await pool.query(`
       SELECT
+        c.id,
         c.mp_order_id,
         c.referencia_externa,
         c.valor_sinal_centavos,
@@ -101,6 +103,25 @@ export async function consultarStatusPagamentoPix(req, res, pool) {
       pedido,
       cobranca
     );
+
+    if (resultado.creditado) {
+      const conciliacao = await registrarCreditoPix({
+        pool,
+        cobrancaId: cobranca.id,
+        uid,
+        pedido
+      });
+
+      responder(res, 200, {
+        situacao: conciliacao.situacao,
+        pagamentoCreditado: true,
+        agendamentoConfirmado: conciliacao.agendamentoConfirmado,
+        mensagem: conciliacao.agendamentoConfirmado
+          ? "Agendamento confirmado."
+          : "Pagamento identificado. Agendamento aguardando confirmacao."
+      });
+      return;
+    }
 
     responder(res, 200, {
       situacao: resultado.situacao,
