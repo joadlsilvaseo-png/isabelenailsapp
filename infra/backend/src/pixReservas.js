@@ -9,7 +9,11 @@ import { getFirestore } from "firebase-admin/firestore";
 import { verificarUsuario } from "./pushSubscriptions.js";
 import { validarHorarioPix } from "./pixDisponibilidade.js";
 import { verificarConflitoFirestore } from "./pixAgendaFirestore.js";
-import { consultarPedidoPixTeste } from "./pixMercadoPago.js";
+import {
+  ambienteMercadoPagoAtual,
+  consultarPedidoPix,
+  mercadoPagoHabilitado
+} from "./pixMercadoPago.js";
 import { validarRetornoPagamentoPix } from "./pixValidacaoPagamento.js";
 import {
   encerrarCobrancaPixSemPagamento,
@@ -155,8 +159,6 @@ function calcularValores(preco, regra) {
 }
 
 async function reconciliarReservasVencidasDoDia(pool, data) {
-  if (process.env.PIX_TEST_ORDERS_ENABLED !== "true") return;
-
   const consulta = await pool.query(`
     SELECT
       c.id,
@@ -164,6 +166,7 @@ async function reconciliarReservasVencidasDoDia(pool, data) {
       c.mp_order_id,
       c.referencia_externa,
       c.valor_sinal_centavos,
+      c.mp_environment,
       r.id AS reserva_id
     FROM public.pix_reservas r
     JOIN public.pix_cobrancas c ON c.id = r.cobranca_id
@@ -178,7 +181,9 @@ async function reconciliarReservasVencidasDoDia(pool, data) {
 
   await Promise.allSettled(consulta.rows.map(async (cobranca) => {
     try {
-      const pedido = await consultarPedidoPixTeste(cobranca.mp_order_id);
+      const ambiente = cobranca.mp_environment || "test";
+      if (!mercadoPagoHabilitado(ambiente)) return;
+      const pedido = await consultarPedidoPix(cobranca.mp_order_id, ambiente);
       const validacao = validarRetornoPagamentoPix(pedido, cobranca);
 
       if (validacao.creditado) {
@@ -256,7 +261,11 @@ export async function criarReservaPix(req, res, pool) {
       throw new ErroReserva(400, "Servico invalido");
     }
 
-    // Recurso desativado durante o desenvolvimento.
+    const ambienteMP = ambienteMercadoPagoAtual();
+    if (!mercadoPagoHabilitado(ambienteMP)) {
+      throw new ErroReserva(409, `PIX desativado para ${ambienteMP}`);
+    }
+
     const habilitacao = await pool.query(
       "SELECT ativo FROM public.pix_configuracao WHERE id = 1"
     );
@@ -414,6 +423,7 @@ export async function criarReservaPix(req, res, pool) {
           percentual_sinal,
           valor_sinal_centavos,
           valor_restante_centavos,
+          mp_environment,
           estado,
           vence_em,
           tipo_sinal,
@@ -421,8 +431,8 @@ export async function criarReservaPix(req, res, pool) {
         )
         VALUES (
           $1, $2, $3::jsonb, $4, $5,
-          $6, $7, $8, $9,
-          'criada', $10, $11, $12
+          $6, $7, $8, $9, $10,
+          'criada', $11, $12, $13
         )
       `, [
         cobrancaId,
@@ -434,6 +444,7 @@ export async function criarReservaPix(req, res, pool) {
         percentual,
         valores.valorSinalCentavos,
         valores.valorRestanteCentavos,
+        ambienteMP,
         venceEm,
         regra.tipo_sinal_padrao,
         valorFixo
