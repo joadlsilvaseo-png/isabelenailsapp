@@ -9,6 +9,7 @@ import { atenderAcaoAgendamento } from "./agendamentosAcoes.js";
 import { criarReservaPix } from "./pixReservas.js";
 import { emitirPixDaReserva } from "./pixPedidos.js";
 import { consultarStatusPagamentoPix } from "./pixConsultaPagamento.js";
+import { atenderWebhookPix } from "./pixWebhook.js";
 import { cotarSinalPix } from "./pixCotacao.js";
 
 const { Pool } = pg;
@@ -81,6 +82,15 @@ const server = http.createServer(async (req, res) => {
   // PIX - Consulta autenticada do pagamento
   if (req.method === "POST" && req.url === "/pix/status") {
     await consultarStatusPagamentoPix(req, res, pool);
+    return;
+  }
+
+  // Mercado Pago - Webhook de Orders
+  if (
+    req.method === "POST" &&
+    new URL(req.url, "http://localhost").pathname === "/pix/webhook"
+  ) {
+    await atenderWebhookPix(req, res, pool);
     return;
   }
 
