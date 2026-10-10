@@ -6,7 +6,8 @@ import {
 import { validarRetornoPagamentoPix } from "./pixValidacaoPagamento.js";
 import {
   encerrarCobrancaPixSemPagamento,
-  registrarCreditoPix
+  registrarCreditoPix,
+  registrarEstornoPix
 } from "./pixConciliacao.js";
 import { efetivarAgendamentoPix } from "./pixEfetivacao.js";
 
@@ -30,6 +31,7 @@ export async function consultarStatusPagamentoPix(req, res, pool, dependencias =
   const registrarCredito = dependencias.registrarCredito || registrarCreditoPix;
   const efetivarAgendamento = dependencias.efetivarAgendamento || efetivarAgendamentoPix;
   const encerrarCobranca = dependencias.encerrarCobranca || encerrarCobrancaPixSemPagamento;
+  const registrarEstorno = dependencias.registrarEstorno || registrarEstornoPix;
   let uid;
 
   try {
@@ -164,7 +166,7 @@ export async function consultarStatusPagamentoPix(req, res, pool, dependencias =
       return;
     }
 
-    if (["expirada", "cancelada"].includes(resultado.situacao)) {
+    if (["expirada", "cancelada", "recusada"].includes(resultado.situacao)) {
       const encerramento = await encerrarCobranca({
         pool,
         cobrancaId: cobranca.id,
@@ -178,6 +180,20 @@ export async function consultarStatusPagamentoPix(req, res, pool, dependencias =
         mensagem: encerramento.situacao === "expirada"
           ? "O prazo deste PIX terminou. Faça uma nova reserva."
           : "Esta cobrança foi cancelada. Faça uma nova reserva."
+      });
+      return;
+    }
+
+    if (resultado.situacao === "estornada") {
+      const estorno = await registrarEstorno({
+        pool, cobrancaId: cobranca.id, pedido,
+        atualizarFirestore: dependencias.atualizarFirestore
+      });
+      responder(res, 200, {
+        situacao: estorno.situacao,
+        pagamentoCreditado: false,
+        agendamentoConfirmado: estorno.agendamentoConfirmado,
+        mensagem: "O Mercado Pago registrou o estorno integral desta cobrança."
       });
       return;
     }
