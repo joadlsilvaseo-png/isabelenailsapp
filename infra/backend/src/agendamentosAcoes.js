@@ -10,6 +10,7 @@ import {
 } from "firebase-admin/firestore";
 
 import { verificarUsuario } from "./pushSubscriptions.js";
+import { pagamentoPixConfirmadoManualmente } from "./pixRegrasConfirmacao.js";
 
 const ACOES = new Set([
   "cancelar_cliente",
@@ -158,7 +159,7 @@ export async function atenderAcaoAgendamento(req, res) {
           throw new ErroAcao(409, "Cancelamento nao permitido");
         }
 
-        if (agendamento.pixCobrancaId || agendamento.pixPagamentoId) {
+        if (pagamentoPixConfirmadoManualmente(agendamento)) {
           throw new ErroAcao(
             409,
             "Agendamento com PIX requer tratamento financeiro"
@@ -170,6 +171,9 @@ export async function atenderAcaoAgendamento(req, res) {
       }
 
       if (acao === "confirmar_admin") {
+        if (agendamento.pixCobrancaId || agendamento.pixPagamentoId) {
+          throw new ErroAcao(409, "Agendamento PIX confirmado automaticamente apos conciliacao financeira");
+        }
         if (!["agendado", "reagendado"].includes(statusAtual)) {
           throw new ErroAcao(409, "Agendamento nao pode ser confirmado");
         }
