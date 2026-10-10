@@ -73,14 +73,24 @@ async function lerCorpo(req) {
 }
 
 function validarValorFinal(valor) {
-  if (typeof valor !== "number" ||
-      !Number.isFinite(valor) ||
-      valor < 0 ||
-      Math.round(valor * 100) !== valor * 100) {
+  if (
+    typeof valor !== "number" ||
+    !Number.isFinite(valor) ||
+    valor <= 0
+  ) {
     throw new ErroAcao(400, "Valor final invalido");
   }
 
-  return valor;
+  const centavos = Math.round(valor * 100);
+
+  if (
+    !Number.isSafeInteger(centavos) ||
+    Math.abs(centavos / 100 - valor) > 1e-9
+  ) {
+    throw new ErroAcao(400, "Valor final invalido");
+  }
+
+  return centavos / 100;
 }
 
 export async function atenderAcaoAgendamento(req, res) {
@@ -169,7 +179,7 @@ export async function atenderAcaoAgendamento(req, res) {
       }
 
       if (acao === "concluir_admin") {
-        if (statusAtual !== "confirmado") {
+        if (!["confirmado", "reagendado"].includes(statusAtual)) {
           throw new ErroAcao(409, "Agendamento nao pode ser concluido");
         }
 
