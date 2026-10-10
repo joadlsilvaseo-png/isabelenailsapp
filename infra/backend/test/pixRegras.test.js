@@ -18,6 +18,8 @@ import {
 } from "../src/pixRegrasConfirmacao.js";
 import { consultarStatusPagamentoPix } from "../src/pixConsultaPagamento.js";
 import { validarRetornoPagamentoPix } from "../src/pixValidacaoPagamento.js";
+import { processarProximaSincronizacaoCalendar, montarPayloadCalendar } from "../src/pixCalendarWorker.js";
+import { ambienteMercadoPagoAtual, criarPedidoPix, mercadoPagoHabilitado, montarPedidoPix } from "../src/pixMercadoPago.js";
 
 const cobrancaBase = {
   id: "6d8f562d-5e85-4bc8-9705-932158e7c2a9",
@@ -70,10 +72,14 @@ function criarPoolEfetivacao({ falharUmaVezEmReserva = false, estado } = {}) {
   let fila = Promise.resolve();
   let falhar = falharUmaVezEmReserva;
   const eventos = new Set();
+  const calendarOutbox = new Map();
+  const ordemOperacoes = [];
 
   return {
     dados,
     eventos,
+    calendarOutbox,
+    ordemOperacoes,
     async connect() {
       let liberar;
       let snapshot;
@@ -84,7 +90,7 @@ function criarPoolEfetivacao({ falharUmaVezEmReserva = false, estado } = {}) {
             const anterior = fila;
             fila = new Promise((resolve) => { liberar = resolve; });
             await anterior;
-            snapshot = structuredClone(dados);
+            snapshot = { dados: structuredClone(dados), calendarOutbox: structuredClone([...calendarOutbox]) };
             return { rows: [] };
           }
           if (normalizado === "commit") {
@@ -93,8 +99,10 @@ function criarPoolEfetivacao({ falharUmaVezEmReserva = false, estado } = {}) {
           }
           if (normalizado === "rollback") {
             if (snapshot) {
-              dados.charge = snapshot.charge;
-              dados.reservation = snapshot.reservation;
+              dados.charge = snapshot.dados.charge;
+              dados.reservation = snapshot.dados.reservation;
+              calendarOutbox.clear();
+              for (const [key, value] of snapshot.calendarOutbox) calendarOutbox.set(key, value);
             }
             liberar?.();
             return { rows: [] };
@@ -121,6 +129,7 @@ function criarPoolEfetivacao({ falharUmaVezEmReserva = false, estado } = {}) {
             }
             dados.reservation.estado = "confirmada";
             dados.reservation.agendamento_id = parametros[1];
+            ordemOperacoes.push("postgres-reserva-confirmada");
             return { rowCount: 1, rows: [] };
           }
           if (normalizado.startsWith("update public.pix_cobrancas")) {
@@ -129,6 +138,14 @@ function criarPoolEfetivacao({ falharUmaVezEmReserva = false, estado } = {}) {
           }
           if (normalizado.startsWith("insert into public.pix_eventos")) {
             eventos.add(parametros[1]);
+            return { rowCount: 1, rows: [] };
+          }
+          if (normalizado.startsWith("insert into public.pix_calendar_outbox")) {
+            ordemOperacoes.push("calendar-enfileirado");
+            calendarOutbox.set(parametros[0], {
+              event_id: parametros[0], agendamento_id: parametros[1], nome_cliente: parametros[2],
+              servico: parametros[3], data_servico: parametros[4], horario: parametros[5], duracao_minutos: parametros[6]
+            });
             return { rowCount: 1, rows: [] };
           }
           throw new Error(`SQL de teste nao previsto: ${normalizado}`);
@@ -342,6 +359,107 @@ test("reserva vencida preserva pagamento para analise e bloqueia novo agendament
   );
   assert.equal(fs.criacoes, 0);
   assert.equal(pool.dados.reservation.estado, "expirada");
+});
+
+test("agenda Calendar entra na outbox só após confirmação e é idempotente", async () => {
+  const pool = criarPoolEfetivacao();
+  const fs = criarConfirmadorFirestore();
+  const dependencias = { obterNomeCliente: async () => "Cliente Teste", confirmarFirestore: fs.confirmar };
+  await efetivarAgendamentoPix({ pool, cobrancaId: cobrancaBase.id, uid: cobrancaBase.cliente_uid, dependencias });
+  await efetivarAgendamentoPix({ pool, cobrancaId: cobrancaBase.id, uid: cobrancaBase.cliente_uid, dependencias });
+  assert.equal(fs.criacoes, 1);
+  assert.equal(pool.calendarOutbox.size, 1);
+  const [evento] = pool.calendarOutbox.values();
+  assert.equal(evento.event_id, `evt_${gerarIdAgendamentoPix(cobrancaBase.id)}`);
+  assert.equal(evento.nome_cliente, "Cliente Teste");
+  assert.equal(evento.servico, "Manicure Simples");
+  assert.equal(evento.duracao_minutos, 60);
+  assert.ok(pool.ordemOperacoes.indexOf("postgres-reserva-confirmada") < pool.ordemOperacoes.indexOf("calendar-enfileirado"));
+});
+
+test("worker Calendar envia somente campos autorizados com eventId estável e marca sucesso", async () => {
+  const evento = { id: 9, event_id: "evt_pix_123", nome_cliente: "Cliente", servico: "Manicure", data_servico: "2099-01-01", horario: "10:00:00", duracao_minutos: 60, tentativas: 1 };
+  const atualizacoes = [];
+  const pool = {
+    async connect() {
+      return { async query(sql) {
+        const q = sql.replace(/\s+/g, " ").toLowerCase();
+        if (["begin", "commit", "rollback"].includes(q)) return { rows: [] };
+        if (q.includes("with proximo as")) return { rows: [evento] };
+        throw new Error(`SQL inesperado: ${q}`);
+      }, release() {} };
+    },
+    async query(sql, params) { atualizacoes.push({ sql, params }); return { rowCount: 1 }; }
+  };
+  let enviado;
+  const resultado = await processarProximaSincronizacaoCalendar(pool, async (row) => { enviado = montarPayloadCalendar(row); });
+  assert.deepEqual(resultado, { processado: true, enviado: true, eventId: evento.event_id });
+  assert.deepEqual(Object.keys(enviado).sort(), ["acao", "dataInicio", "duracaoMinutos", "eventId", "nomeCliente", "servico"].sort());
+  assert.deepEqual(enviado, { acao: "AGENDAR", nomeCliente: "Cliente", servico: "Manicure", dataInicio: "2099-01-01T10:00:00", duracaoMinutos: 60, eventId: evento.event_id });
+  assert.match(atualizacoes[0].sql, /status = 'enviado'/);
+});
+
+test("falha do Apps Script mantém agendamento e agenda retry durável sem request real", async () => {
+  const evento = { id: 10, event_id: "evt_pix_retry", nome_cliente: "Cliente", servico: "Manicure", data_servico: "2099-01-01", horario: "10:00:00", duracao_minutos: 60, tentativas: 1 };
+  const atualizacoes = [];
+  const pool = {
+    async connect() { return { async query(sql) { if (/begin|commit|rollback/i.test(sql.trim())) return { rows: [] }; return { rows: [evento] }; }, release() {} }; },
+    async query(sql, params) { atualizacoes.push({ sql, params }); return { rowCount: 1 }; }
+  };
+  let chamadas = 0;
+  const resultado = await processarProximaSincronizacaoCalendar(pool, async () => { chamadas += 1; throw new Error("mock offline"); });
+  assert.deepEqual(resultado, { processado: true, enviado: false, eventId: evento.event_id });
+  assert.equal(chamadas, 1);
+  assert.match(atualizacoes[0].sql, /status = 'pendente'/);
+  assert.equal(atualizacoes[0].params[1], 30);
+});
+
+test("ambientes Mercado Pago são separados e produção fica desativada por padrão", () => {
+  const envAnterior = { ...process.env };
+  try {
+    delete process.env.MP_ENVIRONMENT;
+    delete process.env.PIX_PRODUCTION_ORDERS_ENABLED;
+    process.env.PIX_TEST_ORDERS_ENABLED = "true";
+    assert.equal(ambienteMercadoPagoAtual(), "test");
+    assert.equal(mercadoPagoHabilitado("test"), true);
+    assert.equal(mercadoPagoHabilitado("production"), false);
+    const dados = { valorCentavos: 2000, referenciaExterna: "isabele_pix_123", chaveIdempotencia: "6d8f562d-5e85-4bc8-9705-932158e7c2a9", emailPagador: "cliente@example.com" };
+    assert.equal(montarPedidoPix({ ...dados, ambiente: "test" }).payer.first_name, "APRO");
+    assert.equal("first_name" in montarPedidoPix({ ...dados, ambiente: "production" }).payer, false);
+    process.env.MP_ENVIRONMENT = "production";
+    assert.equal(mercadoPagoHabilitado(), false);
+  } finally {
+    for (const chave of Object.keys(process.env)) if (!(chave in envAnterior)) delete process.env[chave];
+    Object.assign(process.env, envAnterior);
+  }
+});
+
+test("credenciais e payloads do Mercado Pago usam o ambiente persistido sem chamada real", async () => {
+  const anterior = { ...process.env };
+  const fetchAnterior = globalThis.fetch;
+  const chamadas = [];
+  try {
+    process.env.PIX_TEST_ORDERS_ENABLED = "true";
+    process.env.PIX_PRODUCTION_ORDERS_ENABLED = "true";
+    process.env.MP_ACCESS_TOKEN_TEST = "APP_USR-test-token";
+    process.env.MP_ACCESS_TOKEN_PRODUCTION = "APP_USR-production-token";
+    globalThis.fetch = async (url, options) => {
+      chamadas.push({ url, options });
+      return { ok: true, async json() { return { id: "order-1", external_reference: "isabele_pix_123", total_amount: "20.00", status: "action_required", transactions: { payments: [{ amount: "20.00", status: "pending", payment_method: { id: "pix" } }] } }; } };
+    };
+    const dados = { valorCentavos: 2000, referenciaExterna: "isabele_pix_123", chaveIdempotencia: "6d8f562d-5e85-4bc8-9705-932158e7c2a9", emailPagador: "cliente@example.com" };
+    await criarPedidoPix(dados, "test");
+    await criarPedidoPix(dados, "production");
+    assert.equal(chamadas.length, 2);
+    assert.equal(chamadas[0].options.headers.Authorization, "Bearer APP_USR-test-token");
+    assert.equal(chamadas[1].options.headers.Authorization, "Bearer APP_USR-production-token");
+    assert.equal(JSON.parse(chamadas[0].options.body).payer.first_name, "APRO");
+    assert.equal("first_name" in JSON.parse(chamadas[1].options.body).payer, false);
+  } finally {
+    globalThis.fetch = fetchAnterior;
+    for (const chave of Object.keys(process.env)) if (!(chave in anterior)) delete process.env[chave];
+    Object.assign(process.env, anterior);
+  }
 });
 
 test("confirmacao concorrente usa um documento Firestore deterministico", async () => {
