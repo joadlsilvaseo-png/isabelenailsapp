@@ -12,6 +12,8 @@ import { consultarStatusPagamentoPix } from "./pixConsultaPagamento.js";
 import { atenderWebhookPix } from "./pixWebhook.js";
 import { cotarSinalPix } from "./pixCotacao.js";
 import { iniciarWorkerPixCalendar } from "./pixCalendarWorker.js";
+import { atenderConfirmacaoAgendamentoPix } from "./pixAgendamentoConfirmacao.js";
+import { iniciarWorkerPixWebhook } from "./pixWebhookWorker.js";
 
 const { Pool } = pg;
 
@@ -86,6 +88,11 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (req.method === "POST" && req.url === "/pix/agendamento/confirmacao") {
+    await atenderConfirmacaoAgendamentoPix(req, res, pool);
+    return;
+  }
+
   // Mercado Pago - Webhook de Orders
   if (
     req.method === "POST" &&
@@ -133,6 +140,10 @@ server.listen(PORT, "0.0.0.0", () => {
   console.log(`API Isabele Nails iniciada na porta ${PORT}`);
 
   iniciarWorkerPush(pool);
+
+  if (process.env.PIX_WEBHOOK_ENABLED === "true" && process.env.PIX_WEBHOOK_WORKER_ENABLED === "true") {
+    iniciarWorkerPixWebhook(pool);
+  }
 
   if (process.env.PIX_CALENDAR_WORKER_ENABLED === "true") {
     iniciarWorkerPixCalendar(pool);
