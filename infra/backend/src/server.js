@@ -6,6 +6,7 @@ import { iniciarMonitorAgendamentos } from "./agendaMonitor.js";
 import { iniciarWorkerPush } from "./pushWorker.js";
 import { atenderCentralNotificacoes } from "./centralNotificacoes.js";
 import { atenderAcaoAgendamento } from "./agendamentosAcoes.js";
+import { criarReservaPix } from "./pixReservas.js";
 import { cotarSinalPix } from "./pixCotacao.js";
 
 const { Pool } = pg;
@@ -60,6 +61,12 @@ const server = http.createServer(async (req, res) => {
   // Acoes protegidas de agendamentos
   if (req.method === "POST" && req.url === "/agendamentos/acao") {
     await atenderAcaoAgendamento(req, res);
+    return;
+  }
+
+  // PIX - Reserva temporaria autenticada
+  if (req.method === "POST" && req.url === "/pix/reservar") {
+    await criarReservaPix(req, res, pool);
     return;
   }
 
