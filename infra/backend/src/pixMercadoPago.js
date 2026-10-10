@@ -57,7 +57,10 @@ export function montarPedidoPix({
     external_reference: referenciaExterna,
     total_amount: valor,
     payer: {
-      email: emailPagador
+      email: emailPagador,
+      ...(process.env.PIX_TEST_ORDERS_ENABLED === "true"
+        ? { first_name: "APRO" }
+        : {})
     },
     transactions: {
       payments: [
