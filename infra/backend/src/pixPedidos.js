@@ -8,8 +8,9 @@ import { getAuth } from "firebase-admin/auth";
 import { verificarUsuario } from "./pushSubscriptions.js";
 
 import {
-  criarPedidoPixTeste,
-  consultarPedidoPixTeste
+  criarPedidoPix,
+  consultarPedidoPix,
+  mercadoPagoHabilitado
 } from "./pixMercadoPago.js";
 
 function responder(res, codigo, dados) {
@@ -115,11 +116,6 @@ export async function emitirPixDaReserva(req, res, pool) {
   }
 
   try {
-    // Dupla protecao durante o desenvolvimento.
-    if (process.env.PIX_TEST_ORDERS_ENABLED !== "true") {
-      throw erroHttp(409, "Emissao PIX ainda desativada");
-    }
-
     const { reservaId } = await lerJson(req);
 
     if (
@@ -160,6 +156,11 @@ export async function emitirPixDaReserva(req, res, pool) {
 
       if (!cobranca) {
         throw erroHttp(404, "Reserva nao encontrada");
+      }
+
+      cobranca.mp_environment ||= "test";
+      if (!mercadoPagoHabilitado(cobranca.mp_environment)) {
+        throw erroHttp(409, `Operacoes PIX desativadas para ${cobranca.mp_environment}`);
       }
 
       if (!cobranca.pix_ativo) {
@@ -271,14 +272,14 @@ export async function emitirPixDaReserva(req, res, pool) {
     // A chave de idempotencia vem do PostgreSQL.
     // O navegador nunca escolhe valor, referencia ou email.
     const pedido = emitir
-      ? await criarPedidoPixTeste({
+      ? await criarPedidoPix({
           valorCentavos: Number(cobranca.valor_sinal_centavos),
           referenciaExterna: cobranca.referencia_externa,
           chaveIdempotencia: cobranca.chave_idempotencia,
           emailPagador: cobranca.reserva_dados.emailPagador,
           prazoMinutos: 30
-        })
-      : await consultarPedidoPixTeste(cobranca.mp_order_id);
+        }, cobranca.mp_environment)
+      : await consultarPedidoPix(cobranca.mp_order_id, cobranca.mp_environment);
 
     conferirPedido(pedido, cobranca);
 
