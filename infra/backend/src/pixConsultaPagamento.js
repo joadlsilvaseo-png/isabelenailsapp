@@ -1,7 +1,9 @@
-import { verificarUsuario } from "./pushSubscriptions.js";
 import { consultarPedidoPixTeste } from "./pixMercadoPago.js";
 import { validarRetornoPagamentoPix } from "./pixValidacaoPagamento.js";
-import { registrarCreditoPix } from "./pixConciliacao.js";
+import {
+  encerrarCobrancaPixSemPagamento,
+  registrarCreditoPix
+} from "./pixConciliacao.js";
 import { efetivarAgendamentoPix } from "./pixEfetivacao.js";
 
 function responder(res, codigo, dados) {
@@ -14,11 +16,20 @@ function responder(res, codigo, dados) {
   res.end(JSON.stringify(dados));
 }
 
-export async function consultarStatusPagamentoPix(req, res, pool) {
+export async function consultarStatusPagamentoPix(req, res, pool, dependencias = {}) {
+  const autenticar = dependencias.verificarUsuario || (async (requisicao) => {
+    const modulo = await import("./pushSubscriptions.js");
+    return modulo.verificarUsuario(requisicao);
+  });
+  const consultarPedido = dependencias.consultarPedido || consultarPedidoPixTeste;
+  const validarPagamento = dependencias.validarPagamento || validarRetornoPagamentoPix;
+  const registrarCredito = dependencias.registrarCredito || registrarCreditoPix;
+  const efetivarAgendamento = dependencias.efetivarAgendamento || efetivarAgendamentoPix;
+  const encerrarCobranca = dependencias.encerrarCobranca || encerrarCobrancaPixSemPagamento;
   let uid;
 
   try {
-    uid = await verificarUsuario(req);
+    uid = await autenticar(req);
   } catch {
     responder(res, 401, { erro: "Nao autenticado" });
     return;
@@ -96,17 +107,17 @@ export async function consultarStatusPagamentoPix(req, res, pool) {
       return;
     }
 
-    const pedido = await consultarPedidoPixTeste(
+    const pedido = await consultarPedido(
       cobranca.mp_order_id
     );
 
-    const resultado = validarRetornoPagamentoPix(
+    const resultado = validarPagamento(
       pedido,
       cobranca
     );
 
     if (resultado.creditado) {
-      const conciliacao = await registrarCreditoPix({
+      const conciliacao = await registrarCredito({
         pool,
         cobrancaId: cobranca.id,
         uid,
@@ -120,7 +131,7 @@ export async function consultarStatusPagamentoPix(req, res, pool) {
           .includes(conciliacao.situacao)
       ) {
         try {
-          finalizacao = await efetivarAgendamentoPix({
+          finalizacao = await efetivarAgendamento({
             pool,
             cobrancaId: cobranca.id,
             uid
@@ -141,9 +152,28 @@ export async function consultarStatusPagamentoPix(req, res, pool) {
         situacao: finalizacao.situacao,
         pagamentoCreditado: true,
         agendamentoConfirmado: finalizacao.agendamentoConfirmado,
+        agendamentoId: finalizacao.agendamentoId || null,
         mensagem: finalizacao.agendamentoConfirmado
           ? "Agendamento confirmado."
           : "Pagamento identificado. Confirmacao do horario pendente."
+      });
+      return;
+    }
+
+    if (["expirada", "cancelada"].includes(resultado.situacao)) {
+      const encerramento = await encerrarCobranca({
+        pool,
+        cobrancaId: cobranca.id,
+        uid,
+        situacao: resultado.situacao
+      });
+      responder(res, 200, {
+        situacao: encerramento.situacao,
+        pagamentoCreditado: false,
+        agendamentoConfirmado: false,
+        mensagem: encerramento.situacao === "expirada"
+          ? "O prazo deste PIX terminou. Faça uma nova reserva."
+          : "Esta cobrança foi cancelada. Faça uma nova reserva."
       });
       return;
     }
