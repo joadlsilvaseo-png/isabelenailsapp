@@ -56,7 +56,9 @@ export function validarAssinaturaWebhookPix({
   }
 
   const manifesto =
-    `id:${pedidoId.toLowerCase()};` +
+    // O SDK oficial atual usa o data.id recebido, preservando a caixa.
+    // A API Orders gera IDs em maiusculas; normalizar aqui muda o HMAC.
+    `id:${pedidoId};` +
     `request-id:${requisicaoId};` +
     `ts:${ts};`;
 
@@ -67,6 +69,25 @@ export function validarAssinaturaWebhookPix({
   const recebido = Buffer.from(v1, "hex");
 
   return timingSafeEqual(esperado, recebido);
+}
+
+function diagnosticoRejeicaoAssinatura({ assinatura, requisicaoId, pedidoId, correspondencias }) {
+  let motivo = "assinatura_ou_manifesto_nao_corresponde";
+
+  if (!assinatura) motivo = "cabecalho_x_signature_ausente";
+  else if (!requisicaoId) motivo = "cabecalho_x_request_id_ausente";
+  else if (!pedidoId) motivo = "parametro_data_id_ausente";
+  else if (correspondencias > 1) motivo = "mais_de_um_ambiente_validou";
+
+  return {
+    motivo,
+    xSignaturePresente: Boolean(assinatura),
+    xRequestIdPresente: Boolean(requisicaoId),
+    xRequestIdFormatoValido: typeof requisicaoId === "string" && /^[A-Za-z0-9._-]{1,128}$/.test(requisicaoId),
+    dataIdPresente: Boolean(pedidoId),
+    dataIdFormatoValido: typeof pedidoId === "string" && /^[A-Za-z0-9_-]{3,128}$/.test(pedidoId),
+    ambientesCorrespondentes: correspondencias
+  };
 }
 
 export async function atenderWebhookPix(req, res, pool) {
@@ -103,6 +124,15 @@ export async function atenderWebhookPix(req, res, pool) {
     }));
 
   if (correspondencias.length !== 1) {
+    console.warn(
+      "[PIX Webhook] Notificacao rejeitada:",
+      JSON.stringify(diagnosticoRejeicaoAssinatura({
+        assinatura: req.headers["x-signature"],
+        requisicaoId: req.headers["x-request-id"],
+        pedidoId,
+        correspondencias: correspondencias.length
+      }))
+    );
     responder(res, 401, {
       erro: "Assinatura invalida"
     });
