@@ -33,6 +33,10 @@ services:
       PGDATABASE: isabele_nails
       PGUSER: isabele_admin
       PGPASSWORD: ${POSTGRES_PASSWORD:?Senha obrigatoria}
+      MP_ENVIRONMENT: ${MP_ENVIRONMENT:-test}
+      PIX_TEST_ORDERS_ENABLED: ${PIX_TEST_ORDERS_ENABLED:-false}
+      PIX_PRODUCTION_ORDERS_ENABLED: ${PIX_PRODUCTION_ORDERS_ENABLED:-false}
+      PIX_CALENDAR_WORKER_ENABLED: ${PIX_CALENDAR_WORKER_ENABLED:-true}
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:?Chave publica obrigatoria}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:?Chave privada obrigatoria}
 
