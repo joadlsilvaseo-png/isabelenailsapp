@@ -51,6 +51,14 @@ export function validarRetornoPagamentoPix(pedido, cobranca) {
   if (creditado) {
     situacao = "creditado_aguardando_confirmacao";
   } else if (
+    ["expired", "cancelled"].includes(pedido.statusPedido) ||
+    ["expired", "cancelled"].includes(pedido.statusPagamento)
+  ) {
+    situacao = pedido.statusPedido === "expired" ||
+      pedido.statusPagamento === "expired"
+      ? "expirada"
+      : "cancelada";
+  } else if (
     ["created", "processing", "action_required"].includes(
       pedido.statusPedido
     )
