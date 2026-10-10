@@ -1,81 +1,92 @@
-# Atualizacao incremental da VPS (PIX)
+# Atualização controlada da VPS (PIX)
 
-Este procedimento atualiza somente o servico `api` para o commit atual de `codex/correcao-pix-20261010`. O script deve ser transferido e executado manualmente por quem administra a VPS. Ele nao faz deploy ao ser adicionado ao repositorio.
+Este roteiro é para uma execução única, iniciada manualmente pelo responsável. O script não foi executado nesta revisão. A VPS não é acessada, a migração 010 não é aplicada e nenhuma cobrança é criada.
 
-## Antes de iniciar
+## O que o script verifica e preserva
 
-- Confirme acesso SSH e espaco livre para um dump PostgreSQL, um release Git isolado e a imagem Docker nova.
-- Confirme que `/opt/isabele` aponta para o checkout do projeto e que o `origin` e `joadlsilvaseo-png/isabelenailsapp`.
-- O script exige Docker Compose v2, Git, `flock`, `curl`, Python 3 e `pg_dump` instalado dentro do container PostgreSQL.
-- Identifique o arquivo Compose e o `.env` realmente usados em producao. O padrão e `/opt/isabele/infra/compose.yaml`; se forem diferentes, passe `COMPOSE_FILE` e `ENV_FILE` explicitamente.
-- As variaveis de teste devem estar no ambiente efetivo do Compose. O script nunca imprime os valores. Produção será fixada como desativada (`MP_ENVIRONMENT=test` e `PIX_PRODUCTION_ORDERS_ENABLED=false`).
-- Se o token de teste estiver presente, o PIX de teste fica habilitado no novo backend. Webhook e worker de teste so ficam habilitados quando token e segredo de webhook de teste estiverem presentes. O backend ainda precisa estar acessivel pelo callback configurado no Mercado Pago.
+A instalação informada usa `/opt/isabele-nails/infra/compose.yaml`, o override local `/opt/isabele-nails/infra/compose.override.yaml` e o arquivo adicional `/root/isabele-codex-pix-teste-20261010-125718.compose.yaml`. O script identifica a configuração ativa pelas labels do container `api` e exige que cada arquivo conhecido existente conste nessa configuração. Ele também guarda todos os arquivos Compose ativos, a configuração renderizada, os ambientes dos containers, os mounts, o ID da imagem antiga, o estado/diff/untracked do checkout e um dump do PostgreSQL.
 
-## Transferir e iniciar em segundo plano
+A configuração efetiva renderizada pode conter senhas, tokens, chaves VAPID e referências Firebase. Os arquivos de backup ficam sob diretório `root` com permissões restritas. O script não escreve o conteúdo dos segredos no log. Antes de qualquer parada, compara as variáveis do Compose renderizado com o ambiente do container ativo e compara os mounts do Compose com os mounts reais (incluindo o arquivo Firebase). Se não conseguir reconstruir a mesma configuração, se faltar uma variável crítica, se algum volume divergir, se o PIX não estiver em `test` ou se a flag de produção não estiver explicitamente desligada, aborta sem parar serviços nem aplicar a migração.
 
-No computador que tem o clone da branch, transfira apenas o script versionado. Troque `usuario@host-vps` pelo destino SSH correto:
+O override de atualização muda apenas o contexto de build do serviço `api`; mantém as variáveis e configurações renderizadas, incluindo PostgreSQL, Firebase, Push, Mercado Pago, volumes, portas, redes e políticas do Compose. O serviço PostgreSQL não é recriado. A cópia de trabalho em `/opt/isabele-nails` não recebe checkout, reset, stash ou limpeza. A imagem anterior e o snapshot efetivo são usados pelo rollback. A migração 010 e os dados ficam preservados no rollback; o dump não é restaurado automaticamente.
 
-```bash
-scp infra/scripts/atualizar-vps-pix.sh usuario@host-vps:/tmp/atualizar-vps-pix.sh
+## Requisitos antes de executar
+
+- O checkout em `/opt/isabele-nails` deve apontar para `joadlsilvaseo-png/isabelenailsapp` e conseguir fazer `git fetch` da branch privada.
+- Docker Compose v2, Git, `flock`, `curl`, Python 3, `realpath`, `tar` e `pg_dump` dentro do container PostgreSQL.
+- O serviço ativo precisa ter as labels padrão do Docker Compose com projeto, diretório de trabalho e lista dos arquivos `-f`.
+- Espaço livre para dump, snapshot de configuração, worktree e imagem nova.
+- O SSH deve usar a chave já configurada no `~/.ssh/config`, no `ssh-agent` ou no caminho padrão do OpenSSH. Nenhuma chave é copiada para o servidor por este roteiro.
+
+## Transferir e iniciar pelo Windows PowerShell
+
+Abra o PowerShell na raiz do clone local da branch. Informe o IP ou alias SSH já configurado em `$VpsHost`. O OpenSSH reutiliza a chave indicada no seu `config`/agent/default; não é necessário abrir ou editar arquivos na VPS.
+
+```powershell
+$VpsHost = "root@IP_OU_ALIAS_SSH"
+$Script = (Resolve-Path ".\infra\scripts\atualizar-vps-pix.sh").Path
+scp $Script "${VpsHost}:/tmp/atualizar-vps-pix.sh"
+ssh $VpsHost "sudo install -o root -g root -m 0750 /tmp/atualizar-vps-pix.sh /usr/local/sbin/atualizar-vps-pix && sudo env APP_DIR=/opt/isabele-nails bash /usr/local/sbin/atualizar-vps-pix start"
 ```
 
-Na VPS, instale o arquivo e inicie o modo em segundo plano. Execute como `root` ou com `sudo`; ajuste caminhos somente se a instalacao usar outros locais:
+O segundo comando somente inicia o processo; ele informa PID e log persistente. Por padrão, logs ficam em `/var/log/isabele-nails-deploy/`. Consulte os mais recentes:
 
-```bash
-sudo install -o root -g root -m 0750 /tmp/atualizar-vps-pix.sh /usr/local/sbin/atualizar-vps-pix
-sudo env APP_DIR=/opt/isabele bash /usr/local/sbin/atualizar-vps-pix start
+```powershell
+ssh $VpsHost "sudo ls -lt /var/log/isabele-nails-deploy"
 ```
 
-O comando informa o PID e o caminho do log persistente, por padrão em `/var/log/isabele-deploy/pix-update-<UTC>.log`. Acompanhe esse caminho com `sudo tail -f <caminho-do-log>`. Para uma instalação fora dos padrões:
+Acompanhe o arquivo cujo nome foi informado pelo script:
 
-```bash
-sudo env APP_DIR=/opt/isabele COMPOSE_FILE=/caminho/compose.yaml ENV_FILE=/caminho/.env bash /usr/local/sbin/atualizar-vps-pix start
+```powershell
+ssh $VpsHost "sudo tail -f /var/log/isabele-nails-deploy/NOME_DO_LOG.log"
 ```
 
-O script busca a branch no GitHub, cria um worktree de release separado e não faz checkout, reset, stash ou limpeza no diretório atual. Antes de parar a API, salva `git status`, diff, arquivos não rastreados, cópia do Compose, ID da imagem anterior e dump PostgreSQL em `/opt/isabele-backups`. Arquivos ignorados e alterações locais permanecem no checkout original, que não é sobrescrito.
+Use a versão do script atualizada junto ao PR. O script busca o commit mais recente de `codex/correcao-pix-20261010`, cria um worktree separado em `/opt/isabele-nails-releases/` e preserva o checkout existente.
 
-## O que a atualização executa
+## Etapas executadas pelo script
 
-1. Confere o repositório remoto e resolve o commit mais recente da branch.
-2. Gera o backup PostgreSQL em formato customizado antes de parar a API ou alterar o schema.
-3. Constrói a nova imagem usando o código do release isolado.
-4. Para somente o serviço `api`, aplica `infra/migrations/010_pix_webhook_ambientes.sql` com `ON_ERROR_STOP` e inicia o novo backend.
-5. Fixa o modo Mercado Pago como teste e desativa a criação de pedidos de produção.
-6. Aguarda até 60 segundos pelo endpoint `/health` (status da API e conexão PostgreSQL) e registra a contagem por ambiente da fila de webhooks.
+1. Descobre a instância `api` ativa e os arquivos Compose que a criaram, incluindo os overrides local e adicional. Confere credenciais, flags, volumes, Firebase e demais variáveis efetivas contra o container.
+2. Salva a configuração renderizada e os arquivos-fonte Compose com acesso restrito; registra alterações locais e imagem anterior.
+3. Gera dump PostgreSQL antes de parar qualquer serviço.
+4. Constrói o backend do commit mais recente em worktree isolado.
+5. Para somente `api`, aplica `infra/migrations/010_pix_webhook_ambientes.sql` com `ON_ERROR_STOP` e atualiza somente `api` usando o snapshot efetivo do Compose.
+6. Verifica `/health` e a conexão PostgreSQL. Registra a contagem da fila por ambiente.
 
-O script não cria pedidos, não realiza pagamentos, não chama Google Apps Script, não executa migrações anteriores e não reinicia o PostgreSQL. Se falhar depois de parar a API, tenta restaurar o container/imagem anterior, mantém a migração já aplicada e os dados, e registra o diretório do backup. A recuperação automática não restaura um dump sobre o banco.
+A produção não é alterada para um valor presumido: se o backend ativo não estiver em `MP_ENVIRONMENT=test` e com `PIX_PRODUCTION_ORDERS_ENABLED=false` explícito, o script aborta antes de qualquer parada. As credenciais de teste/produção e os flags atuais são copiados exatamente do ambiente efetivo; nenhuma credencial é impressa ou enviada para serviços externos.
 
-## Validação manual sem pagamentos reais
+## Validação integrada, sem pagamentos reais
 
-Depois de confirmar healthcheck e logs, valide usando somente credenciais e usuários de teste do Mercado Pago:
+Depois do healthcheck, use apenas contas e credenciais de teste do Mercado Pago:
 
-1. `docker compose ... ps` mostra `postgres` saudável e `api` em execução; `/health` retorna status online e PostgreSQL conectado.
-2. Revise os logs do serviço `api` para erros de webhook/worker, sem copiar tokens para o relatório.
-3. Com o fluxo sandbox e uma conta de teste, crie um pedido de teste e use o mecanismo de aprovação de teste do Mercado Pago. Não use credenciais de produção nem um pagador real.
-4. Confirme no banco e na interface de teste: pedido aprovado uma única vez, horário reservado, confirmação automática e registro na dashboard.
-5. Confirme notificações para cliente e profissional através dos canais de teste disponíveis.
-6. Para webhook/worker, valide recebimento, processamento e ausência de duplicação repetindo consulta/notificação de teste. Se as credenciais não existirem, registre esses itens como pendentes; não habilite credenciais reais para completar a validação.
-7. Confirme que a configuração efetiva continua `MP_ENVIRONMENT=test` e `PIX_PRODUCTION_ORDERS_ENABLED=false`.
+1. Confirme `api` saudável, `postgres` saudável e `/health` com PostgreSQL conectado.
+2. Revise logs da API para erros do webhook/worker sem copiar segredos para mensagens.
+3. No sandbox, crie uma Order de teste e use o mecanismo de aprovação de teste do Mercado Pago. Não use pagador nem credenciais de produção.
+4. Confirme aprovação única, reserva, confirmação automática e dashboard.
+5. Confirme notificações para cliente e profissional pelos canais de teste disponíveis.
+6. Confirme webhook/worker, retry e ausência de duplicações com eventos repetidos de teste. Se as credenciais de teste necessárias não estiverem presentes ou a URL pública não estiver pronta, registre validação pendente; não substitua a configuração por defaults.
+7. Confirme que a configuração ativa continua em `test` e que produção segue desligada.
 
-Como o PR permanece aberto, valide a interface com um preview já disponível e apontado para o backend de teste. Esta atualização de VPS não publica o frontend.
+O script não cria Orders, não realiza pagamentos, não chama Google Apps Script e não publica o frontend. Com o PR aberto, valide a interface pelo preview já disponível e apontado para backend de teste.
 
 ## Rollback
 
-Localize no log o caminho exato indicado em `Backup/rollback`. Execute na VPS:
+Use o caminho `Backup e configuração efetiva anterior` registrado no log. O rollback pode ser solicitado mesmo que a API esteja indisponível, pois usa os arquivos no backup:
 
-```bash
-sudo env APP_DIR=/opt/isabele bash /usr/local/sbin/atualizar-vps-pix rollback /opt/isabele-backups/pix-update-<timestamp>-<commit>
+```powershell
+$VpsHost = "root@IP_OU_ALIAS_SSH"
+$Backup = "/opt/isabele-nails-backups/pix-update-DIRETORIO_INFORMADO_NO_LOG"
+ssh $VpsHost "sudo env APP_DIR=/opt/isabele-nails bash /usr/local/sbin/atualizar-vps-pix rollback $Backup"
 ```
 
-O rollback recria somente o serviço `api` usando o ID da imagem anterior salvo no backup; mantém dados e migração 010 e desliga webhook/worker. Depois, valide `/health` e os logs. O rollback não reverte o schema: restaurar o dump é uma operação separada, que exige avaliação e janela de manutenção para evitar perda de dados posteriores ao backup.
+O comando sobe somente o serviço da API com a imagem anterior e a configuração efetiva salva, incluindo ambientes, credenciais, mounts Firebase, Push, Mercado Pago e demais opções do Compose. Depois confira healthcheck e logs. A migração 010 e o banco permanecem como estão. Restaurar o dump é uma operação separada, que exige análise e janela de manutenção para evitar apagar dados criados após o backup.
 
-## Ativar PIX real futuramente
+## PIX real em uma etapa futura
 
-Produção continua desligada neste procedimento. Antes de habilitá-la em uma mudança separada, preparar e validar:
+Este procedimento não ativa produção. Antes de qualquer ativação separada:
 
-- Conta Mercado Pago aprovada para produção e credenciais de produção emitidas para o aplicativo correto.
-- Chave PIX cadastrada e apta a receber na conta beneficiária correta.
-- `MP_ACCESS_TOKEN_PRODUCTION` e segredo de assinatura do webhook de produção guardados no gerenciador de segredos da VPS, sem colocá-los no Git, script, log ou frontend.
-- URL HTTPS pública de webhook configurada no painel Mercado Pago para os eventos de Orders usados pelo backend; validar assinatura e conectividade em ambiente controlado.
-- Migração 010 aplicada e schema verificado; `MP_ENVIRONMENT=production` e `PIX_PRODUCTION_ORDERS_ENABLED=true` somente em uma implantação explicitamente aprovada.
-- Primeira cobrança real, valor de limite, janela de observação, conciliação e rollback aprovados antes da ativação. Este checklist não ativa nada.
+- Conta Mercado Pago habilitada para produção e credenciais emitidas para o aplicativo correto.
+- Chave PIX cadastrada na conta beneficiária correta.
+- `MP_ACCESS_TOKEN_PRODUCTION` e `MP_WEBHOOK_SECRET_PRODUCTION` guardados no gerenciador de segredos da VPS, fora do Git, dos logs e do frontend.
+- URL HTTPS pública configurada no Mercado Pago para os eventos Orders usados pelo backend; assinatura, conectividade e tratamento de repetição validados.
+- Migração 010 aplicada/revisada; `MP_ENVIRONMENT=production` e `PIX_PRODUCTION_ORDERS_ENABLED=true` somente em implantação futura explicitamente autorizada.
+- Limite da primeira cobrança, conciliação, janela de observação e rollback aprovados antes da ativação.
