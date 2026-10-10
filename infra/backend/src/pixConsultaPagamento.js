@@ -2,6 +2,7 @@ import { verificarUsuario } from "./pushSubscriptions.js";
 import { consultarPedidoPixTeste } from "./pixMercadoPago.js";
 import { validarRetornoPagamentoPix } from "./pixValidacaoPagamento.js";
 import { registrarCreditoPix } from "./pixConciliacao.js";
+import { efetivarAgendamentoPix } from "./pixEfetivacao.js";
 
 function responder(res, codigo, dados) {
   res.writeHead(codigo, {
@@ -112,13 +113,37 @@ export async function consultarStatusPagamentoPix(req, res, pool) {
         pedido
       });
 
+      let finalizacao = conciliacao;
+
+      if (
+        ["pago_aguardando_agendamento", "agendamento_confirmado"]
+          .includes(conciliacao.situacao)
+      ) {
+        try {
+          finalizacao = await efetivarAgendamentoPix({
+            pool,
+            cobrancaId: cobranca.id,
+            uid
+          });
+        } catch (erro) {
+          console.error("[PIX Efetivacao]", erro.message);
+
+          finalizacao = {
+            situacao: erro?.requerAnalise
+              ? "pago_requer_analise"
+              : "pago_aguardando_agendamento",
+            agendamentoConfirmado: false
+          };
+        }
+      }
+
       responder(res, 200, {
-        situacao: conciliacao.situacao,
+        situacao: finalizacao.situacao,
         pagamentoCreditado: true,
-        agendamentoConfirmado: conciliacao.agendamentoConfirmado,
-        mensagem: conciliacao.agendamentoConfirmado
+        agendamentoConfirmado: finalizacao.agendamentoConfirmado,
+        mensagem: finalizacao.agendamentoConfirmado
           ? "Agendamento confirmado."
-          : "Pagamento identificado. Agendamento aguardando confirmacao."
+          : "Pagamento identificado. Confirmacao do horario pendente."
       });
       return;
     }
