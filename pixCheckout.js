@@ -18,6 +18,33 @@ let executando = false;
 let conferindo = false;
 let polling = null;
 let concluido = false;
+const STORAGE_RESERVA_PIX = "isabelePixReserva";
+
+function salvarReservaPix() {
+  if (!reservaAtual) return;
+  try {
+    sessionStorage.setItem(STORAGE_RESERVA_PIX, JSON.stringify(reservaAtual));
+  } catch (erro) {
+    console.warn("[PIX] Não foi possível guardar a reserva nesta sessão:", erro.message);
+  }
+}
+
+function restaurarReservaPix() {
+  if (reservaAtual) return;
+  try {
+    const salva = JSON.parse(sessionStorage.getItem(STORAGE_RESERVA_PIX) || "null");
+    if (
+      salva &&
+      typeof salva.reservaId === "string" &&
+      typeof salva.clienteUid === "string" &&
+      salva.clienteUid === auth.currentUser?.uid
+    ) {
+      reservaAtual = salva;
+    }
+  } catch {
+    sessionStorage.removeItem(STORAGE_RESERVA_PIX);
+  }
+}
 
 function moeda(centavos) {
   return new Intl.NumberFormat("pt-BR", {
@@ -140,6 +167,7 @@ function mostrarPedido(pedido) {
   modal.querySelector("#im-pix-codigo").value = codigoPix;
   btnCopiar.disabled = !codigoPix;
   btnCopiar.textContent = "Copiar código PIX";
+  btnRepetir.textContent = "Tentar novamente";
   caixaPix.hidden = false;
   mensagem("PIX gerado! Aguardando confirmação do pagamento de teste...");
 }
@@ -175,6 +203,7 @@ function concluirAgendamento() {
   localStorage.setItem("nomeCliente", reservaAtual.nome);
   localStorage.setItem("nomeUsuario", reservaAtual.nome);
   localStorage.setItem("servicoAgendamento", reservaAtual.nomeServico);
+  sessionStorage.removeItem(STORAGE_RESERVA_PIX);
   setTimeout(() => { window.location.assign("confirmacao.html"); }, 1400);
 }
 
@@ -187,8 +216,18 @@ async function conferirPagamento() {
       concluirAgendamento();
     } else if (retorno.pagamentoCreditado === true) {
       mensagem("PIX creditado! Finalizando a confirmação do horário...");
+    } else if (["revisao_financeira", "pago_requer_analise"].includes(retorno.situacao)) {
+      pararConsulta();
+      btnRepetir.textContent = "Consultar novamente";
+      btnRepetir.hidden = false;
+      mensagem("Não foi possível concluir a confirmação automaticamente. Não faça outro pagamento; consulte novamente ou fale com o salão.", true);
     } else if (["expirada", "cancelada", "estornada", "falha"].includes(retorno.situacao)) {
       pararConsulta();
+      reservaAtual = null;
+      codigoPix = "";
+      sessionStorage.removeItem(STORAGE_RESERVA_PIX);
+      btnRepetir.textContent = "Tentar nova reserva";
+      btnRepetir.hidden = false;
       mensagem("Esta cobrança não está mais disponível. Inicie uma nova reserva.", true);
     } else {
       mensagem("Aguardando o pagamento de teste...");
@@ -207,6 +246,7 @@ async function iniciarCheckout() {
   if (executando) return;
   if (!modal.open) modal.showModal();
   if (concluido) return;
+  restaurarReservaPix();
   if (reservaAtual && codigoPix) {
     mensagem("Aguardando confirmação do pagamento de teste...");
     if (!polling) {
@@ -224,10 +264,13 @@ async function iniciarCheckout() {
       const dados = selecionarDados();
       const criada = await postApi("/pix/reservar", {
         servicoId: dados.servicoId,
+        nomeCliente: dados.nome,
         data: dados.data,
         horario: dados.horario,
       });
       reservaAtual = { ...dados, ...criada };
+      reservaAtual.clienteUid = auth.currentUser.uid;
+      salvarReservaPix();
     }
     await emitirAteObterPedido();
     pararConsulta();
