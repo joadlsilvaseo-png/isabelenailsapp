@@ -5,6 +5,7 @@ import { enviarTestePush } from "./pushSender.js";
 import { iniciarMonitorAgendamentos } from "./agendaMonitor.js";
 import { iniciarWorkerPush } from "./pushWorker.js";
 import { atenderCentralNotificacoes } from "./centralNotificacoes.js";
+import { atenderAcaoAgendamento } from "./agendamentosAcoes.js";
 import { cotarSinalPix } from "./pixCotacao.js";
 
 const { Pool } = pg;
@@ -53,6 +54,12 @@ const server = http.createServer(async (req, res) => {
     new URL(req.url, "http://localhost").pathname.startsWith("/notificacoes")
   ) {
     await atenderCentralNotificacoes(req, res, pool);
+    return;
+  }
+
+  // Acoes protegidas de agendamentos
+  if (req.method === "POST" && req.url === "/agendamentos/acao") {
+    await atenderAcaoAgendamento(req, res);
     return;
   }
 
