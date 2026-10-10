@@ -107,14 +107,14 @@ export async function cotarSinalPix(req, res, pool) {
 
     // Configuracao financeira controlada no PostgreSQL.
     const configuracao = await pool.query(`
-      SELECT ativo, percentual_padrao, reserva_minutos
+      SELECT ativo, tipo_sinal_padrao, percentual_padrao, valor_fixo_padrao_centavos, reserva_minutos
       FROM public.pix_configuracao
       WHERE id = 1
     `);
 
     const regra = configuracao.rows[0];
 
-    if (!regra?.ativo || !regra.percentual_padrao) {
+    if (!regra?.ativo) {
       responder(res, 409, {
         erro: "Pagamento PIX ainda nao habilitado",
       });
@@ -154,25 +154,54 @@ export async function cotarSinalPix(req, res, pool) {
       return;
     }
 
-    const percentual = Number(regra.percentual_padrao);
-    const pontosPercentuais = Math.round(percentual * 100);
+    const tipoSinal = regra.tipo_sinal_padrao;
 
-    if (
-      !Number.isFinite(percentual) ||
-      pontosPercentuais < 1 ||
-      pontosPercentuais > 10000
-    ) {
+    let percentual = null;
+    let valorFixo = null;
+    let valorSinal = 0;
+
+    if (tipoSinal === "fixo") {
+      valorFixo = Number(regra.valor_fixo_padrao_centavos);
+
+      if (!Number.isSafeInteger(valorFixo) || valorFixo <= 0) {
+        responder(res, 422, {
+          erro: "Valor fixo do sinal invalido",
+        });
+        return;
+      }
+
+      valorSinal = valorFixo;
+
+    } else if (tipoSinal === "percentual") {
+      percentual = Number(regra.percentual_padrao);
+
+      const pontosPercentuais = Math.round(percentual * 100);
+
+      if (
+        !Number.isFinite(percentual) ||
+        pontosPercentuais < 1 ||
+        pontosPercentuais > 10000
+      ) {
+        responder(res, 422, {
+          erro: "Percentual de sinal invalido",
+        });
+        return;
+      }
+
+      valorSinal = Math.round(
+        (valorTotal * pontosPercentuais) / 10000,
+      );
+
+    } else {
       responder(res, 422, {
-        erro: "Percentual de sinal invalido",
+        erro: "Tipo de sinal invalido",
       });
       return;
     }
 
-    const valorSinal = Math.round((valorTotal * pontosPercentuais) / 10000);
-
     if (valorSinal <= 0 || valorSinal > valorTotal) {
       responder(res, 422, {
-        erro: "Valor do sinal invalido",
+        erro: "Sinal maior que o valor do servico ou invalido",
       });
       return;
     }
@@ -181,7 +210,9 @@ export async function cotarSinalPix(req, res, pool) {
       servicoId,
       servico: dadosServico.nome || "Servico",
       valorTotalCentavos: valorTotal,
+      tipoSinal,
       percentualSinal: percentual,
+      valorFixoConfiguradoCentavos: valorFixo,
       valorSinalCentavos: valorSinal,
       valorRestanteCentavos: valorTotal - valorSinal,
       reservaMinutos: regra.reserva_minutos,
