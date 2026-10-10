@@ -87,6 +87,12 @@ export async function confirmarAgendamentoPixNoFirestore({
       };
     }
 
+    if (reserva.estado === "confirmada") {
+      throw new Error(
+        "Reserva confirmada sem documento no Firestore"
+      );
+    }
+
     const horario = validarReservaVigentePix(reserva);
 
     const duracao =

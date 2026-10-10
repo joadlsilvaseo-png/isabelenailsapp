@@ -116,7 +116,7 @@ export async function consultarStatusPagamentoPix(req, res, pool) {
       let finalizacao = conciliacao;
 
       if (
-        ["pago_aguardando_agendamento", "agendamento_confirmado"]
+        ["pago_aguardando_agendamento", "agendamento_confirmado", "pago_requer_analise"]
           .includes(conciliacao.situacao)
       ) {
         try {

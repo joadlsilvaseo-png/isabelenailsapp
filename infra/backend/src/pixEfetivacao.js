@@ -10,10 +10,7 @@ import {
   confirmarAgendamentoPixNoFirestore
 } from "./pixConfirmacaoFirestore.js";
 
-import {
-  gerarIdAgendamentoPix,
-  validarReservaVigentePix
-} from "./pixRegrasConfirmacao.js";
+import { gerarIdAgendamentoPix } from "./pixRegrasConfirmacao.js";
 
 function requerAnalise(mensagem) {
   return Object.assign(new Error(mensagem), {
@@ -98,15 +95,9 @@ export async function efetivarAgendamentoPix({
       throw requerAnalise("Reserva indisponivel");
     }
 
-    if (reserva.estado === "reservada") {
-      try {
-        validarReservaVigentePix(reserva);
-      } catch {
-        throw requerAnalise(
-          "Pagamento creditado com reserva vencida"
-        );
-      }
-    }
+    // O Firestore verifica primeiro se o documento ja existe.
+    // A reserva vencida so pode recuperar um documento existente,
+    // nunca criar um agendamento novo.
 
     if (!getApps().length) {
       initializeApp({
@@ -123,12 +114,34 @@ export async function efetivarAgendamentoPix({
       "Cliente";
 
     // ID deterministico: repetir nao cria outro documento.
-    const confirmado =
-      await confirmarAgendamentoPixNoFirestore({
+    let confirmado;
+
+    try {
+      confirmado = await confirmarAgendamentoPixNoFirestore({
         cobranca: registro,
         reserva,
         nomeCliente
       });
+    } catch (erro) {
+      const venceu =
+        new Date(reserva.vence_em).getTime() <= Date.now();
+
+      const conflitoDefinitivo =
+        /reserva vencida|horario ocupado|exige analise|sem documento|horario do atendimento ja passou/i
+          .test(String(erro.message));
+
+      if (
+        venceu ||
+        reserva.estado === "confirmada" ||
+        conflitoDefinitivo
+      ) {
+        throw requerAnalise(
+          "Pagamento creditado requer conciliacao do agendamento"
+        );
+      }
+
+      throw erro;
+    }
 
     if (
       !["agendado", "reagendado", "confirmado", "concluido"]
