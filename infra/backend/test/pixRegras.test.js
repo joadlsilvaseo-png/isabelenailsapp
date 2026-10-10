@@ -20,6 +20,11 @@ import { consultarStatusPagamentoPix } from "../src/pixConsultaPagamento.js";
 import { validarRetornoPagamentoPix } from "../src/pixValidacaoPagamento.js";
 import { processarProximaSincronizacaoCalendar, montarPayloadCalendar, enviarEventoCalendar } from "../src/pixCalendarWorker.js";
 import { ambienteMercadoPagoAtual, criarPedidoPix, mercadoPagoHabilitado, montarPedidoPix } from "../src/pixMercadoPago.js";
+import { identificarNotificacoesAgendamento } from "../src/agendaNotificacoes.js";
+import { processarOrderNotificada } from "../src/pixWebhookWorker.js";
+import { processarProximaNotificacaoPix } from "../src/pixWebhookFila.js";
+import { pagamentoPixConfirmadoManualmente } from "../src/pixRegrasConfirmacao.js";
+import { atenderConfirmacaoAgendamentoPix } from "../src/pixAgendamentoConfirmacao.js";
 
 const cobrancaBase = {
   id: "6d8f562d-5e85-4bc8-9705-932158e7c2a9",
@@ -441,6 +446,8 @@ test("ambientes Mercado Pago são separados e produção fica desativada por pad
     assert.equal(ambienteMercadoPagoAtual(), "test");
     assert.equal(mercadoPagoHabilitado("test"), true);
     assert.equal(mercadoPagoHabilitado("production"), false);
+    process.env.PIX_PRODUCTION_ORDERS_ENABLED = "true";
+    assert.equal(mercadoPagoHabilitado("production"), false, "produção exige token e segredo do webhook");
     const dados = { valorCentavos: 2000, referenciaExterna: "isabele_pix_123", chaveIdempotencia: "6d8f562d-5e85-4bc8-9705-932158e7c2a9", emailPagador: "cliente@example.com" };
     assert.equal(montarPedidoPix({ ...dados, ambiente: "test" }).payer.first_name, "APRO");
     assert.equal("first_name" in montarPedidoPix({ ...dados, ambiente: "production" }).payer, false);
@@ -461,6 +468,7 @@ test("credenciais e payloads do Mercado Pago usam o ambiente persistido sem cham
     process.env.PIX_PRODUCTION_ORDERS_ENABLED = "true";
     process.env.MP_ACCESS_TOKEN_TEST = "APP_USR-test-token";
     process.env.MP_ACCESS_TOKEN_PRODUCTION = "APP_USR-production-token";
+    process.env.MP_WEBHOOK_SECRET_PRODUCTION = "mock-production-webhook-secret";
     globalThis.fetch = async (url, options) => {
       chamadas.push({ url, options });
       return { ok: true, async json() { return { id: "order-1", external_reference: "isabele_pix_123", total_amount: "20.00", status: "action_required", transactions: { payments: [{ amount: "20.00", status: "pending", payment_method: { id: "pix" } }] } }; } };
@@ -633,4 +641,102 @@ test("duracao ausente mantém compatibilidade; duracao explicitamente invalida f
   assert.throws(() => encontrarConflitoAgendamentoPix([
     { status: "confirmado", horario: "10:00", duracao: 0 },
   ], 600, 660), /duracao invalida/i);
+});
+
+test("novo agendamento PIX confirmado notifica cliente e profissional uma unica vez", () => {
+  const atual = {
+    id: "pix-1", status: "confirmado", origemPagamento: "mercado_pago_pix",
+    nomeCliente: "Ana Lima", servico: "Manicure", data: "2026-10-15",
+    horario: "10:00", clienteId: "cliente-1"
+  };
+  const eventos = identificarNotificacoesAgendamento(null, atual);
+  assert.equal(eventos.length, 2);
+  assert.deepEqual(eventos.map(({ destinatario }) => destinatario), ["cliente", "admin"]);
+  assert.equal(eventos[0].titulo, "Agendamento confirmado!");
+  assert.match(eventos[0].mensagem, /PIX foi aprovado/);
+  assert.equal(eventos[1].titulo, "Novo agendamento confirmado!");
+  assert.match(eventos[1].mensagem, /Ana Lima confirmou o atendimento de Manicure/);
+  assert.deepEqual(identificarNotificacoesAgendamento({ status: "confirmado" }, atual), []);
+});
+
+test("Order aprovada recebida pelo webhook concilia e efetiva sem depender do navegador", async () => {
+  let creditos = 0;
+  let efetivacoes = 0;
+  const pool = { query: async () => ({ rows: [{ ...cobrancaBase, mp_environment: "test" }] }) };
+  const resultado = await processarOrderNotificada(pool, cobrancaBase.mp_order_id, "test", {
+    consultarPedido: async () => aprovado,
+    registrarCredito: async () => { creditos++; return { situacao: "pago_aguardando_agendamento" }; },
+    efetivarAgendamento: async () => { efetivacoes++; return { agendamentoConfirmado: true }; }
+  });
+  assert.deepEqual(resultado, { concluido: true });
+  assert.equal(creditos, 1);
+  assert.equal(efetivacoes, 1);
+});
+
+test("Order pendente reprograma webhook sem confirmar agendamento", async () => {
+  let efetivacoes = 0;
+  const pool = { query: async () => ({ rows: [{ ...cobrancaBase }] }) };
+  const pendente = { ...aprovado, statusPedido: "processing", detalhePedido: "pending", statusPagamento: "pending", detalhePagamento: "pending", valorPagamento: null };
+  const resultado = await processarOrderNotificada(pool, cobrancaBase.mp_order_id, "test", {
+    consultarPedido: async () => pendente,
+    registrarCredito: async () => assert.fail("nao pode creditar"),
+    efetivarAgendamento: async () => { efetivacoes++; }
+  });
+  assert.equal(resultado.concluido, false);
+  assert.equal(efetivacoes, 0);
+});
+
+test("webhook fila preserva ambiente e agenda nova tentativa apos falha temporaria", async () => {
+  const chamadas = [];
+  const pool = { query: async (sql, params) => {
+    chamadas.push({ sql, params });
+    if (chamadas.length === 1) return { rows: [{ mp_environment: "production", mp_order_id: "order-1", tentativas: 1, ultima_notificacao_em: "stamp" }] };
+    return { rowCount: 1, rows: [] };
+  } };
+  let recebido;
+  const resultado = await processarProximaNotificacaoPix(pool, async (id, ambiente) => {
+    recebido = { id, ambiente };
+    throw new Error("falha simulada");
+  });
+  assert.deepEqual(recebido, { id: "order-1", ambiente: "production" });
+  assert.equal(resultado.situacao, "reagendada");
+  assert.match(chamadas[1].sql, /mp_environment = \$1/);
+  assert.equal(chamadas[1].params[0], "production");
+});
+
+test("pedido estornado e recusado recebem classificacao financeira especifica", () => {
+  const estornado = validarRetornoPagamentoPix({
+    ...aprovado, statusPedido: "refunded", detalhePedido: "refunded",
+    statusPagamento: "refunded", detalhePagamento: "refunded"
+  }, cobrancaBase);
+  assert.equal(estornado.situacao, "estornada");
+  const recusado = validarRetornoPagamentoPix({
+    ...aprovado, statusPedido: "rejected", detalhePedido: "rejected",
+    statusPagamento: "rejected", detalhePagamento: "rejected"
+  }, cobrancaBase);
+  assert.equal(recusado.situacao, "recusada");
+});
+
+test("agendamento com cobranca PIX nao pode receber segunda aprovacao manual", () => {
+  assert.equal(pagamentoPixConfirmadoManualmente({ pixCobrancaId: cobrancaBase.id }), true);
+  assert.equal(pagamentoPixConfirmadoManualmente({ status: "agendado" }), false);
+});
+
+test("tela de confirmacao recebe valores reais somente com pagamento e Firestore confirmados", async () => {
+  const req = { async *[Symbol.asyncIterator]() { yield Buffer.from(JSON.stringify({ reservaId: "b52cf512-e0c4-4d71-b3ca-0ef72b0b42bc" })); } };
+  const pool = { query: async () => ({ rows: [{
+    estado_cobranca: "paga", agendamento_id: "pix-appointment-1", estado_reserva: "confirmada",
+    valor_total_centavos: "3000", valor_sinal_centavos: "2000", valor_restante_centavos: "1000"
+  }] }) };
+  const firestore = { collection: () => ({ doc: () => ({ get: async () => ({ exists: true, data: () => ({
+    clienteId: "cliente-1", nomeCliente: "Ana Lima", servico: "Manicure", data: "2026-10-15", horario: "10:00", status: "confirmado"
+  }) }) }) }) };
+  let response;
+  const res = { writeHead(status) { this.status = status; }, end(body) { response = JSON.parse(body); } };
+  await atenderConfirmacaoAgendamentoPix(req, res, pool, { verificarUsuario: async () => "cliente-1", firestore });
+  assert.equal(res.status, 200);
+  assert.equal(response.agendamentoConfirmado, true);
+  assert.equal(response.valorTotalCentavos, 3000);
+  assert.equal(response.sinalPagoCentavos, 2000);
+  assert.equal(response.valorRestanteCentavos, 1000);
 });
