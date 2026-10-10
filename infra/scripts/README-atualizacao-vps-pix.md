@@ -20,7 +20,7 @@ O override de atualização muda apenas o contexto de build do serviço `api`; m
 
 ## Transferir e iniciar pelo Windows PowerShell
 
-Abra o PowerShell na raiz de qualquer clone local do repositório. O bloco busca a branch remota e cria um worktree temporário isolado, sem trocar de branch nem tocar em alterações locais. Informe o IP ou alias SSH já configurado em `$VpsHost`. O OpenSSH reutiliza a chave indicada no seu `config`/agent/default.
+Abra o PowerShell na raiz de qualquer clone local do repositório. O bloco busca a branch remota e cria um worktree temporário isolado, sem trocar de branch nem tocar em alterações locais. Ele usa explicitamente o host `root@177.153.68.33` e a chave privada existente em `$env:USERPROFILE\.ssh\isabele_locaweb_ed25519`.
 
 ```powershell
 $ErrorActionPreference = 'Stop'
