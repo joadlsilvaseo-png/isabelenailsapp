@@ -222,25 +222,26 @@ live_env = {}
 for item in container.get("Config", {}).get("Env", []) or []:
     key, sep, value = item.partition("=")
     if sep: live_env[key] = value
-mismatches = [key for key, value in env_cfg.items() if value is not None and live_env.get(key) != str(value)]
-critical = (
-    "PGHOST", "PGPORT", "PGDATABASE", "PGUSER", "PGPASSWORD",
-    "MP_ENVIRONMENT", "PIX_TEST_ORDERS_ENABLED", "PIX_PRODUCTION_ORDERS_ENABLED",
-    "MP_ACCESS_TOKEN_TEST", "MP_ACCESS_TOKEN_PRODUCTION",
-    "MP_WEBHOOK_SECRET_TEST", "MP_WEBHOOK_SECRET_PRODUCTION",
-    "PIX_WEBHOOK_ENABLED", "PIX_WEBHOOK_WORKER_ENABLED", "PIX_CALENDAR_WORKER_ENABLED",
-    "VAPID_PUBLIC_KEY", "VAPID_PRIVATE_KEY", "GOOGLE_APPLICATION_CREDENTIALS",
-    "FIREBASE_WATCH_ENABLED", "PUSH_WORKER_ENABLED",
-)
-for key in critical:
-    if key not in env_cfg or env_cfg.get(key) is None or live_env.get(key) != str(env_cfg.get(key)):
+mismatches = []
+for key, value in env_cfg.items():
+    # Cada variável declarada no Compose efetivo antigo precisa corresponder
+    # exatamente ao container em execução. Chaves sem valor só são aceitas se
+    # também estiverem ausentes no container.
+    if value is None:
+        if key in live_env:
+            mismatches.append(key)
+    elif key not in live_env or live_env[key] != str(value):
         mismatches.append(key)
 if mismatches:
     names = ", ".join(sorted(set(mismatches)))
     raise SystemExit("Configuracao Compose nao corresponde ao container ativo (variaveis: " + names + "). Abortando sem alteracoes.")
-if str(env_cfg["MP_ENVIRONMENT"]).lower() != "test":
+
+# O commit 844398b antecede os novos flags/segredos de webhook. Eles não são
+# exigidos nem injetados: a implementação alvo usa test quando MP_ENVIRONMENT
+# está ausente e só habilita produção com PIX_PRODUCTION_ORDERS_ENABLED="true".
+if live_env.get("MP_ENVIRONMENT", "test").strip().lower() != "test":
     raise SystemExit("O backend ativo nao esta em ambiente test; abortando sem alteracoes.")
-if str(env_cfg["PIX_PRODUCTION_ORDERS_ENABLED"]).lower() not in ("false", "0", ""):
+if live_env.get("PIX_PRODUCTION_ORDERS_ENABLED", "").strip().lower() == "true":
     raise SystemExit("PIX de producao esta ativo na configuracao efetiva; abortando sem alteracoes.")
 
 # Confere mounts bind (Firebase/segredos e demais arquivos) e os destinos/tipos
@@ -276,7 +277,7 @@ for item in container.get("Mounts", []) or []:
     live.append((item.get("Destination", ""), typ, source, not bool(item.get("RW", True))))
 if sorted(configured) != sorted(live):
     raise SystemExit("Volumes do Compose renderizado diferem dos mounts ativos. Abortando sem alteracoes.")
-print("Configuracao efetiva conferida: ambiente PIX de teste, producao desativada, credenciais/env e mounts iguais ao container ativo.")
+print("Configuracao efetiva conferida: variaveis declaradas e mounts iguais ao container ativo; ambiente test e producao desativada.")
 PY
 
 # Salva status/diff e arquivos nao rastreados; nada e limpo nem sobrescrito.
@@ -311,6 +312,10 @@ services:
     build:
       context: "$RELEASE_DIR/infra/backend"
       dockerfile: Dockerfile
+      labels:
+        org.opencontainers.image.revision: "$TARGET_COMMIT"
+    labels:
+      org.opencontainers.image.revision: "$TARGET_COMMIT"
 EOF
 chmod 600 "$UPDATE_OVERRIDE"
 
@@ -367,6 +372,17 @@ MIGRATION_APPLIED=true
 NEW_API_STARTED=true
 compose_snapshot up -d --no-deps "$API_SERVICE"
 API_STOPPED=false
+
+# O healthcheck, sozinho, não prova que a nova imagem está em execução. Exigir
+# novo container e conferir o commit alvo nos labels do container e da imagem.
+NEW_API_CONTAINER="$(compose_snapshot ps -q "$API_SERVICE" | head -n 1)"
+[[ -n "$NEW_API_CONTAINER" ]] || die "Compose nao encontrou o container api atualizado."
+[[ "$NEW_API_CONTAINER" != "$API_CONTAINER" ]] || die "O container api nao foi recriado; recusando validar somente o healthcheck."
+SERVICE_REVISION="$(docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$NEW_API_CONTAINER")"
+NEW_IMAGE_ID="$(docker inspect --format '{{.Image}}' "$NEW_API_CONTAINER")"
+IMAGE_REVISION="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$NEW_IMAGE_ID")"
+[[ "$SERVICE_REVISION" == "$TARGET_COMMIT" && "$IMAGE_REVISION" == "$TARGET_COMMIT" ]] || die "A API ativa nao comprova o commit alvo ($TARGET_COMMIT); rollback automatico sera iniciado."
+echo "Commit da API conferido no container e na imagem: $TARGET_COMMIT"
 
 HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:3001/health}"
 HEALTH_OK=false
