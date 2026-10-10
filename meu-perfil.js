@@ -1,3 +1,4 @@
+import { executarAcaoAgendamento } from "./agendamentosApi.js";
 import { auth, db } from "./firebase-config.js";
 import { webhookUrl } from "./config.js";
 import {
@@ -251,9 +252,7 @@ function criarCardAtivo({
     try {
       // STATUS SÓ PODE SER ALTERADO POR AÇÃO DO USUÁRIO (CLIQUE NO BOTÃO)
       // ALTERAÇÃO PARA STATUS EM VEZ DE DELETAR O REGISTRO
-      await updateDoc(doc(db, "agendamentos", id), {
-        status: "cancelado_cliente",
-      });
+      await executarAcaoAgendamento(auth, { agendamentoId: id, acao: "cancelar_cliente" });
 
       // Grava evento de notificação para Cancelamento pelo Cliente
       const eventPayloadCancelCliente = {

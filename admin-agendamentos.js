@@ -1,3 +1,4 @@
+import { executarAcaoAgendamento } from "./agendamentosApi.js";
 import { auth, db } from "./firebase-config.js";
 import { webhookUrl } from "./config.js";
 
@@ -1456,14 +1457,24 @@ async function registrarEventoNotificacao(tipo, agendamento) {
    ============================================================ */
 
 async function atualizarAgendamento(id, atualizacoes) {
-  const agendamentoRef = doc(db, "agendamentos", id);
+  const acoes = {
+    confirmado: "confirmar_admin",
+    concluido: "concluir_admin",
+    cancelado_profissional: "cancelar_admin",
+  };
 
-  await updateDoc(agendamentoRef, {
-    ...atualizacoes,
+  const acao = acoes[atualizacoes?.status];
 
-    atualizadoEm: serverTimestamp(),
+  if (!acao) {
+    throw new Error("Acao administrativa nao suportada.");
+  }
 
-    atualizadoPor: auth.currentUser?.uid || null,
+  await executarAcaoAgendamento(auth, {
+    agendamentoId: id,
+    acao,
+    ...(acao === "concluir_admin"
+      ? { valorFinal: atualizacoes.valorFinal }
+      : {}),
   });
 
   const indice = todosAgendamentos.findIndex(
