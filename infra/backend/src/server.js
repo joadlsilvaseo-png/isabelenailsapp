@@ -7,6 +7,7 @@ import { iniciarWorkerPush } from "./pushWorker.js";
 import { atenderCentralNotificacoes } from "./centralNotificacoes.js";
 import { atenderAcaoAgendamento } from "./agendamentosAcoes.js";
 import { criarReservaPix } from "./pixReservas.js";
+import { emitirPixDaReserva } from "./pixPedidos.js";
 import { cotarSinalPix } from "./pixCotacao.js";
 
 const { Pool } = pg;
@@ -67,6 +68,12 @@ const server = http.createServer(async (req, res) => {
   // PIX - Reserva temporaria autenticada
   if (req.method === "POST" && req.url === "/pix/reservar") {
     await criarReservaPix(req, res, pool);
+    return;
+  }
+
+  // PIX - Emissao autenticada da cobranca
+  if (req.method === "POST" && req.url === "/pix/emitir") {
+    await emitirPixDaReserva(req, res, pool);
     return;
   }
 
