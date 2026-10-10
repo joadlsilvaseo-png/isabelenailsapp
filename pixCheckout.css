@@ -30,3 +30,34 @@
 .im-pix-copiar, .im-pix-repetir { display: block; width: 100%; padding: 13px 16px; border-radius: 12px; margin: 12px 0; background: #591c31; color: white; border: 0; font: inherit; font-weight: 650; cursor: pointer; }
 .im-pix-copiar:disabled { opacity: .55; cursor: not-allowed; }
 .im-pix-nota { font-size: .76rem; margin: 14px 0 0; }
+/* AJUSTE RESPONSIVO MODAL PIX */
+
+dialog.im-pix-dialog[open] {
+    position: fixed;
+    inset: 0;
+    margin: auto;
+    width: min(520px, calc(100vw - 32px));
+    max-width: calc(100vw - 32px);
+    max-height: min(88dvh, 820px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    box-sizing: border-box;
+}
+
+@media (max-width: 600px) {
+    dialog.im-pix-dialog[open] {
+        width: calc(100vw - 24px);
+        max-width: calc(100vw - 24px);
+        max-height: calc(100dvh - 24px);
+        padding: 20px;
+        border-radius: 20px;
+    }
+
+    .im-pix-valores {
+        gap: 10px;
+    }
+
+    .im-pix-qr {
+        width: min(220px, 100%);
+    }
+}
