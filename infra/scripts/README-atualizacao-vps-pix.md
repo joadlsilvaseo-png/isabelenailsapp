@@ -4,9 +4,9 @@ Este roteiro é para uma execução única, iniciada manualmente pelo responsáv
 
 ## O que o script verifica e preserva
 
-A instalação informada usa `/opt/isabele-nails/infra/compose.yaml`, o override local `/opt/isabele-nails/infra/compose.override.yaml` e o arquivo adicional `/root/isabele-codex-pix-teste-20261010-125718.compose.yaml`. O script identifica a configuração ativa pelas labels do container `api` e exige que cada arquivo conhecido existente conste nessa configuração. Ele também guarda todos os arquivos Compose ativos, a configuração renderizada, os ambientes dos containers, os mounts, o ID da imagem antiga, o estado/diff/untracked do checkout e um dump do PostgreSQL.
+A instalação informada usa `/opt/isabele-nails/infra/compose.yaml`, o override local `/opt/isabele-nails/infra/compose.override.yaml` e o arquivo adicional `/root/isabele-codex-pix-teste-20261010-125718.compose.yaml`. O script reconhece tanto labels que ainda apontam aos Compose de origem quanto o snapshot de recuperação em `pix-update-*/effective-before.yaml` com `restore-api.yaml` (ou overlay de atualização/rollback do próprio script). Para aceitar a recuperação, exige que os metadados do backup correspondam ao projeto, serviço e diretório de trabalho dos labels; depois renderiza essa configuração e valida API e PostgreSQL contra os containers em execução. Os Compose originais conhecidos também são copiados para o novo backup, mesmo quando os labels atuais apontam ao snapshot de recuperação.
 
-A configuração efetiva renderizada pode conter senhas, tokens, chaves VAPID e referências Firebase. Os arquivos de backup ficam sob diretório `root` com permissões restritas. O script não escreve o conteúdo dos segredos no log. Antes de qualquer parada, compara rigorosamente todas as variáveis declaradas no Compose efetivo com as variáveis do container ativo; uma declaração pass-through sem valor só é aceita se estiver ausente também no container. Compara ainda os mounts do Compose com os mounts reais (incluindo Firebase). Os quatro campos de webhook introduzidos após o commit implantado `844398b` não são exigidos nem criados pelo procedimento. Sem seus flags, o webhook/worker novo permanece desativado. Se a configuração efetiva antiga divergir do container, algum volume divergir, ou produção estiver selecionada/habilitada, o script aborta antes de parar serviços ou aplicar a migração.
+A configuração efetiva renderizada pode conter senhas, tokens, chaves VAPID e referências Firebase. Os arquivos de backup ficam sob diretório `root` com permissões restritas. O script não escreve o conteúdo dos segredos no log. Antes de qualquer parada, compara rigorosamente todas as variáveis declaradas no Compose efetivo com API e PostgreSQL, confere a imagem configurada do banco e compara os volumes/mounts de ambos os containers (incluindo Firebase e o volume de dados do PostgreSQL). Uma declaração pass-through sem valor só é aceita se estiver ausente também no container. Os quatro campos de webhook introduzidos após o commit implantado `844398b` não são exigidos nem criados pelo procedimento. Sem seus flags, o webhook/worker novo permanece desativado. Se projeto, configuração efetiva, credenciais ou mounts divergirem, ou produção estiver selecionada/habilitada, o script aborta antes de parar serviços ou aplicar a migração.
 
 O override de atualização muda o contexto de build e atribui à API uma referência imutável `isabele-nails-api:release-<commit>`; os labels da imagem e do container registram o SHA implantado. O Compose principal também declara a referência local `isabele-nails-api:local`. O Dockerfile copia os arquivos do backend com dono `node` e garante a propriedade de `/app`, incluindo `package.json` e `node_modules`, antes de executar como usuário não root.
 
@@ -22,7 +22,7 @@ O restante da configuração renderizada permanece igual, incluindo variáveis, 
 
 ## Transferir e iniciar pelo Windows PowerShell
 
-Abra o PowerShell na raiz de qualquer clone local do repositório. O bloco busca a branch remota e cria um worktree temporário isolado, sem trocar de branch nem tocar em alterações locais. Ele usa explicitamente o host `root@177.153.68.33` e a chave privada existente em `$env:USERPROFILE\.ssh\isabele_locaweb_ed25519`.
+Abra o PowerShell na raiz de qualquer clone local do repositório. O bloco busca a branch remota e cria um worktree temporário isolado, sem trocar de branch nem tocar em alterações locais. Ele usa explicitamente o host `root@177.153.68.33` e a chave privada existente em `$env:USERPROFILE\.ssh\isabele_locaweb_ed25519`. Antes do SCP, normaliza o script para LF e UTF-8 sem BOM; antes de instalar ou iniciar, o SSH executa `bash -n` no arquivo transferido.
 
 ```powershell
 $ErrorActionPreference = 'Stop'
@@ -37,9 +37,14 @@ git worktree add --detach $DeployDir "origin/$Branch"
 if ($LASTEXITCODE -ne 0) { throw 'Falha ao criar worktree temporario.' }
 try {
     $Script = Join-Path $DeployDir 'infra\scripts\atualizar-vps-pix.sh'
+    $ScriptText = [System.IO.File]::ReadAllText($Script)
+    $ScriptText = $ScriptText.Replace("`r`n", "`n").Replace("`r", "`n")
+    if ($ScriptText.Contains("`r")) { throw 'Não foi possível normalizar o script para LF.' }
+    $Utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+    [System.IO.File]::WriteAllText($Script, $ScriptText, $Utf8NoBom)
     scp -i $SshKey $Script "${VpsHost}:/tmp/atualizar-vps-pix.sh"
     if ($LASTEXITCODE -ne 0) { throw 'Falha ao transferir o script.' }
-    ssh -i $SshKey $VpsHost "sudo install -o root -g root -m 0750 /tmp/atualizar-vps-pix.sh /usr/local/sbin/atualizar-vps-pix && sudo env APP_DIR=/opt/isabele-nails bash /usr/local/sbin/atualizar-vps-pix start"
+    ssh -i $SshKey $VpsHost "bash -n /tmp/atualizar-vps-pix.sh && sudo install -o root -g root -m 0750 /tmp/atualizar-vps-pix.sh /usr/local/sbin/atualizar-vps-pix && sudo env APP_DIR=/opt/isabele-nails bash /usr/local/sbin/atualizar-vps-pix start"
     if ($LASTEXITCODE -ne 0) { throw 'Falha ao iniciar o script na VPS.' }
 }
 finally {
@@ -63,7 +68,7 @@ Use a versão do script atualizada junto ao PR. O script busca o commit mais rec
 
 ## Etapas executadas pelo script
 
-1. Descobre a instância `api` ativa e todos os arquivos Compose que a criaram, incluindo os overrides local e adicional. Compara todas as variáveis realmente declaradas no Compose antigo com o container ativo, e confere volumes, Firebase e demais mounts.
+1. Descobre a instância `api` ativa usando Compose original ou snapshot de recuperação validado por metadados. Confere que PostgreSQL pertence ao mesmo projeto e diretório. Compara todas as variáveis do Compose com API e PostgreSQL, e confere a imagem do banco e os volumes/mounts de ambos.
 2. Salva a configuração renderizada e os arquivos-fonte Compose com acesso restrito; registra alterações locais e imagem anterior.
 3. Gera dump PostgreSQL antes de parar qualquer serviço.
 4. Constrói o backend do commit mais recente em worktree isolado.
