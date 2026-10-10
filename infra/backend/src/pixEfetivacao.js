@@ -162,6 +162,30 @@ export async function efetivarAgendamentoPix({
       WHERE id = $1
     `, [registro.id, confirmado.agendamentoId]);
 
+    const duracaoMinutos = Number(reserva.fim_minuto) - Number(reserva.inicio_minuto);
+    const dataEvento = registro.reserva_data_iso;
+    const horarioEvento = `${String(Math.floor(Number(reserva.inicio_minuto) / 60)).padStart(2, "0")}:${String(Number(reserva.inicio_minuto) % 60).padStart(2, "0")}`;
+    const eventId = `evt_${confirmado.agendamentoId}`;
+
+    // A fila só recebe o atendimento depois da confirmação no Firestore.
+    // O eventId determinístico e a chave única tornam as consultas repetidas idempotentes.
+    await conexao.query(`
+      INSERT INTO public.pix_calendar_outbox (
+        event_id, agendamento_id, nome_cliente, servico,
+        data_servico, horario, duracao_minutos
+      )
+      VALUES ($1, $2, $3, $4, $5::date, $6::time, $7)
+      ON CONFLICT (event_id) DO NOTHING
+    `, [
+      eventId,
+      confirmado.agendamentoId,
+      nomeCliente,
+      registro.reserva_dados?.nomeServico || reserva.servico_id,
+      dataEvento,
+      horarioEvento,
+      duracaoMinutos
+    ]);
+
     await conexao.query(`
       INSERT INTO public.pix_eventos (
         cobranca_id,
@@ -182,7 +206,8 @@ export async function efetivarAgendamentoPix({
     return {
       situacao: "agendamento_confirmado",
       agendamentoConfirmado: true,
-      agendamentoId: confirmado.agendamentoId
+      agendamentoId: confirmado.agendamentoId,
+      sincronizacaoCalendar: "pendente"
     };
   } catch (erro) {
     await conexao.query("ROLLBACK").catch(() => {});
