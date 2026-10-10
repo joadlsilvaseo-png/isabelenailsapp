@@ -1,0 +1,32 @@
+.im-pix-dialog {
+  border: 0;
+  border-radius: 20px;
+  padding: 24px;
+  width: min(440px, calc(100% - 28px));
+  max-height: min(90vh, 860px);
+  overflow-y: auto;
+  box-sizing: border-box;
+  color: #341b27;
+  background: #fffafc;
+  box-shadow: 0 24px 90px #18091350;
+  font: inherit;
+}
+.im-pix-dialog::backdrop { background: #180913b8; }
+.im-pix-topo { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.im-pix-topo h2 { margin: 4px 0 0; font-size: 1.4rem; line-height: 1.25; }
+.im-pix-eyebrow { color: #903751; font-size: .7rem; font-weight: 750; letter-spacing: .12em; }
+.im-pix-fechar { background: #f5e6ec; border: 0; width: 34px; height: 34px; border-radius: 50%; font-size: 26px; cursor: pointer; color: #591c31; }
+.im-pix-status { margin: 18px 0; padding: 12px 14px; border-radius: 10px; background: #f6edf1; color: #591c31; font-size: .92rem; }
+.im-pix-status--erro { color: #891e2a; background: #ffe9eb; }
+.im-pix-conteudo[hidden], .im-pix-repetir[hidden], .im-pix-qr[hidden] { display: none !important; }
+.im-pix-valores { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 16px 0; }
+.im-pix-valores div { padding: 12px; background: #f8edf2; border-radius: 12px; }
+.im-pix-valores span { display: block; font-size: .75rem; color: #684857; }
+.im-pix-valores strong { display: block; margin-top: 4px; color: #591c31; font-size: 1.05rem; }
+.im-pix-qr { display: block; width: 210px; max-width: 100%; margin: 12px auto; background: #fff; padding: 10px; border: 1px solid #f1e2e8; border-radius: 12px; box-sizing: border-box; }
+.im-pix-instrucao, .im-pix-nota { color: #654e59; font-size: .86rem; line-height: 1.5; }
+.im-pix-conteudo label { display: block; margin: 12px 0 6px; font-size: .84rem; font-weight: 700; }
+#im-pix-codigo { display: block; box-sizing: border-box; width: 100%; min-height: 72px; padding: 10px; resize: none; border-radius: 10px; border: 1px solid #e4c9d4; color: #432b37; background: #fff; font: 12px/1.5 monospace; }
+.im-pix-copiar, .im-pix-repetir { display: block; width: 100%; padding: 13px 16px; border-radius: 12px; margin: 12px 0; background: #591c31; color: white; border: 0; font: inherit; font-weight: 650; cursor: pointer; }
+.im-pix-copiar:disabled { opacity: .55; cursor: not-allowed; }
+.im-pix-nota { font-size: .76rem; margin: 14px 0 0; }
