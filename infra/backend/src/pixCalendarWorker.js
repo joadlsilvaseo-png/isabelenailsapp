@@ -1,11 +1,27 @@
 const URL_APPS_SCRIPT = "https://script.google.com/macros/s/AKfycbwUwXunAdMAroSPAeMHH2ZQxCOuQage7lmAHH7-llgmeVXug6-Z9KGq6R7NVgQ70XYy/exec";
 
+function obterDataIso(evento) {
+  // Na fila real, o SELECT entrega um alias formatado pelo PostgreSQL.
+  const data = evento.data_servico_iso ?? evento.data_servico;
+  if (typeof data === "string" && /^\d{4}-\d{2}-\d{2}$/.test(data)) return data;
+  if (data instanceof Date && Number.isFinite(data.getTime())) {
+    // Fallback para chamadas/testes que recebam Date: usa componentes UTC,
+    // nunca a representação textual local da data.
+    return [
+      String(data.getUTCFullYear()).padStart(4, "0"),
+      String(data.getUTCMonth() + 1).padStart(2, "0"),
+      String(data.getUTCDate()).padStart(2, "0")
+    ].join("-");
+  }
+  throw new Error("Data do evento Calendar invalida");
+}
+
 export function montarPayloadCalendar(evento) {
   return {
     acao: "AGENDAR",
     nomeCliente: evento.nome_cliente,
     servico: evento.servico,
-    dataInicio: `${String(evento.data_servico).slice(0, 10)}T${String(evento.horario).slice(0, 5)}:00`,
+    dataInicio: `${obterDataIso(evento)}T${String(evento.horario).slice(0, 5)}:00`,
     duracaoMinutos: Number(evento.duracao_minutos),
     eventId: evento.event_id
   };
@@ -20,6 +36,22 @@ export async function enviarEventoCalendar(evento, fetcher = fetch) {
     signal: AbortSignal.timeout(15000)
   });
   if (!resposta.ok) throw new Error(`Apps Script respondeu HTTP ${resposta.status}`);
+  const texto = typeof resposta.text === "function" ? await resposta.text() : "";
+  if (texto.trim()) {
+    let corpo;
+    try { corpo = JSON.parse(texto); } catch { corpo = null; }
+    if (corpo && typeof corpo === "object") {
+      const status = String(corpo.status || "").toLowerCase();
+      if (
+        corpo.ok === false || corpo.success === false || corpo.sucesso === false ||
+        corpo.error || corpo.erro || ["error", "erro", "falha", "failed"].includes(status)
+      ) {
+        throw new Error("Apps Script informou falha na sincronizacao");
+      }
+    } else if (/exception|script function .* not found/i.test(texto)) {
+      throw new Error("Apps Script informou falha na sincronizacao");
+    }
+  }
   return payload;
 }
 
@@ -44,11 +76,15 @@ async function obterEventoPendente(pool) {
           atualizado_em = NOW()
       FROM proximo
       WHERE fila.id = proximo.id
-      RETURNING fila.*
+      RETURNING fila.*,
+                TO_CHAR(fila.data_servico, 'YYYY-MM-DD') AS data_servico_iso
     `);
     await conexao.query("COMMIT");
     return resultado.rows[0] || null;
   } catch (erro) {
+    // A entrega é at least once: timeout após uma gravação pode gerar retry
+    // com o mesmo eventId. Evitar duplicidade externa depende do Apps Script
+    // reutilizar esse ID; o código do script não está neste repositório.
     await conexao.query("ROLLBACK").catch(() => {});
     throw erro;
   } finally {
