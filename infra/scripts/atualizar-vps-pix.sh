@@ -114,7 +114,8 @@ for expected in \
   if [[ -f "$expected" ]]; then
     found=false
     for file in "${ORIGINAL_COMPOSE_FILES[@]}"; do
-      [[ "$(realpath "$file")" == "$(realpath "$expected")" ]] && found=true
+      file_real="$(realpath "$file" 2>/dev/null || realpath "$PROJECT_WORKDIR/$file" 2>/dev/null || realpath "$APP_REAL/$file" 2>/dev/null || true)"
+      [[ "$file_real" == "$(realpath "$expected")" ]] && found=true
     done
     [[ "$found" == true ]] || die "O arquivo Compose existente nao aparece na configuracao ativa: $expected"
   fi
