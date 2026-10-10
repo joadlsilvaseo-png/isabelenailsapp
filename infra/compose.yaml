@@ -23,6 +23,7 @@ services:
       retries: 10
 
   api:
+    image: isabele-nails-api:local
     build: ./backend
     restart: unless-stopped
 
