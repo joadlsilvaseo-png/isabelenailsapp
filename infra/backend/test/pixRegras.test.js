@@ -18,7 +18,7 @@ import {
 } from "../src/pixRegrasConfirmacao.js";
 import { consultarStatusPagamentoPix } from "../src/pixConsultaPagamento.js";
 import { validarRetornoPagamentoPix } from "../src/pixValidacaoPagamento.js";
-import { processarProximaSincronizacaoCalendar, montarPayloadCalendar } from "../src/pixCalendarWorker.js";
+import { processarProximaSincronizacaoCalendar, montarPayloadCalendar, enviarEventoCalendar } from "../src/pixCalendarWorker.js";
 import { ambienteMercadoPagoAtual, criarPedidoPix, mercadoPagoHabilitado, montarPedidoPix } from "../src/pixMercadoPago.js";
 
 const cobrancaBase = {
@@ -378,14 +378,15 @@ test("agenda Calendar entra na outbox só após confirmação e é idempotente",
 });
 
 test("worker Calendar envia somente campos autorizados com eventId estável e marca sucesso", async () => {
-  const evento = { id: 9, event_id: "evt_pix_123", nome_cliente: "Cliente", servico: "Manicure", data_servico: "2099-01-01", horario: "10:00:00", duracao_minutos: 60, tentativas: 1 };
+  const evento = { id: 9, event_id: "evt_pix_123", nome_cliente: "Cliente", servico: "Manicure", data_servico: new Date("2099-01-01T00:00:00.000Z"), data_servico_iso: "2099-01-01", horario: "10:00:00", duracao_minutos: 60, tentativas: 1 };
   const atualizacoes = [];
+  let consultaWorker = "";
   const pool = {
     async connect() {
       return { async query(sql) {
         const q = sql.replace(/\s+/g, " ").toLowerCase();
         if (["begin", "commit", "rollback"].includes(q)) return { rows: [] };
-        if (q.includes("with proximo as")) return { rows: [evento] };
+        if (q.includes("with proximo as")) { consultaWorker = sql; return { rows: [evento] }; }
         throw new Error(`SQL inesperado: ${q}`);
       }, release() {} };
     },
@@ -396,7 +397,15 @@ test("worker Calendar envia somente campos autorizados com eventId estável e ma
   assert.deepEqual(resultado, { processado: true, enviado: true, eventId: evento.event_id });
   assert.deepEqual(Object.keys(enviado).sort(), ["acao", "dataInicio", "duracaoMinutos", "eventId", "nomeCliente", "servico"].sort());
   assert.deepEqual(enviado, { acao: "AGENDAR", nomeCliente: "Cliente", servico: "Manicure", dataInicio: "2099-01-01T10:00:00", duracaoMinutos: 60, eventId: evento.event_id });
+  assert.match(consultaWorker, /TO_CHAR\(fila\.data_servico, 'YYYY-MM-DD'\) AS data_servico_iso/i);
   assert.match(atualizacoes[0].sql, /status = 'enviado'/);
+});
+
+test("payload Calendar serializa data YYYY-MM-DD recebida como string ou Date", () => {
+  const base = { nome_cliente: "Cliente", servico: "Manicure", horario: "10:00:00", duracao_minutos: 60, event_id: "evt_data" };
+  assert.equal(montarPayloadCalendar({ ...base, data_servico: "2026-10-15" }).dataInicio, "2026-10-15T10:00:00");
+  assert.equal(montarPayloadCalendar({ ...base, data_servico: new Date("2026-10-15T00:00:00.000Z") }).dataInicio, "2026-10-15T10:00:00");
+  assert.equal(montarPayloadCalendar({ ...base, data_servico: new Date("2026-10-14T23:00:00.000Z"), data_servico_iso: "2026-10-15" }).dataInicio, "2026-10-15T10:00:00");
 });
 
 test("falha do Apps Script mantém agendamento e agenda retry durável sem request real", async () => {
@@ -407,9 +416,18 @@ test("falha do Apps Script mantém agendamento e agenda retry durável sem reque
     async query(sql, params) { atualizacoes.push({ sql, params }); return { rowCount: 1 }; }
   };
   let chamadas = 0;
-  const resultado = await processarProximaSincronizacaoCalendar(pool, async () => { chamadas += 1; throw new Error("mock offline"); });
+  let payloadEnviado;
+  const resultado = await processarProximaSincronizacaoCalendar(pool, async (row) => {
+    chamadas += 1;
+    await enviarEventoCalendar(row, async (url, options) => {
+      payloadEnviado = JSON.parse(options.body);
+      assert.match(url, /^https:\/\/script\.google\.com\/macros\/s\//);
+      return { ok: true, status: 200, async text() { return JSON.stringify({ status: "error", message: "calendar unavailable" }); } };
+    });
+  });
   assert.deepEqual(resultado, { processado: true, enviado: false, eventId: evento.event_id });
   assert.equal(chamadas, 1);
+  assert.equal(payloadEnviado.eventId, evento.event_id);
   assert.match(atualizacoes[0].sql, /status = 'pendente'/);
   assert.equal(atualizacoes[0].params[1], 30);
 });
