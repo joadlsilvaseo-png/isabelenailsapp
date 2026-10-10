@@ -20,13 +20,27 @@ O override de atualização muda apenas o contexto de build do serviço `api`; m
 
 ## Transferir e iniciar pelo Windows PowerShell
 
-Abra o PowerShell na raiz do clone local da branch. Informe o IP ou alias SSH já configurado em `$VpsHost`. O OpenSSH reutiliza a chave indicada no seu `config`/agent/default; não é necessário abrir ou editar arquivos na VPS.
+Abra o PowerShell na raiz de qualquer clone local do repositório. O bloco busca a branch remota e cria um worktree temporário isolado, sem trocar de branch nem tocar em alterações locais. Informe o IP ou alias SSH já configurado em `$VpsHost`. O OpenSSH reutiliza a chave indicada no seu `config`/agent/default.
 
 ```powershell
+$ErrorActionPreference = 'Stop'
 $VpsHost = "root@IP_OU_ALIAS_SSH"
-$Script = (Resolve-Path ".\infra\scripts\atualizar-vps-pix.sh").Path
-scp $Script "${VpsHost}:/tmp/atualizar-vps-pix.sh"
-ssh $VpsHost "sudo install -o root -g root -m 0750 /tmp/atualizar-vps-pix.sh /usr/local/sbin/atualizar-vps-pix && sudo env APP_DIR=/opt/isabele-nails bash /usr/local/sbin/atualizar-vps-pix start"
+$Branch = 'codex/correcao-pix-20261010'
+git fetch origin "refs/heads/${Branch}:refs/remotes/origin/${Branch}"
+if ($LASTEXITCODE -ne 0) { throw 'Falha ao buscar a branch do PR.' }
+$DeployDir = Join-Path $env:TEMP ("isabele-pix-" + [guid]::NewGuid().ToString('N'))
+git worktree add --detach $DeployDir "origin/$Branch"
+if ($LASTEXITCODE -ne 0) { throw 'Falha ao criar worktree temporario.' }
+try {
+    $Script = Join-Path $DeployDir 'infra\scripts\atualizar-vps-pix.sh'
+    scp $Script "${VpsHost}:/tmp/atualizar-vps-pix.sh"
+    if ($LASTEXITCODE -ne 0) { throw 'Falha ao transferir o script.' }
+    ssh $VpsHost "sudo install -o root -g root -m 0750 /tmp/atualizar-vps-pix.sh /usr/local/sbin/atualizar-vps-pix && sudo env APP_DIR=/opt/isabele-nails bash /usr/local/sbin/atualizar-vps-pix start"
+    if ($LASTEXITCODE -ne 0) { throw 'Falha ao iniciar o script na VPS.' }
+}
+finally {
+    git worktree remove $DeployDir
+}
 ```
 
 O segundo comando somente inicia o processo; ele informa PID e log persistente. Por padrão, logs ficam em `/var/log/isabele-nails-deploy/`. Consulte os mais recentes:
