@@ -1152,6 +1152,10 @@ function abrirModal(id) {
   const status = normalizarStatus(agendamento.status);
 
   const observacao = obterObservacao(agendamento);
+  const possuiPix = Boolean(agendamento.pixCobrancaId || agendamento.pixPagamentoId);
+  const valorTotal = converterValorMonetario(obterPrimeiroValor(agendamento, ["precoSnapshot", "valor", "preco"], 0));
+  const sinalPix = Number(agendamento.valorSinalCentavos || 0) / 100;
+  const restantePix = Number(agendamento.valorRestanteCentavos || 0) / 100;
 
   elements.modalContent.innerHTML = `
     <div class="admin-modal-client">
@@ -1220,6 +1224,12 @@ function abrirModal(id) {
           ${escaparHTML(horario)}
         </strong>
       </div>
+
+      ${possuiPix ? `
+      <div class="admin-modal-detail"><span>Valor total</span><strong>${escaparHTML(formatarValorMonetario(valorTotal))}</strong></div>
+      <div class="admin-modal-detail"><span>Sinal PIX</span><strong>${escaparHTML(formatarValorMonetario(sinalPix))}${agendamento.pixStatusFinanceiro === "estornado" ? " (estornado)" : " (pago)"}</strong></div>
+      <div class="admin-modal-detail"><span>Restante no atendimento</span><strong>${escaparHTML(formatarValorMonetario(restantePix))}</strong></div>
+      ` : ""}
 
       <div class="admin-modal-detail">
         <span>Telefone</span>
@@ -1301,7 +1311,7 @@ function renderizarAcoesModal(agendamento) {
    *
    * Reagendado já é considerado confirmado.
    */
-  if (status === "agendado") {
+  if (status === "agendado" && !agendamento.pixCobrancaId && !agendamento.pixPagamentoId) {
     acoes.push(
       criarBotaoModal({
         label: "Confirmar agendamento",
