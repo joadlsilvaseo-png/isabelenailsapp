@@ -145,7 +145,8 @@ export async function encerrarCobrancaPixSemPagamento({
 }) {
   const estados = {
     expirada: { cobranca: "expirada", reserva: "expirada" },
-    cancelada: { cobranca: "cancelada", reserva: "cancelada" }
+    cancelada: { cobranca: "cancelada", reserva: "cancelada" },
+    recusada: { cobranca: "falha", reserva: "cancelada" }
   };
   const destino = estados[situacao];
 
@@ -205,4 +206,48 @@ export async function encerrarCobrancaPixSemPagamento({
   } finally {
     conexao.release();
   }
+}
+
+export async function registrarEstornoPix({ pool, cobrancaId, pedido, atualizarFirestore }) {
+  const conexao = await pool.connect();
+  let agendamentoId;
+  try {
+    await conexao.query("BEGIN");
+    const consulta = await conexao.query(`
+      SELECT c.id, c.estado, c.mp_order_id, c.referencia_externa,
+        c.valor_sinal_centavos, c.agendamento_id
+      FROM public.pix_cobrancas c WHERE c.id = $1 FOR UPDATE
+    `, [cobrancaId]);
+    const cobranca = consulta.rows[0];
+    if (!cobranca) throw new Error("Cobranca nao encontrada");
+    const validacao = validarRetornoPagamentoPix(pedido, cobranca);
+    if (validacao.situacao !== "estornada") throw new Error("Estorno integral nao confirmado");
+    await conexao.query(`UPDATE public.pix_cobrancas
+      SET estado = 'estornada', atualizado_em = NOW() WHERE id = $1`, [cobrancaId]);
+    await conexao.query(`INSERT INTO public.pix_eventos
+      (cobranca_id, chave_evento, tipo, mp_order_id)
+      VALUES ($1, $2, 'pagamento_estornado', $3)
+      ON CONFLICT (chave_evento) DO NOTHING`,
+    [cobrancaId, `mercadopago:estorno:${pedido.pedidoId}`, pedido.pedidoId]);
+    agendamentoId = cobranca.agendamento_id;
+    await conexao.query("COMMIT");
+  } catch (erro) {
+    await conexao.query("ROLLBACK").catch(() => {});
+    throw erro;
+  } finally {
+    conexao.release();
+  }
+  if (agendamentoId) {
+    const atualizar = atualizarFirestore || (async (id, dados) => {
+      const { initializeApp, applicationDefault, getApps } = await import("firebase-admin/app");
+      const { getFirestore } = await import("firebase-admin/firestore");
+      if (!getApps().length) initializeApp({ credential: applicationDefault(), projectId: "isabele-nails-app" });
+      await getFirestore().collection("agendamentos").doc(id).update(dados);
+    });
+    await atualizar(agendamentoId, {
+      pixStatusFinanceiro: "estornado",
+      pixEstornadoEm: new Date().toISOString()
+    });
+  }
+  return { situacao: "estornada", agendamentoConfirmado: Boolean(agendamentoId) };
 }
