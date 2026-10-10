@@ -204,9 +204,9 @@ chmod 600 "$BACKUP_DIR"/effective-before.*
 
 # A renderizacao precisa refletir exatamente o processo ativo. O script aborta
 # antes de parar servicos se qualquer env, credencial ou volume nao corresponder.
-python3 - "$BACKUP_DIR/effective-before.json" "$BACKUP_DIR/api-container-before.json" <<'PY'
+python3 - "$BACKUP_DIR/effective-before.json" "$BACKUP_DIR/api-container-before.json" "$PROJECT_NAME" <<'PY'
 import json, os, sys
-config_path, inspect_path = sys.argv[1:]
+config_path, inspect_path, project = sys.argv[1:]
 with open(config_path, encoding="utf-8") as f: config = json.load(f)
 with open(inspect_path, encoding="utf-8") as f: container = json.load(f)[0]
 service = config.get("services", {}).get("api")
@@ -247,7 +247,13 @@ if str(env_cfg["PIX_PRODUCTION_ORDERS_ENABLED"]).lower() not in ("false", "0", "
 configured = []
 for item in service.get("volumes", []) or []:
     if isinstance(item, str):
-        source, target, *mode = item.split(":")
+        parts = item.rsplit(":", 2)
+        if len(parts) == 1:
+            source, target, mode = "", parts[0], ""
+        elif len(parts) == 2:
+            source, target, mode = parts[0], parts[1], ""
+        else:
+            source, target, mode = parts
         typ = "bind" if source.startswith("/") or source.startswith(".") else "volume"
         ro = any("ro" in m.split(",") for m in mode)
     else:
@@ -255,12 +261,17 @@ for item in service.get("volumes", []) or []:
         source = item.get("source", "")
         target = item.get("target", "")
         ro = bool(item.get("read_only", False))
-    if typ == "bind": source = os.path.realpath(source)
-    configured.append((target, typ, source if typ == "bind" else "", ro))
+    if typ == "bind":
+        source = os.path.realpath(source)
+    elif typ == "volume" and source:
+        volume = (config.get("volumes", {}) or {}).get(source, {}) or {}
+        resolved_name = volume.get("name") or (source if volume.get("external") else f"{project}_{source}")
+        source = resolved_name
+    configured.append((target, typ, source, ro))
 live = []
 for item in container.get("Mounts", []) or []:
     typ = item.get("Type", "")
-    source = os.path.realpath(item.get("Source", "")) if typ == "bind" else ""
+    source = os.path.realpath(item.get("Source", "")) if typ == "bind" else item.get("Name", "") if typ == "volume" else ""
     live.append((item.get("Destination", ""), typ, source, not bool(item.get("RW", True))))
 if sorted(configured) != sorted(live):
     raise SystemExit("Volumes do Compose renderizado diferem dos mounts ativos. Abortando sem alteracoes.")
