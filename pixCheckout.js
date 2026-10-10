@@ -203,6 +203,7 @@ function concluirAgendamento() {
   localStorage.setItem("nomeCliente", reservaAtual.nome);
   localStorage.setItem("nomeUsuario", reservaAtual.nome);
   localStorage.setItem("servicoAgendamento", reservaAtual.nomeServico);
+  localStorage.setItem("isabelePixReservaId", reservaAtual.reservaId);
   sessionStorage.removeItem(STORAGE_RESERVA_PIX);
   setTimeout(() => { window.location.assign("confirmacao.html"); }, 1400);
 }
@@ -230,7 +231,7 @@ async function conferirPagamento() {
       btnRepetir.hidden = false;
       mensagem("Esta cobrança não está mais disponível. Inicie uma nova reserva.", true);
     } else {
-      mensagem("Aguardando o pagamento de teste...");
+      mensagem("Aguardando a identificação do pagamento PIX...");
     }
   } catch (erro) {
     // Falhas temporarias nao interrompem a verificacao.
