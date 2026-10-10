@@ -54,11 +54,27 @@ if [[ "$MODE" == "rollback" ]]; then
   PROJECT_WORKDIR="$(<"$BACKUP_DIR/compose-working-dir")"
   OLD_IMAGE_ID="$(<"$BACKUP_DIR/old-api-image-id")"
   [[ "$OLD_IMAGE_ID" =~ ^sha256:[0-9a-f]{64}$ ]] || die "Imagem anterior invalida."
+  OLD_IMAGE_REF_FILE="$BACKUP_DIR/old-api-image-tag"
+  if [[ -s "$OLD_IMAGE_REF_FILE" ]]; then
+    OLD_IMAGE_REF="$(<"$OLD_IMAGE_REF_FILE")"
+    if ! docker image inspect "$OLD_IMAGE_REF" >/dev/null 2>&1; then
+      docker image inspect "$OLD_IMAGE_ID" >/dev/null 2>&1 || die "Tag e imagem antiga ausentes; rollback indisponivel com este backup."
+      docker image tag "$OLD_IMAGE_ID" "$OLD_IMAGE_REF"
+    fi
+  else
+    # Compatibility for backups made before persistent rollback tags existed.
+    docker image inspect "$OLD_IMAGE_ID" >/dev/null 2>&1 || die "Imagem antiga nao esta mais no cache local e este backup nao possui tag persistente."
+    OLD_IMAGE_REF="isabele-nails-api:rollback-recovered-$(timestamp)"
+    docker image tag "$OLD_IMAGE_ID" "$OLD_IMAGE_REF"
+    printf '%s\n' "$OLD_IMAGE_REF" >"$OLD_IMAGE_REF_FILE"
+    chmod 600 "$OLD_IMAGE_REF_FILE"
+  fi
+  docker image inspect "$OLD_IMAGE_REF" >/dev/null 2>&1 || die "Referencia persistente da imagem antiga nao encontrada: $OLD_IMAGE_REF"
   ROLLBACK_OVERRIDE="$BACKUP_DIR/rollback-compose.yaml"
   cat >"$ROLLBACK_OVERRIDE" <<EOF
 services:
   $API_SERVICE:
-    image: "$OLD_IMAGE_ID"
+    image: "$OLD_IMAGE_REF"
     build: null
 EOF
   chmod 600 "$ROLLBACK_OVERRIDE"
@@ -297,6 +313,11 @@ find "$BACKUP_DIR" -maxdepth 1 -type f -exec chmod 600 {} +
 API_IMAGE_ID="$(docker inspect --format '{{.Image}}' "$API_CONTAINER")"
 [[ "$API_IMAGE_ID" =~ ^sha256:[0-9a-f]{64}$ ]] || die "Imagem ativa da API nao identificada."
 printf '%s\n' "$API_IMAGE_ID" >"$BACKUP_DIR/old-api-image-id"
+OLD_API_IMAGE_TAG="isabele-nails-api:rollback-$(timestamp)-$$"
+docker image tag "$API_IMAGE_ID" "$OLD_API_IMAGE_TAG"
+[[ "$(docker image inspect --format '{{.Id}}' "$OLD_API_IMAGE_TAG")" == "$API_IMAGE_ID" ]] || die "Nao foi possivel criar referencia persistente para a imagem anterior."
+printf '%s\n' "$OLD_API_IMAGE_TAG" >"$BACKUP_DIR/old-api-image-tag"
+chmod 600 "$BACKUP_DIR/old-api-image-id" "$BACKUP_DIR/old-api-image-tag"
 
 RELEASE_DIR="$RELEASE_ROOT/$TARGET_COMMIT"
 [[ ! -e "$RELEASE_DIR" ]] || die "Release ja existe: $RELEASE_DIR"
@@ -306,14 +327,17 @@ MIGRATION="$RELEASE_DIR/infra/migrations/010_pix_webhook_ambientes.sql"
 [[ -f "$MIGRATION" ]] || die "Migracao 010 nao encontrada no commit alvo."
 
 UPDATE_OVERRIDE="$BACKUP_DIR/update-compose.yaml"
+TARGET_IMAGE_TAG="isabele-nails-api:release-${TARGET_COMMIT}"
+printf '%s\n' "$TARGET_IMAGE_TAG" >"$BACKUP_DIR/target-api-image-tag"
 cat >"$UPDATE_OVERRIDE" <<EOF
 services:
   $API_SERVICE:
+    image: "$TARGET_IMAGE_TAG"
     build:
       context: "$RELEASE_DIR/infra/backend"
       dockerfile: Dockerfile
-      labels:
-        org.opencontainers.image.revision: "$TARGET_COMMIT"
+      args:
+        APP_REVISION: "$TARGET_COMMIT"
     labels:
       org.opencontainers.image.revision: "$TARGET_COMMIT"
 EOF
@@ -324,6 +348,69 @@ compose_snapshot() {
     --file "$BACKUP_DIR/effective-before.yaml" --file "$UPDATE_OVERRIDE" "$@"
 }
 
+# A migration 010 pode já ter sido aplicada por uma tentativa anterior. Detecta
+# a estrutura final no catálogo PostgreSQL e só aplica se a estrutura ainda for
+# a versão pré-010. Estado parcial é ambíguo e interrompe a atualização.
+MIGRATION_STATE_SQL="$BACKUP_DIR/migration-010-state.sql"
+cat >"$MIGRATION_STATE_SQL" <<'SQL'
+WITH state AS (
+  SELECT
+    to_regclass('public.pix_webhook_inbox') IS NOT NULL AS has_table,
+    EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'pix_webhook_inbox'
+        AND column_name = 'mp_environment'
+    ) AS has_environment_column,
+    EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'pix_webhook_inbox'
+        AND column_name = 'mp_environment' AND is_nullable = 'NO'
+    ) AS environment_column_not_null,
+    EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'pix_webhook_inbox'
+        AND column_name = 'mp_environment' AND column_default = '''test''::text'
+    ) AS environment_default_test,
+    EXISTS (
+      SELECT 1 FROM pg_constraint
+      WHERE conrelid = to_regclass('public.pix_webhook_inbox')
+        AND conname = 'pix_webhook_inbox_environment_check' AND contype = 'c'
+        AND pg_get_constraintdef(oid) LIKE '%test%'
+        AND pg_get_constraintdef(oid) LIKE '%production%'
+    ) AS has_environment_check,
+    EXISTS (
+      SELECT 1 FROM pg_constraint
+      WHERE conrelid = to_regclass('public.pix_webhook_inbox')
+        AND conname = 'pix_webhook_inbox_pkey' AND contype = 'p'
+        AND pg_get_constraintdef(oid) = 'PRIMARY KEY (mp_environment, mp_order_id)'
+    ) AS has_environment_primary_key,
+    EXISTS (
+      SELECT 1 FROM pg_index i
+      WHERE i.indexrelid = to_regclass('public.idx_pix_webhook_pendentes')
+        AND i.indisvalid
+        AND pg_get_indexdef(i.indexrelid) LIKE '%(mp_environment, proxima_tentativa_em)%'
+        AND pg_get_expr(i.indpred, i.indrelid) = '(processado_em IS NULL)'
+    ) AS has_environment_pending_index
+)
+SELECT CASE
+  WHEN NOT has_table THEN 'missing_table'
+  WHEN has_environment_column AND environment_column_not_null AND environment_default_test AND has_environment_check
+    AND has_environment_primary_key AND has_environment_pending_index THEN 'applied'
+  WHEN NOT has_environment_column AND NOT has_environment_check THEN 'pending'
+  ELSE 'partial'
+END
+FROM state;
+SQL
+chmod 600 "$MIGRATION_STATE_SQL"
+MIGRATION_STATE="$(compose_snapshot exec -T "$DB_SERVICE" sh -lc 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At' <"$MIGRATION_STATE_SQL" | tr -d '\r\n')"
+case "$MIGRATION_STATE" in
+  applied) echo "Migracao 010 ja aplicada; sera preservada sem nova execucao." ;;
+  pending) echo "Migracao 010 ainda pendente; sera aplicada uma vez nesta atualizacao." ;;
+  partial) die "Estado parcial da migracao 010; nenhuma migracao foi executada e a API nao sera parada." ;;
+  missing_table) die "Tabela da migracao 008 ausente; nao e seguro aplicar a migracao 010." ;;
+  *) die "Nao foi possivel determinar o estado da migracao 010 (resultado: $MIGRATION_STATE)." ;;
+esac
+
 printf '%s\n' "$DB_CONTAINER" >"$BACKUP_DIR/db-container-id"
 compose_snapshot exec -T "$DB_SERVICE" sh -lc 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' >"$BACKUP_DIR/postgres-before.dump"
 [[ -s "$BACKUP_DIR/postgres-before.dump" ]] || die "Backup PostgreSQL vazio; atualizacao cancelada."
@@ -331,9 +418,11 @@ chmod 600 "$BACKUP_DIR/postgres-before.dump"
 echo "Backup PostgreSQL concluido ($(du -h "$BACKUP_DIR/postgres-before.dump" | awk '{print $1}'))."
 echo "Backup protegido: $BACKUP_DIR"
 echo "Commit alvo: $TARGET_COMMIT"
+echo "Imagem alvo: $TARGET_IMAGE_TAG"
 echo "Configuracao de teste e volumes efetivos foram preservados; PIX real segue desativado."
 
 compose_snapshot build "$API_SERVICE"
+[[ "$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$TARGET_IMAGE_TAG" 2>/dev/null || true)" == "$TARGET_COMMIT" ]] || die "A imagem versionada nao foi construida com o commit alvo."
 API_STOPPED=false
 MIGRATION_APPLIED=false
 NEW_API_STARTED=false
@@ -344,7 +433,7 @@ restore_old_api_on_error() {
     echo "Falha (codigo $rc); iniciando recuperacao segura."
     if [[ "$NEW_API_STARTED" == true ]]; then
       local rollback="$BACKUP_DIR/rollback-compose.yaml"
-      local old_image="$(<"$BACKUP_DIR/old-api-image-id")"
+      local old_image="$(<"$BACKUP_DIR/old-api-image-tag")"
       cat >"$rollback" <<EOF
 services:
   $API_SERVICE:
@@ -358,7 +447,9 @@ EOF
     elif [[ "$API_STOPPED" == true ]]; then
       docker start "$API_CONTAINER" >/dev/null || true
     fi
-    [[ "$MIGRATION_APPLIED" != true ]] || echo "Migracao 010 aplicada e preservada; nenhum dado foi removido."
+    if [[ "$MIGRATION_APPLIED" == true || "$MIGRATION_STATE" == applied ]]; then
+      echo "Migracao 010 aplicada e preservada; nenhum dado foi removido."
+    fi
     echo "Backup e configuracao efetiva anterior: $BACKUP_DIR"
   fi
   exit "$rc"
@@ -367,8 +458,12 @@ trap restore_old_api_on_error EXIT
 
 compose_snapshot stop "$API_SERVICE"
 API_STOPPED=true
-compose_snapshot exec -T "$DB_SERVICE" sh -lc 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <"$MIGRATION"
-MIGRATION_APPLIED=true
+if [[ "$MIGRATION_STATE" == pending ]]; then
+  compose_snapshot exec -T "$DB_SERVICE" sh -lc 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <"$MIGRATION"
+  MIGRATION_APPLIED=true
+else
+  echo "Pulando migracao 010 ja aplicada; banco e dados serao mantidos."
+fi
 NEW_API_STARTED=true
 compose_snapshot up -d --no-deps "$API_SERVICE"
 API_STOPPED=false
@@ -379,10 +474,12 @@ NEW_API_CONTAINER="$(compose_snapshot ps -q "$API_SERVICE" | head -n 1)"
 [[ -n "$NEW_API_CONTAINER" ]] || die "Compose nao encontrou o container api atualizado."
 [[ "$NEW_API_CONTAINER" != "$API_CONTAINER" ]] || die "O container api nao foi recriado; recusando validar somente o healthcheck."
 SERVICE_REVISION="$(docker inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$NEW_API_CONTAINER")"
+RUNNING_IMAGE_REF="$(docker inspect --format '{{.Config.Image}}' "$NEW_API_CONTAINER")"
 NEW_IMAGE_ID="$(docker inspect --format '{{.Image}}' "$NEW_API_CONTAINER")"
 IMAGE_REVISION="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$NEW_IMAGE_ID")"
-[[ "$SERVICE_REVISION" == "$TARGET_COMMIT" && "$IMAGE_REVISION" == "$TARGET_COMMIT" ]] || die "A API ativa nao comprova o commit alvo ($TARGET_COMMIT); rollback automatico sera iniciado."
-echo "Commit da API conferido no container e na imagem: $TARGET_COMMIT"
+TARGET_TAG_IMAGE_ID="$(docker image inspect --format '{{.Id}}' "$TARGET_IMAGE_TAG")"
+[[ "$SERVICE_REVISION" == "$TARGET_COMMIT" && "$IMAGE_REVISION" == "$TARGET_COMMIT" && "$RUNNING_IMAGE_REF" == "$TARGET_IMAGE_TAG" && "$NEW_IMAGE_ID" == "$TARGET_TAG_IMAGE_ID" ]] || die "A API ativa nao comprova o commit e a referencia de imagem alvo ($TARGET_COMMIT); rollback automatico sera iniciado."
+echo "Commit da API e referencia persistente conferidos: $TARGET_COMMIT ($TARGET_IMAGE_TAG)"
 
 HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:3001/health}"
 HEALTH_OK=false
