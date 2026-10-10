@@ -78,9 +78,10 @@ mapfile -t ALL_API_CONTAINERS < <(docker ps -q --filter "label=com.docker.compos
 API_CONTAINERS=()
 for candidate in "${ALL_API_CONTAINERS[@]}"; do
   candidate_files="$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.project.config_files" }}' "$candidate")"
+  candidate_workdir="$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}' "$candidate")"
   IFS=',' read -r -a candidate_file_list <<<"$candidate_files"
   for candidate_file in "${candidate_file_list[@]}"; do
-    candidate_real="$(realpath "$candidate_file" 2>/dev/null || realpath "$APP_REAL/$candidate_file" 2>/dev/null || true)"
+    candidate_real="$(realpath "$candidate_file" 2>/dev/null || realpath "$candidate_workdir/$candidate_file" 2>/dev/null || realpath "$APP_REAL/$candidate_file" 2>/dev/null || true)"
     if [[ "$candidate_real" == "$APP_REAL/infra/compose.yaml" ]]; then
       API_CONTAINERS+=("$candidate")
       break
