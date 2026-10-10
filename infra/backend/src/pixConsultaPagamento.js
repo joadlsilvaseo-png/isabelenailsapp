@@ -1,4 +1,8 @@
-import { consultarPedidoPixTeste } from "./pixMercadoPago.js";
+import {
+  ambienteMercadoPagoAtual,
+  consultarPedidoPix,
+  mercadoPagoHabilitado
+} from "./pixMercadoPago.js";
 import { validarRetornoPagamentoPix } from "./pixValidacaoPagamento.js";
 import {
   encerrarCobrancaPixSemPagamento,
@@ -21,7 +25,7 @@ export async function consultarStatusPagamentoPix(req, res, pool, dependencias =
     const modulo = await import("./pushSubscriptions.js");
     return modulo.verificarUsuario(requisicao);
   });
-  const consultarPedido = dependencias.consultarPedido || consultarPedidoPixTeste;
+  const consultarPedido = dependencias.consultarPedido || consultarPedidoPix;
   const validarPagamento = dependencias.validarPagamento || validarRetornoPagamentoPix;
   const registrarCredito = dependencias.registrarCredito || registrarCreditoPix;
   const efetivarAgendamento = dependencias.efetivarAgendamento || efetivarAgendamentoPix;
@@ -36,11 +40,6 @@ export async function consultarStatusPagamentoPix(req, res, pool, dependencias =
   }
 
   try {
-    if (process.env.PIX_TEST_ORDERS_ENABLED !== "true") {
-      responder(res, 409, { erro: "PIX ainda desativado" });
-      return;
-    }
-
     const partes = [];
     let tamanho = 0;
 
@@ -83,6 +82,7 @@ export async function consultarStatusPagamentoPix(req, res, pool, dependencias =
         c.mp_order_id,
         c.referencia_externa,
         c.valor_sinal_centavos,
+        c.mp_environment,
         r.estado AS estado_reserva
       FROM public.pix_reservas AS r
       JOIN public.pix_cobrancas AS c
@@ -99,6 +99,12 @@ export async function consultarStatusPagamentoPix(req, res, pool, dependencias =
       return;
     }
 
+    const ambiente = cobranca.mp_environment || ambienteMercadoPagoAtual();
+    if (!dependencias.consultarPedido && !mercadoPagoHabilitado(ambiente)) {
+      responder(res, 409, { erro: `Operacoes PIX desativadas para ${ambiente}` });
+      return;
+    }
+
     if (!cobranca.mp_order_id) {
       responder(res, 202, {
         situacao: "cobranca_em_preparacao",
@@ -107,9 +113,7 @@ export async function consultarStatusPagamentoPix(req, res, pool, dependencias =
       return;
     }
 
-    const pedido = await consultarPedido(
-      cobranca.mp_order_id
-    );
+    const pedido = await consultarPedido(cobranca.mp_order_id, ambiente);
 
     const resultado = validarPagamento(
       pedido,
