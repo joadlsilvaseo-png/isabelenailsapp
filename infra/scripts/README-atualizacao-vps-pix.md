@@ -1,6 +1,6 @@
 # Atualização controlada da VPS (PIX)
 
-Este roteiro é para uma execução única, iniciada manualmente pelo responsável. O script não foi executado nesta revisão. A VPS não é acessada, a migração 010 não é aplicada e nenhuma cobrança é criada.
+Este roteiro é para uma execução única, iniciada manualmente pelo responsável. O script não foi executado nesta revisão e a VPS não foi acessada. A migração 010 já foi aplicada na instalação atual; o script verifica o catálogo PostgreSQL e pula a migração quando a estrutura esperada está presente. Não cria cobranças.
 
 ## O que o script verifica e preserva
 
@@ -8,7 +8,9 @@ A instalação informada usa `/opt/isabele-nails/infra/compose.yaml`, o override
 
 A configuração efetiva renderizada pode conter senhas, tokens, chaves VAPID e referências Firebase. Os arquivos de backup ficam sob diretório `root` com permissões restritas. O script não escreve o conteúdo dos segredos no log. Antes de qualquer parada, compara rigorosamente todas as variáveis declaradas no Compose efetivo com as variáveis do container ativo; uma declaração pass-through sem valor só é aceita se estiver ausente também no container. Compara ainda os mounts do Compose com os mounts reais (incluindo Firebase). Os quatro campos de webhook introduzidos após o commit implantado `844398b` não são exigidos nem criados pelo procedimento. Sem seus flags, o webhook/worker novo permanece desativado. Se a configuração efetiva antiga divergir do container, algum volume divergir, ou produção estiver selecionada/habilitada, o script aborta antes de parar serviços ou aplicar a migração.
 
-O override de atualização muda apenas o contexto de build do serviço `api`; mantém as variáveis e configurações renderizadas, incluindo PostgreSQL, Firebase, Push, Mercado Pago, volumes, portas, redes e políticas do Compose. O serviço PostgreSQL não é recriado. A cópia de trabalho em `/opt/isabele-nails` não recebe checkout, reset, stash ou limpeza. A imagem anterior e o snapshot efetivo são usados pelo rollback. A migração 010 e os dados ficam preservados no rollback; o dump não é restaurado automaticamente.
+O override de atualização muda o contexto de build e atribui à API uma referência imutável `isabele-nails-api:release-<commit>`; os labels da imagem e do container registram o SHA implantado. O Compose principal também declara a referência local `isabele-nails-api:local`. O Dockerfile copia os arquivos do backend com dono `node` e garante a propriedade de `/app`, incluindo `package.json` e `node_modules`, antes de executar como usuário não root.
+
+O restante da configuração renderizada permanece igual, incluindo variáveis, credenciais, PostgreSQL, Firebase, Push, Mercado Pago, volumes, portas, redes e políticas do Compose. O serviço PostgreSQL não é recriado. A cópia de trabalho em `/opt/isabele-nails` não recebe checkout, reset, stash ou limpeza. Antes do build, o script atribui à imagem anterior uma tag exclusiva guardada no backup; tanto o rollback automático quanto o manual usam essa referência persistente, sem depender de um ID `sha256` que possa deixar de estar disponível. A migração 010 e os dados ficam preservados no rollback; o dump não é restaurado automaticamente.
 
 ## Requisitos antes de executar
 
@@ -65,8 +67,8 @@ Use a versão do script atualizada junto ao PR. O script busca o commit mais rec
 2. Salva a configuração renderizada e os arquivos-fonte Compose com acesso restrito; registra alterações locais e imagem anterior.
 3. Gera dump PostgreSQL antes de parar qualquer serviço.
 4. Constrói o backend do commit mais recente em worktree isolado.
-5. Para somente `api`, aplica `infra/migrations/010_pix_webhook_ambientes.sql` com `ON_ERROR_STOP` e atualiza somente `api` usando o snapshot efetivo do Compose.
-6. Confirma que o container foi recriado e que o container e a imagem têm o label de revisão igual ao commit Git alvo. Depois verifica `/health` e a conexão PostgreSQL e registra a contagem da fila por ambiente.
+5. Detecta a migração 010 pelo estado da tabela, coluna, constraints, chave primária e índice. Se já estiver aplicada, não executa o SQL novamente. Se estiver pendente, aplica uma vez com `ON_ERROR_STOP`; estado parcial interrompe o processo antes da parada da API. Atualiza somente `api` usando o snapshot efetivo do Compose.
+6. Confirma que o container foi recriado com a referência de imagem versionada e que o container e a imagem têm label de revisão igual ao commit Git alvo. Depois verifica `/health` e a conexão PostgreSQL e registra a contagem da fila por ambiente.
 
 A produção permanece desativada. O script aborta se `MP_ENVIRONMENT` estiver diferente de `test` ou se `PIX_PRODUCTION_ORDERS_ENABLED` estiver como `true`. Se `MP_ENVIRONMENT` estiver ausente, a implementação usa `test`; se a flag de produção estiver ausente, o backend não habilita pedidos de produção. Os novos flags `PIX_WEBHOOK_ENABLED` e `PIX_WEBHOOK_WORKER_ENABLED` não são injetados; ausentes, deixam o endpoint/worker de webhook desabilitados. Segredos de webhook ausentes continuam ausentes. As variáveis antigas declaradas e seus valores são preservados conforme o snapshot efetivo; nenhuma credencial é impressa ou enviada para serviços externos.
 
@@ -95,7 +97,7 @@ $Backup = "/opt/isabele-nails-backups/pix-update-DIRETORIO_INFORMADO_NO_LOG"
 ssh -i $SshKey $VpsHost "sudo env APP_DIR=/opt/isabele-nails bash /usr/local/sbin/atualizar-vps-pix rollback $Backup"
 ```
 
-O comando sobe somente o serviço da API com a imagem anterior e o snapshot renderizado da configuração efetiva anterior, incluindo todos os valores de ambiente, Firebase, Push, PostgreSQL, Mercado Pago, volumes, redes e opções do Compose. Os arquivos Compose fonte originais também ficam copiados no backup para auditoria; o rollback usa o snapshot efetivo, não tenta reconstituir a configuração a partir de arquivos que possam ter mudado. Depois confira healthcheck e logs. A migração 010 e o banco permanecem como estão. Restaurar o dump é uma operação separada, que exige análise e janela de manutenção para evitar apagar dados criados após o backup.
+O comando sobe somente o serviço da API com a tag persistente da imagem anterior e o snapshot renderizado da configuração efetiva anterior, incluindo todos os valores de ambiente, Firebase, Push, PostgreSQL, Mercado Pago, volumes, redes e opções do Compose. Os arquivos Compose fonte originais também ficam copiados no backup para auditoria; o rollback usa o snapshot efetivo, não tenta reconstituir a configuração a partir de arquivos que possam ter mudado. Depois confira healthcheck e logs. A migração 010 e o banco permanecem como estão. Restaurar o dump é uma operação separada, que exige análise e janela de manutenção para evitar apagar dados criados após o backup.
 
 ## PIX real em uma etapa futura
 
