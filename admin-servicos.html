@@ -444,6 +444,34 @@
 
           </div>
 
+          <section class="admin-pix-deposit" aria-labelledby="admin-pix-deposit-title">
+            <div class="admin-pix-deposit-heading">
+              <span class="admin-modal-eyebrow">Pagamento antecipado</span>
+              <h3 id="admin-pix-deposit-title">Sinal para Agendamento PIX</h3>
+              <p>Defina o valor cobrado para reservar este serviço.</p>
+            </div>
+
+            <label class="admin-form-field" for="admin-service-pix-signal-type">
+              <span>Forma de cálculo</span>
+              <select id="admin-service-pix-signal-type">
+                <option value="">Sinal não configurado</option>
+                <option value="fixo">Valor fixo (R$)</option>
+                <option value="percentual">Porcentagem (%)</option>
+              </select>
+            </label>
+
+            <label id="admin-service-pix-signal-value-field" class="admin-form-field" for="admin-service-pix-signal-value" hidden>
+              <span id="admin-service-pix-signal-value-label">Valor do sinal</span>
+              <input id="admin-service-pix-signal-value" type="number" inputmode="decimal" min="0.01" step="0.01" placeholder="0,00">
+              <small id="admin-service-pix-signal-value-help">Informe um valor maior que zero.</small>
+            </label>
+
+            <div id="admin-service-pix-signal-preview" class="admin-pix-deposit-preview" aria-live="polite">
+              <strong>Prévia do sinal</strong>
+              <span>Informe o preço do serviço e configure o sinal.</span>
+            </div>
+          </section>
+
           <label class="admin-form-field">
             <span>
               Descrição

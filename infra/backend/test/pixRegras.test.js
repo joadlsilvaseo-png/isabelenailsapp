@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
+import { readFile } from "node:fs/promises";
 
 import {
   encerrarCobrancaPixSemPagamento,
@@ -28,6 +29,7 @@ import { processarProximaNotificacaoPix } from "../src/pixWebhookFila.js";
 import { atenderWebhookPix, validarAssinaturaWebhookPix } from "../src/pixWebhook.js";
 import { pagamentoPixConfirmadoManualmente } from "../src/pixRegrasConfirmacao.js";
 import { atenderConfirmacaoAgendamentoPix } from "../src/pixAgendamentoConfirmacao.js";
+import { calcularSinalServico, criarCamposSinalServico, obterEntradaSinalServico } from "../src/pixSinalServico.js";
 
 const cobrancaBase = {
   id: "6d8f562d-5e85-4bc8-9705-932158e7c2a9",
@@ -1162,4 +1164,109 @@ test("tela de confirmacao recebe valores reais somente com pagamento e Firestore
   assert.equal(response.valorTotalCentavos, 3000);
   assert.equal(response.sinalPagoCentavos, 2000);
   assert.equal(response.valorRestanteCentavos, 1000);
+});
+
+test("sinal fixo por servico calcula valor e restante em centavos", () => {
+  const campos = criarCamposSinalServico(50, "fixo", "15.00");
+  assert.deepEqual(campos, {
+    pixSinalTipo: "fixo",
+    pixSinalValorCentavos: 1500,
+    pixSinalPercentual: null,
+  });
+  assert.deepEqual(calcularSinalServico({ preco: 50, ...campos }), {
+    valorTotalCentavos: 5000,
+    tipoSinal: "fixo",
+    percentualSinal: null,
+    valorFixoConfiguradoCentavos: 1500,
+    valorSinalCentavos: 1500,
+    valorRestanteCentavos: 3500,
+  });
+});
+
+test("sinal percentual por servico calcula a porcentagem sobre o preco", () => {
+  const campos = criarCamposSinalServico(150, "percentual", "30");
+  const valores = calcularSinalServico({ preco: 150, ...campos });
+  assert.equal(valores.valorSinalCentavos, 4500);
+  assert.equal(valores.valorRestanteCentavos, 10500);
+  assert.equal(valores.percentualSinal, 30);
+});
+
+test("sinal percentual arredonda meio centavo para cima", () => {
+  const valores = calcularSinalServico({
+    preco: 1.01,
+    pixSinalTipo: "percentual",
+    pixSinalPercentual: 50,
+  });
+  assert.equal(valores.valorSinalCentavos, 51);
+  assert.equal(valores.valorRestanteCentavos, 50);
+});
+
+test("servico sem sinal configurado nao recorre ao padrao global", () => {
+  assert.throws(
+    () => calcularSinalServico({ preco: 50 }),
+    /Sinal PIX nao configurado/
+  );
+  assert.deepEqual(criarCamposSinalServico(50, "", ""), {
+    pixSinalTipo: null,
+    pixSinalValorCentavos: null,
+    pixSinalPercentual: null,
+  });
+  assert.throws(() => calcularSinalServico({}), /Preco do servico invalido/);
+});
+
+test("sinal fixo superior ao preco e percentual acima de 100 sao rejeitados", () => {
+  assert.throws(
+    () => criarCamposSinalServico(50, "fixo", "50.01"),
+    /nao superar o preco/
+  );
+  assert.throws(
+    () => criarCamposSinalServico(50, "percentual", "100.01"),
+    /no maximo 100/
+  );
+});
+
+test("edicao recarrega a regra e preservar cobranca existente nao muda seu snapshot", () => {
+  const servico = {
+    preco: 50,
+    pixSinalTipo: "fixo",
+    pixSinalValorCentavos: 1500,
+    pixSinalPercentual: null,
+  };
+  assert.deepEqual(obterEntradaSinalServico(servico), { tipo: "fixo", valor: "15.00" });
+
+  const cobranca = Object.freeze({
+    valor_total_centavos: 5000,
+    valor_sinal_centavos: 1500,
+    valor_restante_centavos: 3500,
+    tipo_sinal: "fixo",
+    valor_fixo_configurado_centavos: 1500,
+  });
+  const novaRegra = criarCamposSinalServico(60, "percentual", "25");
+  assert.equal(calcularSinalServico({ preco: 60, ...novaRegra }).valorSinalCentavos, 1500);
+  assert.deepEqual(cobranca, {
+    valor_total_centavos: 5000,
+    valor_sinal_centavos: 1500,
+    valor_restante_centavos: 3500,
+    tipo_sinal: "fixo",
+    valor_fixo_configurado_centavos: 1500,
+  });
+});
+
+test("cotacao e reserva dependem do mesmo calculador de sinal por servico", async () => {
+  const [cotacao, reservas, admin] = await Promise.all([
+    readFile(new URL("../src/pixCotacao.js", import.meta.url), "utf8"),
+    readFile(new URL("../src/pixReservas.js", import.meta.url), "utf8"),
+    readFile(new URL("../../../admin-servicos.js", import.meta.url), "utf8"),
+  ]);
+  assert.match(cotacao, /calcularSinalServico\(dadosServico\)/);
+  assert.match(reservas, /calcularSinalServico\(servico\)/);
+  assert.match(reservas, /valorSinalCentavos/);
+  assert.match(reservas, /valorFixoConfiguradoCentavos/);
+  assert.match(admin, /obterEntradaSinalServico/);
+  assert.match(admin, /obterEntradaSinalServico\(servico\.dadosOriginais\)/);
+  assert.match(admin, /pixSinalTipo/);
+  assert.doesNotMatch(cotacao, /tipo_sinal_padrao|percentual_padrao|valor_fixo_padrao_centavos/);
+  assert.doesNotMatch(reservas, /tipo_sinal_padrao|percentual_padrao|valor_fixo_padrao_centavos/);
+  assert.match(reservas, /valores\.valorTotalCentavos,[\s\S]*valores\.percentualSinal,[\s\S]*valores\.valorSinalCentavos,[\s\S]*valores\.valorRestanteCentavos/);
+  assert.match(reservas, /valores\.tipoSinal,[\s\S]*valores\.valorFixoConfiguradoCentavos/);
 });

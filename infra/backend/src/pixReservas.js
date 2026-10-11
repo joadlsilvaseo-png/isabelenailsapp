@@ -20,6 +20,7 @@ import {
   registrarCreditoPix
 } from "./pixConciliacao.js";
 import { efetivarAgendamentoPix } from "./pixEfetivacao.js";
+import { calcularSinalServico } from "./pixSinalServico.js";
 
 class ErroReserva extends Error {
   constructor(status, mensagem) {
@@ -99,63 +100,6 @@ function validarDataFutura(data, horario) {
   if (`${data}T${horario}` <= agora) {
     throw new ErroReserva(409, "Horario ja passou");
   }
-}
-
-function calcularValores(preco, regra) {
-  if (
-    typeof preco !== "number" ||
-    !Number.isFinite(preco) ||
-    preco <= 0
-  ) {
-    throw new ErroReserva(422, "Preco do servico invalido");
-  }
-
-  const valorTotal = Math.round(preco * 100);
-
-  if (
-    !Number.isSafeInteger(valorTotal) ||
-    Math.abs(preco * 100 - valorTotal) > 1e-7
-  ) {
-    throw new ErroReserva(422, "Preco do servico invalido");
-  }
-
-  let valorSinal;
-
-  if (regra.tipo_sinal_padrao === "fixo") {
-    valorSinal = Number(regra.valor_fixo_padrao_centavos);
-  } else if (regra.tipo_sinal_padrao === "percentual") {
-    const percentual = Number(regra.percentual_padrao);
-    const pontos = Math.round(percentual * 100);
-
-    if (
-      !Number.isFinite(percentual) ||
-      pontos <= 0 ||
-      pontos > 10000
-    ) {
-      throw new ErroReserva(422, "Percentual invalido");
-    }
-
-    valorSinal = Math.round(valorTotal * pontos / 10000);
-  } else {
-    throw new ErroReserva(422, "Tipo de sinal invalido");
-  }
-
-  if (
-    !Number.isSafeInteger(valorSinal) ||
-    valorSinal <= 0 ||
-    valorSinal > valorTotal
-  ) {
-    throw new ErroReserva(
-      422,
-      "Sinal invalido para o valor do servico"
-    );
-  }
-
-  return {
-    valorTotalCentavos: valorTotal,
-    valorSinalCentavos: valorSinal,
-    valorRestanteCentavos: valorTotal - valorSinal
-  };
 }
 
 async function reconciliarReservasVencidasDoDia(pool, data) {
@@ -318,9 +262,6 @@ export async function criarReservaPix(req, res, pool) {
       const config = await conexao.query(`
         SELECT
           ativo,
-          tipo_sinal_padrao,
-          valor_fixo_padrao_centavos,
-          percentual_padrao,
           reserva_minutos
         FROM public.pix_configuracao
         WHERE id = 1
@@ -346,7 +287,12 @@ export async function criarReservaPix(req, res, pool) {
         );
       }
 
-      const valores = calcularValores(servico.preco, regra);
+      let valores;
+      try {
+        valores = calcularSinalServico(servico);
+      } catch (erro) {
+        throw new ErroReserva(422, erro.message);
+      }
 
       // Libera somente reservas sem pedido enviado ao MP.
       // Antes de chamar a API externa, a cobranca devera
@@ -396,19 +342,12 @@ export async function criarReservaPix(req, res, pool) {
 
       const venceEm = vencimento.rows[0].vence_em;
 
-      const percentual =
-        regra.tipo_sinal_padrao === "percentual"
-          ? Number(regra.percentual_padrao)
-          : null;
-
-      const valorFixo =
-        regra.tipo_sinal_padrao === "fixo"
-          ? Number(regra.valor_fixo_padrao_centavos)
-          : null;
-
       const reservaDados = {
         servicoId,
         nomeServico: servico.nome || "Servico",
+        pixSinalTipo: valores.tipoSinal,
+        pixSinalPercentual: valores.percentualSinal,
+        pixSinalValorCentavos: valores.valorFixoConfiguradoCentavos,
         nomeCliente,
         data,
         horario,
@@ -445,13 +384,13 @@ export async function criarReservaPix(req, res, pool) {
         referenciaExterna,
         chaveIdempotencia,
         valores.valorTotalCentavos,
-        percentual,
+        valores.percentualSinal,
         valores.valorSinalCentavos,
         valores.valorRestanteCentavos,
         ambienteMP,
         venceEm,
-        regra.tipo_sinal_padrao,
-        valorFixo
+        valores.tipoSinal,
+        valores.valorFixoConfiguradoCentavos
       ]);
 
       // Vincula o horario a cobranca na mesma transacao.

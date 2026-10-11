@@ -1,4 +1,5 @@
 import { auth, db } from "./firebase-config.js";
+import { calcularSinalServico, criarCamposSinalServico, formatarSinalServico, obterEntradaSinalServico } from "./infra/backend/src/pixSinalServico.js";
 
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
 
@@ -121,6 +122,13 @@ function carregarElementos() {
   elements.serviceCategory = document.getElementById("admin-service-category");
 
   elements.servicePrice = document.getElementById("admin-service-price");
+
+  elements.pixSignalType = document.getElementById("admin-service-pix-signal-type");
+  elements.pixSignalValueField = document.getElementById("admin-service-pix-signal-value-field");
+  elements.pixSignalValue = document.getElementById("admin-service-pix-signal-value");
+  elements.pixSignalValueLabel = document.getElementById("admin-service-pix-signal-value-label");
+  elements.pixSignalValueHelp = document.getElementById("admin-service-pix-signal-value-help");
+  elements.pixSignalPreview = document.getElementById("admin-service-pix-signal-preview");
 
   elements.serviceDuration = document.getElementById("admin-service-duration");
 
@@ -355,6 +363,9 @@ function normalizarServico(documentSnapshot) {
     duracao,
     descricao,
     ativo,
+    pixSinalTipo: dados.pixSinalTipo || null,
+    pixSinalValorCentavos: dados.pixSinalValorCentavos ?? null,
+    pixSinalPercentual: dados.pixSinalPercentual ?? null,
 
     criadoEm: dados.criadoEm || null,
 
@@ -751,6 +762,13 @@ function criarCardServico(servico) {
 
   const textoToggle = servico.ativo ? "Desativar serviço" : "Ativar serviço";
 
+  let sinalPix = "Sinal não configurado";
+  try {
+    sinalPix = formatarSinalServico(servico.dadosOriginais);
+  } catch {
+    // Serviços antigos sem regra permanecem editáveis, mas não geram PIX.
+  }
+
   return `
     <article
       class="admin-service-card"
@@ -799,6 +817,14 @@ function criarCardServico(servico) {
             </strong>
           </div>
 
+        </div>
+
+        <div class="admin-service-meta-item admin-service-meta-item--pix">
+          <span class="admin-service-meta-icon" aria-hidden="true">PIX</span>
+          <div>
+            <span>Sinal para agendamento PIX</span>
+            <strong>${escaparHTML(sinalPix)}</strong>
+          </div>
         </div>
 
         <div class="admin-service-meta-item">
@@ -928,6 +954,9 @@ function limparFormulario() {
 
   elements.serviceId.value = "";
   elements.serviceActive.checked = true;
+  elements.pixSignalType.value = "";
+  elements.pixSignalValue.value = "";
+  atualizarCamposSinalPix();
 
   servicoEmEdicaoId = null;
 }
@@ -967,6 +996,11 @@ function abrirModalEditarServico(id) {
 
   elements.servicePrice.value = formatarPrecoParaCampo(servico.preco);
 
+  const sinalEdicao = obterEntradaSinalServico(servico.dadosOriginais);
+  elements.pixSignalType.value = sinalEdicao.tipo;
+  elements.pixSignalValue.value = sinalEdicao.valor;
+  atualizarCamposSinalPix();
+
   elements.serviceDuration.value = servico.duracao;
 
   elements.serviceDescription.value = servico.descricao;
@@ -995,6 +1029,57 @@ function fecharModalServico() {
 
   limparFormulario();
   liberarRolagemPagina();
+}
+
+function criarConfiguracaoSinalPix() {
+  const tipo = elements.pixSignalType.value;
+  if (!tipo) {
+    return {
+      pixSinalTipo: null,
+      pixSinalValorCentavos: null,
+      pixSinalPercentual: null,
+    };
+  }
+
+  return criarCamposSinalServico(
+    converterPrecoParaNumero(elements.servicePrice.value),
+    tipo,
+    elements.pixSignalValue.value,
+  );
+}
+
+function atualizarCamposSinalPix() {
+  const tipo = elements.pixSignalType.value;
+  const fixo = tipo === "fixo";
+  elements.pixSignalValueField.hidden = !tipo;
+  elements.pixSignalValueLabel.textContent = fixo ? "Valor fixo do sinal (R$)" : "Percentual do sinal (%)";
+  elements.pixSignalValueHelp.textContent = fixo
+    ? "Maior que zero e até o preço do serviço."
+    : "Maior que zero e até 100%.";
+  elements.pixSignalValue.min = "0.01";
+  elements.pixSignalValue.max = fixo ? "" : "100";
+  elements.pixSignalValue.step = "0.01";
+  atualizarPreviaSinalPix();
+}
+
+function atualizarPreviaSinalPix() {
+  const resumo = elements.pixSignalPreview.querySelector("span");
+  const tipo = elements.pixSignalType.value;
+  if (!tipo) {
+    resumo.textContent = "Este serviço ainda não tem sinal configurado e não poderá emitir PIX.";
+    return;
+  }
+  try {
+    const sinal = criarConfiguracaoSinalPix();
+    const valores = calcularSinalServico({
+      preco: converterPrecoParaNumero(elements.servicePrice.value),
+      ...sinal,
+    });
+    const moeda = (centavos) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(centavos / 100);
+    resumo.textContent = `Sinal: ${moeda(valores.valorSinalCentavos)} · Restante: ${moeda(valores.valorRestanteCentavos)}`;
+  } catch (erro) {
+    resumo.textContent = erro.message;
+  }
 }
 
 /* ============================================================
@@ -1032,11 +1117,23 @@ function validarFormularioServico() {
     return false;
   }
 
+  const tipoSinal = elements.pixSignalType.value;
+  if (tipoSinal) {
+    try {
+      criarConfiguracaoSinalPix();
+    } catch (erro) {
+      window.alert(erro.message);
+      elements.pixSignalValue.focus();
+      return false;
+    }
+  }
+
   return true;
 }
 
 function criarPayloadServico() {
   const ativo = elements.serviceActive.checked;
+  const configuracaoSinal = criarConfiguracaoSinalPix();
 
   return {
     nome: elements.serviceName.value.trim(),
@@ -1048,6 +1145,8 @@ function criarPayloadServico() {
     duracao: converterDuracaoParaNumero(elements.serviceDuration.value),
 
     descricao: elements.serviceDescription.value.trim(),
+
+    ...configuracaoSinal,
 
     ativo,
 
@@ -1350,7 +1449,12 @@ function configurarEventos() {
 
     elements.servicePrice.value =
       preco > 0 ? formatarPrecoParaCampo(preco) : "";
+    atualizarPreviaSinalPix();
   });
+
+  elements.servicePrice?.addEventListener("input", atualizarPreviaSinalPix);
+  elements.pixSignalType?.addEventListener("change", atualizarCamposSinalPix);
+  elements.pixSignalValue?.addEventListener("input", atualizarPreviaSinalPix);
 
   document.querySelectorAll("[data-close-service-modal]").forEach((button) => {
     button.addEventListener("click", fecharModalServico);
