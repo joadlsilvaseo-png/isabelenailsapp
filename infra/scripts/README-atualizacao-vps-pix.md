@@ -113,7 +113,7 @@ $Backup = "/opt/isabele-nails-backups/pix-update-DIRETORIO_INFORMADO_NO_LOG"
 ssh -i $SshKey $VpsHost "sudo env APP_DIR=/opt/isabele-nails bash /usr/local/sbin/atualizar-vps-pix rollback $Backup"
 ```
 
-O comando sobe somente o serviço da API com a tag persistente da imagem anterior e o snapshot renderizado da configuração efetiva anterior, incluindo todos os valores de ambiente, Firebase, Push, PostgreSQL, Mercado Pago, volumes, redes e opções do Compose. Os arquivos Compose fonte originais também ficam copiados no backup para auditoria; o rollback usa o snapshot efetivo, não tenta reconstituir a configuração a partir de arquivos que possam ter mudado. Depois confira healthcheck e logs. As migrações 010/011 e o banco permanecem como estão; rollback de código não desfaz schema. Restaurar o dump é uma operação separada, que exige análise e janela de manutenção para evitar apagar dados criados após o backup.
+O comando sobe somente o serviço da API com a tag persistente da imagem anterior e o snapshot renderizado da configuração efetiva anterior, incluindo todos os valores de ambiente, Firebase, Push, PostgreSQL, Mercado Pago, volumes, redes e opções do Compose. Os arquivos Compose fonte originais também ficam copiados no backup para auditoria; o rollback usa o snapshot efetivo, não tenta reconstituir a configuração a partir de arquivos que possam ter mudado. Depois confira healthcheck e logs. As migrações 010/011/012 e o banco permanecem como estão; rollback de código não desfaz schema. Restaurar o dump é uma operação separada, que exige análise e janela de manutenção para evitar apagar dados criados após o backup.
 
 ## PIX real em uma etapa futura
 
