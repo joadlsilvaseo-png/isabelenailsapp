@@ -1152,8 +1152,12 @@ function abrirModal(id) {
   const status = normalizarStatus(agendamento.status);
 
   const observacao = obterObservacao(agendamento);
-  const possuiPix = Boolean(agendamento.pixCobrancaId || agendamento.pixPagamentoId);
-  const valorTotal = converterValorMonetario(obterPrimeiroValor(agendamento, ["precoSnapshot", "valor", "preco"], 0));
+  const possuiPix = Boolean(
+    agendamento.pixCobrancaId || agendamento.pixPagamentoId,
+  );
+  const valorTotal = converterValorMonetario(
+    obterPrimeiroValor(agendamento, ["precoSnapshot", "valor", "preco"], 0),
+  );
   const sinalPix = Number(agendamento.valorSinalCentavos || 0) / 100;
   const restantePix = Number(agendamento.valorRestanteCentavos || 0) / 100;
 
@@ -1225,11 +1229,15 @@ function abrirModal(id) {
         </strong>
       </div>
 
-      ${possuiPix ? `
+      ${
+        possuiPix
+          ? `
       <div class="admin-modal-detail"><span>Valor total</span><strong>${escaparHTML(formatarValorMonetario(valorTotal))}</strong></div>
       <div class="admin-modal-detail"><span>Sinal PIX</span><strong>${escaparHTML(formatarValorMonetario(sinalPix))}${agendamento.pixStatusFinanceiro === "estornado" ? " (estornado)" : " (pago)"}</strong></div>
       <div class="admin-modal-detail"><span>Restante no atendimento</span><strong>${escaparHTML(formatarValorMonetario(restantePix))}</strong></div>
-      ` : ""}
+      `
+          : ""
+      }
 
       <div class="admin-modal-detail">
         <span>Telefone</span>
@@ -1311,7 +1319,11 @@ function renderizarAcoesModal(agendamento) {
    *
    * Reagendado já é considerado confirmado.
    */
-  if (status === "agendado" && !agendamento.pixCobrancaId && !agendamento.pixPagamentoId) {
+  if (
+    status === "agendado" &&
+    !agendamento.pixCobrancaId &&
+    !agendamento.pixPagamentoId
+  ) {
     acoes.push(
       criarBotaoModal({
         label: "Confirmar agendamento",
@@ -1487,9 +1499,11 @@ async function atualizarAgendamento(id, atualizacoes) {
       : {}),
   });
 
-  if (acao === "cancelar_admin" &&
-      resultadoAcao.cancelamentoPendente &&
-      !resultadoAcao.firestoreCancelado) {
+  if (
+    acao === "cancelar_admin" &&
+    resultadoAcao.cancelamentoPendente &&
+    !resultadoAcao.firestoreCancelado
+  ) {
     return resultadoAcao;
   }
 
@@ -1586,40 +1600,199 @@ async function concluirAgendamento(agendamento) {
   }
 }
 
+/* ============================================================
+   MODAL PERSONALIZADO — CANCELAMENTO ADMIN
+   ============================================================ */
+
+function exibirModalCancelamentoAdmin({
+  titulo,
+  mensagem,
+  exigirConfirmacao = false,
+}) {
+  return new Promise((resolver) => {
+    const modal = document.getElementById("admin-cancelamento-modal");
+    const painel = modal?.querySelector(".admin-cancelamento-painel");
+    const tituloElemento = document.getElementById("admin-cancelamento-titulo");
+    const descricao = document.getElementById("admin-cancelamento-descricao");
+    const aviso = modal?.querySelector(".admin-cancelamento-aviso");
+    const acoes = modal?.querySelector(".admin-cancelamento-acoes");
+    const botaoVoltar = document.getElementById("admin-cancelamento-voltar");
+    const botaoConfirmar = document.getElementById(
+      "admin-cancelamento-confirmar",
+    );
+    const overlay = modal?.querySelector(".admin-cancelamento-overlay");
+
+    if (
+      !modal ||
+      !painel ||
+      !tituloElemento ||
+      !descricao ||
+      !aviso ||
+      !acoes ||
+      !botaoVoltar ||
+      !botaoConfirmar
+    ) {
+      console.error("Modal de cancelamento Admin não encontrado.");
+      resolver(false);
+      return;
+    }
+
+    if (!modal.hidden) {
+      resolver(false);
+      return;
+    }
+
+    const focoAnterior = document.activeElement;
+    const overflowAnterior = document.body.style.overflow;
+    const eventos = new AbortController();
+
+    tituloElemento.textContent = titulo;
+    descricao.textContent = mensagem;
+
+    aviso.hidden = !exigirConfirmacao;
+    botaoConfirmar.hidden = !exigirConfirmacao;
+
+    botaoVoltar.textContent = exigirConfirmacao ? "Voltar" : "Entendi";
+
+    botaoConfirmar.textContent = "Confirmar cancelamento";
+
+    acoes.style.gridTemplateColumns = exigirConfirmacao
+      ? "repeat(2, minmax(0, 1fr))"
+      : "minmax(0, 1fr)";
+
+    function fechar(confirmado = false) {
+      if (modal.hidden) return;
+
+      eventos.abort();
+
+      modal.hidden = true;
+      document.body.style.overflow = overflowAnterior;
+
+      if (
+        focoAnterior?.isConnected &&
+        typeof focoAnterior.focus === "function"
+      ) {
+        focoAnterior.focus();
+      }
+
+      resolver(confirmado);
+    }
+
+    botaoVoltar.addEventListener("click", () => fechar(false), {
+      signal: eventos.signal,
+    });
+
+    botaoConfirmar.addEventListener("click", () => fechar(true), {
+      signal: eventos.signal,
+    });
+
+    overlay?.addEventListener("click", () => fechar(false), {
+      signal: eventos.signal,
+    });
+
+    // Mantém o teclado dentro do modal.
+    modal.addEventListener(
+      "keydown",
+      (event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          event.stopPropagation();
+          fechar(false);
+          return;
+        }
+
+        if (event.key !== "Tab") return;
+
+        const botoes = exigirConfirmacao
+          ? [botaoVoltar, botaoConfirmar]
+          : [botaoVoltar];
+
+        const primeiro = botoes[0];
+        const ultimo = botoes[botoes.length - 1];
+
+        if (!botoes.includes(document.activeElement)) {
+          event.preventDefault();
+          primeiro.focus();
+        } else if (event.shiftKey && document.activeElement === primeiro) {
+          event.preventDefault();
+          ultimo.focus();
+        } else if (!event.shiftKey && document.activeElement === ultimo) {
+          event.preventDefault();
+          primeiro.focus();
+        }
+      },
+      { signal: eventos.signal },
+    );
+
+    modal.hidden = false;
+    document.body.style.overflow = "hidden";
+
+    botaoVoltar.focus();
+  });
+}
+
 async function cancelarAgendamento(agendamento) {
-  const confirmou = window.confirm(
-    `Cancelar o agendamento de ${obterNomeCliente(agendamento)}? O cancelamento não altera nem estorna eventual pagamento PIX.`,
-  );
+  const nomeCliente = obterNomeCliente(agendamento);
+
+  const confirmou = await exibirModalCancelamentoAdmin({
+    titulo: "Cancelar agendamento?",
+    mensagem: `Deseja realmente cancelar o atendimento de ${nomeCliente}?`,
+    exigirConfirmacao: true,
+  });
 
   if (!confirmou) {
     return;
   }
 
   try {
+    // Mantém o cancelamento original pelo backend.
     const cancelamento = await atualizarAgendamento(agendamento.id, {
       status: "cancelado_profissional",
-
       canceladoEm: serverTimestamp(),
     });
 
+    // Preserva as notificações existentes.
     if (cancelamento.firestoreCancelado) {
-      await registrarEventoNotificacao("cancelamento_admin", agendamento);
+      try {
+        await registrarEventoNotificacao("cancelamento_admin", agendamento);
+      } catch (erroNotificacao) {
+        console.warn(
+          "Cancelamento registrado, mas houve falha na notificação:",
+          erroNotificacao,
+        );
+      }
     }
 
+    // Fecha o modal de detalhes original.
     fecharModal();
+
+    let tituloResultado = "Agendamento cancelado!";
+    let mensagemResultado = "Agendamento cancelado com sucesso.";
+
     if (cancelamento.cancelamentoPendente) {
-      window.alert(cancelamento.firestoreCancelado
+      tituloResultado = "Cancelamento em andamento";
+
+      mensagemResultado = cancelamento.firestoreCancelado
         ? "O cancelamento foi registrado. A liberação do horário está sendo concluída em segundo plano."
-        : "A solicitação foi recebida e será concluída após a sincronização dos sistemas.");
+        : "A solicitação foi recebida e será concluída após a sincronização dos sistemas.";
     } else if (cancelamento.pixPago) {
-      window.alert("Agendamento cancelado. A cobrança PIX permanece paga e preservada no histórico financeiro.");
-    } else {
-      window.alert("Agendamento cancelado com sucesso.");
+      mensagemResultado =
+        "Agendamento cancelado. A cobrança PIX permanece paga e preservada no histórico financeiro. Eventual reembolso deverá ser tratado diretamente com a cliente.";
     }
+
+    // Exibe o resultado no modal personalizado.
+    await exibirModalCancelamentoAdmin({
+      titulo: tituloResultado,
+      mensagem: mensagemResultado,
+    });
   } catch (error) {
     console.error("Erro ao cancelar agendamento:", error);
 
-    window.alert("Não foi possível cancelar o agendamento.");
+    await exibirModalCancelamentoAdmin({
+      titulo: "Não foi possível cancelar",
+      mensagem:
+        "Ocorreu um problema ao cancelar o agendamento. Tente novamente mais tarde.",
+    });
   }
 }
 
@@ -1799,7 +1972,15 @@ function configurarEventos() {
   });
 
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && !elements.modal.hidden) {
+    const modalCancelamento = document.getElementById(
+      "admin-cancelamento-modal",
+    );
+
+    if (
+      event.key === "Escape" &&
+      !elements.modal.hidden &&
+      modalCancelamento?.hidden !== false
+    ) {
       fecharModal();
     }
   });
@@ -1882,4 +2063,3 @@ if (document.readyState === "loading") {
 } else {
   iniciarPagina();
 }
-
