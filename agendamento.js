@@ -55,10 +55,25 @@ const minsToTime = (m) => {
 
 function validarAgendamento(data, hora) {
   if (!data || !hora) return false;
+
   const dataOk = /^\d{4}-\d{2}-\d{2}$/.test(data);
   const horaOk = /^([01]\d|2[0-3]):[0-5]\d$/.test(hora);
-  return dataOk && horaOk;
+
+  if (!dataOk || !horaOk) return false;
+
+  // Bloqueia agendamentos anteriores a novembro de 2026.
+  if (data < "2026-11-01") {
+    return false;
+  }
+
+  // Dezembro de 2026 permanece bloqueado.
+  if (data.startsWith("2026-12-") && !DATAS_DEZEMBRO_LIBERADAS.has(data)) {
+    return false;
+  }
+
+  return true;
 }
+
 function formatarDataIsoLocal(data) {
   const ano = data.getFullYear();
   const mes = String(data.getMonth() + 1).padStart(2, "0");
@@ -206,6 +221,9 @@ function atualizarResumoAgendamento() {
     botaoAgendar.classList.toggle("is-ready", prontoParaAgendar);
   }
 }
+
+const DATAS_DEZEMBRO_LIBERADAS = new Set([]);
+
 function gerarCalendarioDias(container) {
   if (!container) return;
 
@@ -237,13 +255,18 @@ function gerarCalendarioDias(container) {
 
   const hojeIso = formatarDataIsoLocal(hoje);
 
-  const dataLiberacaoAgenda = new Date(2026, 9, 3, 12, 0, 0);
+  const dataLiberacaoAgenda = new Date(2026, 10, 1, 12, 0, 0);
 
   const cursor =
     hoje < dataLiberacaoAgenda ? new Date(dataLiberacaoAgenda) : new Date(hoje);
 
   while (dias.length < 8) {
-    if (diasAtendimento.has(cursor.getDay())) {
+    const dezembroBloqueado =
+      cursor.getFullYear() === 2026 &&
+      cursor.getMonth() === 11 &&
+      !DATAS_DEZEMBRO_LIBERADAS.has(formatarDataIsoLocal(cursor));
+
+    if (diasAtendimento.has(cursor.getDay()) && !dezembroBloqueado) {
       const dataAtual = new Date(cursor);
 
       const dataIso = formatarDataIsoLocal(dataAtual);
@@ -757,8 +780,13 @@ async function inicializarAgendamento() {
 
     agendamentoOriginal = agendamentoOriginalSnap.data();
 
-    if (agendamentoOriginal.pixCobrancaId || agendamentoOriginal.pixPagamentoId) {
-      window.alert("Este atendimento tem sinal PIX. O reagendamento precisa de conciliação financeira pelo salão para evitar cobranças duplicadas. Entre em contato com a Isabele.");
+    if (
+      agendamentoOriginal.pixCobrancaId ||
+      agendamentoOriginal.pixPagamentoId
+    ) {
+      window.alert(
+        "Este atendimento tem sinal PIX. O reagendamento precisa de conciliação financeira pelo salão para evitar cobranças duplicadas. Entre em contato com a Isabele.",
+      );
       botaoAgendar.disabled = true;
       return;
     }
@@ -939,8 +967,13 @@ async function inicializarAgendamento() {
           agendamentoAnteriorSnap.data().calendarEventId || "",
         ).trim();
 
-        if (agendamentoAnteriorSnap.data().pixCobrancaId || agendamentoAnteriorSnap.data().pixPagamentoId) {
-          throw new Error("Atendimento com PIX exige conciliacao financeira antes do reagendamento.");
+        if (
+          agendamentoAnteriorSnap.data().pixCobrancaId ||
+          agendamentoAnteriorSnap.data().pixPagamentoId
+        ) {
+          throw new Error(
+            "Atendimento com PIX exige conciliacao financeira antes do reagendamento.",
+          );
         }
 
         if (!calendarEventIdOriginal) {
