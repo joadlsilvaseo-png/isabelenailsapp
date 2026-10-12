@@ -401,6 +401,8 @@ MIGRATION="$RELEASE_DIR/infra/migrations/010_pix_webhook_ambientes.sql"
 [[ -f "$MIGRATION" ]] || die "Migracao 010 nao encontrada no commit alvo."
 MIGRATION_011="$RELEASE_DIR/infra/migrations/011_pix_polling_worker.sql"
 [[ -f "$MIGRATION_011" ]] || die "Migracao 011 nao encontrada no commit alvo."
+MIGRATION_012="$RELEASE_DIR/infra/migrations/012_agendamento_cancelamentos.sql"
+[[ -f "$MIGRATION_012" ]] || die "Migracao 012 nao encontrada no commit alvo."
 
 UPDATE_OVERRIDE="$BACKUP_DIR/update-compose.yaml"
 TARGET_IMAGE_TAG="isabele-nails-api:release-${TARGET_COMMIT}"
@@ -485,6 +487,84 @@ case "$MIGRATION_STATE" in
   partial) die "Estado parcial da migracao 010; nenhuma migracao foi executada e a API nao sera parada." ;;
   missing_table) die "Tabela da migracao 008 ausente; nao e seguro aplicar a migracao 010." ;;
   *) die "Nao foi possivel determinar o estado da migracao 010 (resultado: $MIGRATION_STATE)." ;;
+esac
+
+# A migracao 012 cria o registro duravel de cancelamento e a fila de Calendar.
+# O preflight aceita somente a estrutura completa ou a ausencia total da tabela.
+MIGRATION_012_STATE_SQL="$BACKUP_DIR/migration-012-state.sql"
+cat >"$MIGRATION_012_STATE_SQL" <<'SQL'
+WITH state AS (
+  SELECT
+    to_regclass('public.pix_cobrancas') IS NOT NULL AS has_charge_table,
+    to_regclass('public.agendamento_cancelamentos') IS NOT NULL AS has_table,
+    NOT EXISTS (
+      SELECT 1 FROM (VALUES
+        ('agendamento_id'), ('cobranca_id'), ('cliente_uid'), ('solicitante_uid'),
+        ('tipo'), ('estado'), ('calendar_event_id'), ('calendar_estado'),
+        ('calendar_tentativas'), ('calendar_proxima_tentativa_em'),
+        ('calendar_bloqueado_ate'), ('calendar_ultimo_erro'), ('calendar_enviado_em'),
+        ('tentativas'), ('proxima_tentativa_em'), ('bloqueado_ate'), ('ultimo_erro'),
+        ('criado_em'), ('atualizado_em'), ('concluido_em')
+      ) AS esperado(nome)
+      WHERE NOT EXISTS (
+        SELECT 1 FROM information_schema.columns c
+        WHERE c.table_schema = 'public'
+          AND c.table_name = 'agendamento_cancelamentos'
+          AND c.column_name = esperado.nome
+      )
+    ) AS has_columns,
+    EXISTS (
+      SELECT 1 FROM pg_constraint
+      WHERE conrelid = to_regclass('public.agendamento_cancelamentos')
+        AND conname = 'agendamento_cancelamentos_pkey' AND contype = 'p'
+    ) AS has_primary_key,
+    EXISTS (
+      SELECT 1 FROM pg_constraint
+      WHERE conrelid = to_regclass('public.agendamento_cancelamentos')
+        AND conname = 'agendamento_cancelamentos_cobranca_id_fkey' AND contype = 'f'
+    ) AS has_charge_fk,
+    NOT EXISTS (
+      SELECT 1 FROM (VALUES
+        ('agendamento_cancelamentos_tipo_check'),
+        ('agendamento_cancelamentos_estado_check'),
+        ('agendamento_cancelamentos_calendar_estado_check'),
+        ('agendamento_cancelamentos_calendar_tentativas_check'),
+        ('agendamento_cancelamentos_tentativas_check'),
+        ('agendamento_cancelamentos_check')
+      ) AS esperado(nome)
+      WHERE NOT EXISTS (
+        SELECT 1 FROM pg_constraint c
+        WHERE c.conrelid = to_regclass('public.agendamento_cancelamentos')
+          AND c.conname = esperado.nome AND c.contype = 'c'
+      )
+    ) AS has_check_constraints,
+    EXISTS (
+      SELECT 1 FROM pg_index i
+      WHERE i.indexrelid = to_regclass('public.idx_agendamento_cancelamentos_pendentes')
+        AND i.indisvalid
+    ) AS has_pending_index,
+    EXISTS (
+      SELECT 1 FROM pg_index i
+      WHERE i.indexrelid = to_regclass('public.idx_agendamento_cancelamentos_calendar_pendente')
+        AND i.indisvalid
+    ) AS has_calendar_index
+)
+SELECT CASE
+  WHEN NOT has_charge_table THEN 'missing_charge_table'
+  WHEN NOT has_table THEN 'pending'
+  WHEN has_columns AND has_primary_key AND has_charge_fk AND has_check_constraints AND has_pending_index AND has_calendar_index THEN 'applied'
+  ELSE 'partial'
+END
+FROM state;
+SQL
+chmod 600 "$MIGRATION_012_STATE_SQL"
+MIGRATION_012_STATE="$(compose_snapshot exec -T "$DB_SERVICE" sh -lc 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At' <"$MIGRATION_012_STATE_SQL" | tr -d '\r\n')"
+case "$MIGRATION_012_STATE" in
+  applied) echo "Migracao 012 ja aplicada; sera preservada sem nova execucao." ;;
+  pending) echo "Migracao 012 pendente; sera aplicada uma vez nesta atualizacao." ;;
+  partial) die "Estado parcial da migracao 012; nenhuma migracao foi executada e a API nao sera parada." ;;
+  missing_charge_table) die "Tabela pix_cobrancas ausente; nao e seguro aplicar a migracao 012." ;;
+  *) die "Nao foi possivel determinar o estado da migracao 012 (resultado: $MIGRATION_012_STATE)." ;;
 esac
 
 # A migracao 011 adiciona a agenda persistente do polling. Detecta estado
@@ -587,6 +667,7 @@ compose_snapshot build "$API_SERVICE"
 API_STOPPED=false
 MIGRATION_APPLIED=false
 MIGRATION_011_APPLIED=false
+MIGRATION_012_APPLIED=false
 NEW_API_STARTED=false
 restore_old_api_on_error() {
   local rc=$?
@@ -609,8 +690,8 @@ EOF
     elif [[ "$API_STOPPED" == true ]]; then
       docker start "$API_CONTAINER" >/dev/null || true
     fi
-    if [[ "$MIGRATION_APPLIED" == true || "$MIGRATION_STATE" == applied || "$MIGRATION_011_APPLIED" == true || "$MIGRATION_011_STATE" == applied ]]; then
-      echo "Migracoes 010/011 aplicadas e preservadas; nenhum dado foi removido."
+    if [[ "$MIGRATION_APPLIED" == true || "$MIGRATION_STATE" == applied || "$MIGRATION_011_APPLIED" == true || "$MIGRATION_011_STATE" == applied || "$MIGRATION_012_APPLIED" == true || "$MIGRATION_012_STATE" == applied ]]; then
+      echo "Migracoes 010/011/012 aplicadas e preservadas; nenhum dado foi removido."
     fi
     echo "Backup e configuracao efetiva anterior: $BACKUP_DIR"
   fi
@@ -631,6 +712,12 @@ if [[ "$MIGRATION_011_STATE" == pending ]]; then
   MIGRATION_011_APPLIED=true
 else
   echo "Pulando migracao 011 ja aplicada; banco e dados serao mantidos."
+fi
+if [[ "$MIGRATION_012_STATE" == pending ]]; then
+  compose_snapshot exec -T "$DB_SERVICE" sh -lc 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <"$MIGRATION_012"
+  MIGRATION_012_APPLIED=true
+else
+  echo "Pulando migracao 012 ja aplicada; banco e dados serao mantidos."
 fi
 NEW_API_STARTED=true
 compose_snapshot up -d --no-deps "$API_SERVICE"

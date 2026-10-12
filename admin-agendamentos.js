@@ -1479,13 +1479,19 @@ async function atualizarAgendamento(id, atualizacoes) {
     throw new Error("Acao administrativa nao suportada.");
   }
 
-  await executarAcaoAgendamento(auth, {
+  const resultadoAcao = await executarAcaoAgendamento(auth, {
     agendamentoId: id,
     acao,
     ...(acao === "concluir_admin"
       ? { valorFinal: atualizacoes.valorFinal }
       : {}),
   });
+
+  if (acao === "cancelar_admin" &&
+      resultadoAcao.cancelamentoPendente &&
+      !resultadoAcao.firestoreCancelado) {
+    return resultadoAcao;
+  }
 
   const indice = todosAgendamentos.findIndex(
     (agendamento) => agendamento.id === id,
@@ -1502,6 +1508,7 @@ async function atualizarAgendamento(id, atualizacoes) {
   atualizarResumo();
   atualizarContadoresFiltros();
   aplicarFiltros();
+  return resultadoAcao;
 }
 
 async function confirmarAgendamento(agendamento) {
@@ -1581,49 +1588,34 @@ async function concluirAgendamento(agendamento) {
 
 async function cancelarAgendamento(agendamento) {
   const confirmou = window.confirm(
-    `Cancelar o agendamento de ${obterNomeCliente(agendamento)}?`,
+    `Cancelar o agendamento de ${obterNomeCliente(agendamento)}? O cancelamento não altera nem estorna eventual pagamento PIX.`,
   );
 
   if (!confirmou) {
     return;
   }
 
-  const calendarEventId = String(agendamento.calendarEventId || "").trim();
-
   try {
-    await atualizarAgendamento(agendamento.id, {
+    const cancelamento = await atualizarAgendamento(agendamento.id, {
       status: "cancelado_profissional",
 
       canceladoEm: serverTimestamp(),
     });
 
-    await registrarEventoNotificacao("cancelamento_admin", agendamento);
-
-    if (calendarEventId) {
-      try {
-        await fetch(
-          "https://script.google.com/macros/s/AKfycbwUwXunAdMAroSPAeMHH2ZQxCOuQage7lmAHH7-llgmeVXug6-Z9KGq6R7NVgQ70XYy/exec",
-          {
-            method: "POST",
-            mode: "no-cors",
-            body: JSON.stringify({
-              acao: "CANCELAR",
-              eventId: calendarEventId,
-            }),
-          },
-        );
-      } catch (erroGas) {
-        console.error("Erro ao comunicar cancelamento para o GAS:", erroGas);
-      }
-    } else {
-      console.warn(
-        "Agendamento sem calendarEventId. Evento do Google não foi removido.",
-      );
+    if (cancelamento.firestoreCancelado) {
+      await registrarEventoNotificacao("cancelamento_admin", agendamento);
     }
 
     fecharModal();
-
-    window.alert("Agendamento cancelado com sucesso.");
+    if (cancelamento.cancelamentoPendente) {
+      window.alert(cancelamento.firestoreCancelado
+        ? "O cancelamento foi registrado. A liberação do horário está sendo concluída em segundo plano."
+        : "A solicitação foi recebida e será concluída após a sincronização dos sistemas.");
+    } else if (cancelamento.pixPago) {
+      window.alert("Agendamento cancelado. A cobrança PIX permanece paga e preservada no histórico financeiro.");
+    } else {
+      window.alert("Agendamento cancelado com sucesso.");
+    }
   } catch (error) {
     console.error("Erro ao cancelar agendamento:", error);
 
@@ -1890,3 +1882,4 @@ if (document.readyState === "loading") {
 } else {
   iniciarPagina();
 }
+

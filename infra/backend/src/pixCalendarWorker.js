@@ -27,8 +27,14 @@ export function montarPayloadCalendar(evento) {
   };
 }
 
-export async function enviarEventoCalendar(evento, fetcher = fetch) {
-  const payload = montarPayloadCalendar(evento);
+export function montarPayloadCancelamentoCalendar(evento) {
+  return {
+    acao: "CANCELAR",
+    eventId: evento.calendar_event_id
+  };
+}
+
+async function enviarAcaoCalendar(payload, fetcher = fetch) {
   const resposta = await fetcher(URL_APPS_SCRIPT, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -45,14 +51,23 @@ export async function enviarEventoCalendar(evento, fetcher = fetch) {
       if (
         corpo.ok === false || corpo.success === false || corpo.sucesso === false ||
         corpo.error || corpo.erro || ["error", "erro", "falha", "failed"].includes(status)
-      ) {
-        throw new Error("Apps Script informou falha na sincronizacao");
-      }
+      ) throw new Error("Apps Script informou falha na sincronizacao");
     } else if (/exception|script function .* not found/i.test(texto)) {
       throw new Error("Apps Script informou falha na sincronizacao");
     }
   }
   return payload;
+}
+
+export async function enviarEventoCalendar(evento, fetcher = fetch) {
+  const payload = montarPayloadCalendar(evento);
+  return enviarAcaoCalendar(payload, fetcher);
+}
+
+export async function enviarCancelamentoCalendar(evento, fetcher = fetch) {
+  const payload = montarPayloadCancelamentoCalendar(evento);
+  if (!payload.eventId) throw new Error("Identificador do evento Calendar ausente");
+  return enviarAcaoCalendar(payload, fetcher);
 }
 
 async function obterEventoPendente(pool) {
@@ -117,6 +132,77 @@ export async function processarProximaSincronizacaoCalendar(pool, enviar = envia
   }
 }
 
+async function obterCancelamentoCalendarPendente(pool) {
+  const conexao = await pool.connect();
+  try {
+    await conexao.query("BEGIN");
+    const resultado = await conexao.query(`
+      WITH proximo AS (
+        SELECT cancelamento.agendamento_id
+        FROM public.agendamento_cancelamentos AS cancelamento
+        WHERE cancelamento.estado = 'concluida'
+          AND cancelamento.calendar_event_id IS NOT NULL
+          AND (
+            (cancelamento.calendar_estado = 'pendente'
+              AND cancelamento.calendar_proxima_tentativa_em <= NOW())
+            OR (cancelamento.calendar_estado = 'enviando'
+              AND cancelamento.calendar_bloqueado_ate <= NOW())
+          )
+          AND NOT EXISTS (
+            SELECT 1
+            FROM public.pix_calendar_outbox AS criacao
+            WHERE criacao.agendamento_id = cancelamento.agendamento_id
+              AND criacao.status <> 'enviado'
+          )
+        ORDER BY cancelamento.criado_em
+        FOR UPDATE OF cancelamento SKIP LOCKED
+        LIMIT 1
+      )
+      UPDATE public.agendamento_cancelamentos AS fila
+      SET calendar_estado = 'enviando',
+          calendar_tentativas = calendar_tentativas + 1,
+          calendar_bloqueado_ate = NOW() + INTERVAL '1 minute',
+          atualizado_em = NOW()
+      FROM proximo
+      WHERE fila.agendamento_id = proximo.agendamento_id
+      RETURNING fila.*
+    `);
+    await conexao.query("COMMIT");
+    return resultado.rows[0] || null;
+  } catch (erro) {
+    await conexao.query("ROLLBACK").catch(() => {});
+    throw erro;
+  } finally {
+    conexao.release();
+  }
+}
+
+export async function processarProximoCancelamentoCalendar(pool, enviar = enviarCancelamentoCalendar) {
+  const evento = await obterCancelamentoCalendarPendente(pool);
+  if (!evento) return { processado: false };
+  try {
+    await enviar(evento);
+    await pool.query(`
+      UPDATE public.agendamento_cancelamentos
+      SET calendar_estado = 'enviado', calendar_enviado_em = NOW(),
+          calendar_bloqueado_ate = NULL, calendar_ultimo_erro = NULL,
+          atualizado_em = NOW()
+      WHERE agendamento_id = $1 AND calendar_estado = 'enviando'
+    `, [evento.agendamento_id]);
+    return { processado: true, enviado: true, eventId: evento.calendar_event_id };
+  } catch (erro) {
+    const atraso = Math.min(3600, 30 * (2 ** Math.min(evento.calendar_tentativas - 1, 7)));
+    await pool.query(`
+      UPDATE public.agendamento_cancelamentos
+      SET calendar_estado = 'pendente', calendar_bloqueado_ate = NULL,
+          calendar_proxima_tentativa_em = NOW() + ($2::integer * INTERVAL '1 second'),
+          calendar_ultimo_erro = $3, atualizado_em = NOW()
+      WHERE agendamento_id = $1 AND calendar_estado = 'enviando'
+    `, [evento.agendamento_id, atraso, String(erro?.message || "Falha ao cancelar evento").slice(0, 300)]);
+    return { processado: true, enviado: false, eventId: evento.calendar_event_id };
+  }
+}
+
 export function iniciarWorkerPixCalendar(pool) {
   let ocupado = false;
   const executar = async () => {
@@ -126,6 +212,10 @@ export function iniciarWorkerPixCalendar(pool) {
       const resultado = await processarProximaSincronizacaoCalendar(pool);
       if (resultado.processado && !resultado.enviado) {
         console.warn("[PIX Calendar] Sincronizacao falhou; nova tentativa agendada.");
+      }
+      const cancelamento = await processarProximoCancelamentoCalendar(pool);
+      if (cancelamento.processado && !cancelamento.enviado) {
+        console.warn("[PIX Calendar] Cancelamento falhou; nova tentativa agendada.");
       }
     } catch (erro) {
       console.error("[PIX Calendar] Worker indisponivel:", erro.message);
@@ -138,3 +228,4 @@ export function iniciarWorkerPixCalendar(pool) {
   executar();
   return () => clearInterval(timer);
 }
+

@@ -21,6 +21,12 @@ function responder(res, codigo, dados) {
   res.end(JSON.stringify(dados));
 }
 
+export function deveEfetivarAgendamentoAposCredito(cobranca, conciliacao) {
+  return cobranca?.estado_reserva !== "cancelada" &&
+    ["pago_aguardando_agendamento", "agendamento_confirmado", "pago_requer_analise"]
+      .includes(conciliacao?.situacao);
+}
+
 export async function consultarStatusPagamentoPix(req, res, pool, dependencias = {}) {
   const autenticar = dependencias.verificarUsuario || (async (requisicao) => {
     const modulo = await import("./pushSubscriptions.js");
@@ -86,6 +92,7 @@ export async function consultarStatusPagamentoPix(req, res, pool, dependencias =
         c.referencia_externa,
         c.valor_sinal_centavos,
         c.mp_environment,
+        c.estado AS estado_cobranca,
         r.estado AS estado_reserva
       FROM public.pix_reservas AS r
       JOIN public.pix_cobrancas AS c
@@ -133,10 +140,7 @@ export async function consultarStatusPagamentoPix(req, res, pool, dependencias =
 
       let finalizacao = conciliacao;
 
-      if (
-        ["pago_aguardando_agendamento", "agendamento_confirmado", "pago_requer_analise"]
-          .includes(conciliacao.situacao)
-      ) {
+      if (deveEfetivarAgendamentoAposCredito(cobranca, conciliacao)) {
         try {
           finalizacao = await efetivarAgendamento({
             pool,
@@ -224,3 +228,4 @@ export async function consultarStatusPagamentoPix(req, res, pool, dependencias =
     });
   }
 }
+

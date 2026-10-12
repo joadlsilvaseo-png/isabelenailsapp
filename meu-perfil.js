@@ -189,7 +189,6 @@ function criarCardAtivo({
   horario,
   id,
   idServico,
-  calendarEventId,
   status: statusAgendamento,
 }) {
   const card = document.createElement("article");
@@ -242,7 +241,7 @@ function criarCardAtivo({
   cancelButton.textContent = "Cancelar";
   cancelButton.addEventListener("click", async () => {
     const confirmDelete = window.confirm(
-      "Deseja realmente cancelar esse agendamento?",
+      "Deseja realmente cancelar esse agendamento? O cancelamento não estorna o PIX. Se o sinal já foi pago, eventual reembolso deverá ser tratado diretamente com a profissional.",
     );
     if (!confirmDelete) return;
 
@@ -252,7 +251,10 @@ function criarCardAtivo({
     try {
       // STATUS SÓ PODE SER ALTERADO POR AÇÃO DO USUÁRIO (CLIQUE NO BOTÃO)
       // ALTERAÇÃO PARA STATUS EM VEZ DE DELETAR O REGISTRO
-      await executarAcaoAgendamento(auth, { agendamentoId: id, acao: "cancelar_cliente" });
+      const cancelamento = await executarAcaoAgendamento(auth, {
+        agendamentoId: id,
+        acao: "cancelar_cliente",
+      });
 
       // Grava evento de notificação para Cancelamento pelo Cliente
       const eventPayloadCancelCliente = {
@@ -262,61 +264,44 @@ function criarCardAtivo({
         processado: false,
         timestamp: new Date().toISOString(),
       };
-      try {
-        await addDoc(
-          collection(db, "eventos_notificacao"),
-          eventPayloadCancelCliente,
-        );
-      } catch (erroNotificacao) {
-        console.warn(
-          "Cancelamento salvo, mas houve falha no registro da notificação:",
-          erroNotificacao,
-        );
-      }
-      // Dispara para Webhook (Redundância para WhatsApp)
-      (async () => {
+      if (cancelamento.firestoreCancelado) {
         try {
-          await fetch(webhookUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(eventPayloadCancelCliente),
-          });
-        } catch (err) {
-          console.error(
-            "Falha no disparo para o Webhook (Make.com - Cancelamento Cliente):",
-            err,
+          await addDoc(
+            collection(db, "eventos_notificacao"),
+            eventPayloadCancelCliente,
           );
+        } catch (erroNotificacao) {
+          console.warn("Cancelamento salvo, mas o aviso externo não foi registrado:", erroNotificacao);
         }
-      })();
-      if (calendarEventId) {
-        try {
-          await fetch(
-            "https://script.google.com/macros/s/AKfycbwUwXunAdMAroSPAeMHH2ZQxCOuQage7lmAHH7-llgmeVXug6-Z9KGq6R7NVgQ70XYy/exec",
-            {
+        (async () => {
+          try {
+            await fetch(webhookUrl, {
               method: "POST",
-              mode: "no-cors",
-              body: JSON.stringify({
-                acao: "CANCELAR",
-                eventId: calendarEventId,
-              }),
-            },
-          );
-        } catch (erroGas) {
-          console.error("Erro ao comunicar cancelamento para o GAS:", erroGas);
-        }
-      } else {
-        console.warn(
-          "Agendamento sem calendarEventId. Evento do Google não foi removido.",
-        );
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(eventPayloadCancelCliente),
+            });
+          } catch (err) {
+            console.error("Falha ao comunicar o cancelamento ao webhook existente:", err);
+          }
+        })();
       }
-      window.alert("Agendamento cancelado com sucesso!");
 
-      // Remove imediatamente da tela
-      card.remove();
+      if (cancelamento.cancelamentoPendente) {
+        window.alert(cancelamento.firestoreCancelado
+          ? "O cancelamento foi registrado. A liberação do horário está sendo concluída em segundo plano."
+          : "Sua solicitação foi recebida e será concluída após a sincronização dos sistemas.");
+      } else if (cancelamento.pixPago) {
+        window.alert("Agendamento cancelado. O sinal PIX continua registrado como pago; eventual reembolso será tratado diretamente com a profissional.");
+      } else {
+        window.alert("Agendamento cancelado com sucesso!");
+      }
 
-      // Recarrega os cards sem precisar de F5
-      if (auth.currentUser) {
-        await carregarAgendamentos(auth.currentUser.uid);
+      if (cancelamento.firestoreCancelado) {
+        card.remove();
+        if (auth.currentUser) await carregarAgendamentos(auth.currentUser.uid);
+      } else {
+        cancelButton.disabled = false;
+        cancelButton.textContent = "Cancelar";
       }
     } catch (error) {
       console.error("Erro ao cancelar agendamento:", error);
@@ -536,7 +521,6 @@ async function carregarAgendamentos(uid) {
         horario: dados.horario || "--:--",
         id: docItem.id,
         idServico: dados.idServico,
-        calendarEventId: dados.calendarEventId || "",
         status: dados.status || "agendado",
       };
 
@@ -708,3 +692,4 @@ document.addEventListener("DOMContentLoaded", () => {
     await carregarAgendamentos(user.uid);
   });
 });
+

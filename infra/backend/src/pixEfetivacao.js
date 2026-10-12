@@ -95,6 +95,10 @@ export async function efetivarAgendamentoPix({
       data_iso: registro.reserva_data_iso
     };
 
+    if (reserva.estado === "cancelada") {
+      throw requerAnalise("Agendamento cancelado não pode ser reativado pela conciliação PIX");
+    }
+
     if (!["reservada", "confirmada", "expirada"].includes(reserva.estado)) {
       throw requerAnalise("Reserva indisponivel");
     }
@@ -216,3 +220,4 @@ export async function efetivarAgendamentoPix({
     conexao.release();
   }
 }
+

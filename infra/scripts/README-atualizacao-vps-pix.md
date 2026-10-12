@@ -1,6 +1,6 @@
 # Atualização controlada da VPS (PIX)
 
-Este roteiro é para uma execução única, iniciada manualmente pelo responsável. O script não foi executado nesta revisão e a VPS não foi acessada. As migrações 010 e 011 são verificadas pelo catálogo PostgreSQL; o script pula cada migração já aplicada e aborta se encontrar estado parcial. Não cria cobranças.
+Este roteiro é para uma execução única, iniciada manualmente pelo responsável. O script não foi executado nesta revisão e a VPS não foi acessada. As migrações 010, 011 e 012 são verificadas pelo catálogo PostgreSQL; o script pula cada migração já aplicada e aborta se encontrar estado parcial. Não cria cobranças.
 
 ## O que o script verifica e preserva
 
@@ -10,7 +10,13 @@ A configuração efetiva renderizada pode conter senhas, tokens, chaves VAPID e 
 
 O override de atualização muda o contexto de build e atribui à API uma referência imutável `isabele-nails-api:release-<commit>`; os labels da imagem e do container registram o SHA implantado. O Compose principal também declara a referência local `isabele-nails-api:local`. O Dockerfile copia os arquivos do backend com dono `node` e garante a propriedade de `/app`, incluindo `package.json` e `node_modules`, antes de executar como usuário não root.
 
-O restante da configuração renderizada permanece igual, incluindo variáveis, credenciais, PostgreSQL, Firebase, Push, Mercado Pago, volumes, portas, redes e políticas do Compose. O serviço PostgreSQL não é recriado. A cópia de trabalho em `/opt/isabele-nails` não recebe checkout, reset, stash ou limpeza. Antes do build, o script atribui à imagem anterior uma tag exclusiva guardada no backup; tanto o rollback automático quanto o manual usam essa referência persistente, sem depender de um ID `sha256` que possa deixar de estar disponível. As migrações 010/011 e os dados ficam preservados no rollback; o dump não é restaurado automaticamente.
+## Cancelamento de agendamento com PIX
+
+A migração 012 cria uma fila durável de cancelamentos. O backend valida novamente cliente/admin, grava a intenção, atualiza o Firestore e, na mesma transação PostgreSQL que conclui a intenção, muda somente a reserva vinculada para `cancelada`. A cobrança PIX e os eventos financeiros não são atualizados. Se Firestore ou PostgreSQL falhar depois que a intenção foi gravada, o worker tenta concluir novamente; o intervalo só deixa de ficar bloqueado quando a operação PostgreSQL é confirmada. O polling registra eventual pagamento, mas não recria um agendamento cancelado.
+
+O worker de Calendar existente também envia `CANCELAR` ao Apps Script já usado pelo aplicativo, com o mesmo `calendarEventId` estável e tentativas persistentes. Para a fila ser processada, mantenha `PIX_CALENDAR_WORKER_ENABLED=true`, conforme a configuração já existente. A entrega é at least once: evitar duplicação externa em um timeout depende de o Apps Script tratar o mesmo `eventId` de forma idempotente. O código desse Apps Script não está neste repositório, então essa dependência não foi validada.
+
+O restante da configuração renderizada permanece igual, incluindo variáveis, credenciais, PostgreSQL, Firebase, Push, Mercado Pago, volumes, portas, redes e políticas do Compose. O serviço PostgreSQL não é recriado. A cópia de trabalho em `/opt/isabele-nails` não recebe checkout, reset, stash ou limpeza. Antes do build, o script atribui à imagem anterior uma tag exclusiva guardada no backup; tanto o rollback automático quanto o manual usam essa referência persistente, sem depender de um ID `sha256` que possa deixar de estar disponível. As migrações 010/011/012 e os dados ficam preservados no rollback; o dump não é restaurado automaticamente.
 
 ## Requisitos antes de executar
 
@@ -72,7 +78,7 @@ Use a versão do script atualizada junto ao PR. O script busca o commit mais rec
 2. Salva a configuração renderizada e os arquivos-fonte Compose com acesso restrito; registra alterações locais e imagem anterior.
 3. Gera dump PostgreSQL antes de parar qualquer serviço.
 4. Constrói o backend do commit mais recente em worktree isolado.
-5. Detecta as migrações 010 e 011 pela estrutura de tabelas, colunas, constraints e índices. Se já estiverem aplicadas, não executa o SQL novamente. Se estiverem pendentes, aplica uma vez com `ON_ERROR_STOP`; estado parcial interrompe o processo antes da parada da API. Atualiza somente `api` usando o snapshot efetivo do Compose.
+5. Detecta as migrações 010, 011 e 012 pela estrutura de tabelas, colunas, constraints e índices. Se já estiverem aplicadas, não executa o SQL novamente. Se estiverem pendentes, aplica uma vez com `ON_ERROR_STOP`; estado parcial interrompe o processo antes da parada da API. Atualiza somente `api` usando o snapshot efetivo do Compose.
 6. Confirma que o container foi recriado com a referência de imagem versionada e que o container e a imagem têm label de revisão igual ao commit Git alvo. Depois verifica `/health` e a conexão PostgreSQL e registra a contagem da fila por ambiente.
 
 A produção permanece desativada. O script aborta se `MP_ENVIRONMENT` estiver diferente de `test` ou se `PIX_PRODUCTION_ORDERS_ENABLED` estiver como `true`. Se `MP_ENVIRONMENT` estiver ausente, a implementação usa `test`; se a flag de produção estiver ausente, o backend não habilita pedidos de produção. O polling exige explicitamente `PIX_POLLING_WORKER_ENABLED=true`; o valor padrão é `false`. A atualização não habilita o worker automaticamente. Os flags `PIX_WEBHOOK_ENABLED` e `PIX_WEBHOOK_WORKER_ENABLED` continuam preservados como estavam; não são desativados nem usados como condição do polling. Segredos de webhook ausentes continuam ausentes. As variáveis antigas declaradas e seus valores são preservados conforme o snapshot efetivo; nenhuma credencial é impressa ou enviada para serviços externos.

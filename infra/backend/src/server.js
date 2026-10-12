@@ -6,6 +6,7 @@ import { iniciarMonitorAgendamentos } from "./agendaMonitor.js";
 import { iniciarWorkerPush } from "./pushWorker.js";
 import { atenderCentralNotificacoes } from "./centralNotificacoes.js";
 import { atenderAcaoAgendamento } from "./agendamentosAcoes.js";
+import { iniciarWorkerAgendamentoCancelamentos } from "./agendamentoCancelamentos.js";
 import { criarReservaPix } from "./pixReservas.js";
 import { emitirPixDaReserva } from "./pixPedidos.js";
 import { consultarStatusPagamentoPix } from "./pixConsultaPagamento.js";
@@ -67,7 +68,7 @@ const server = http.createServer(async (req, res) => {
 
   // Acoes protegidas de agendamentos
   if (req.method === "POST" && req.url === "/agendamentos/acao") {
-    await atenderAcaoAgendamento(req, res);
+    await atenderAcaoAgendamento(req, res, pool);
     return;
   }
 
@@ -141,6 +142,7 @@ server.listen(PORT, "0.0.0.0", () => {
   console.log(`API Isabele Nails iniciada na porta ${PORT}`);
 
   iniciarWorkerPush(pool);
+  iniciarWorkerAgendamentoCancelamentos(pool);
 
   if (process.env.PIX_WEBHOOK_ENABLED === "true" && process.env.PIX_WEBHOOK_WORKER_ENABLED === "true") {
     iniciarWorkerPixWebhook(pool);
@@ -160,3 +162,4 @@ server.listen(PORT, "0.0.0.0", () => {
     process.exit(1);
   });
 });
+
