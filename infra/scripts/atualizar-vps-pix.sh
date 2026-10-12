@@ -3,7 +3,7 @@ set -Eeuo pipefail
 umask 077
 
 # Atualizacao incremental PIX: preserva a configuracao efetiva do Compose.
-# O script nao acessa contas externas, nao cria cobrancas e nao habilita producao.
+# O script preserva o ambiente PIX ativo; nao cria cobrancas nem solicita reembolsos.
 
 BRANCH="${BRANCH:-codex/correcao-pix-20261010}"
 APP_DIR="${APP_DIR:-/opt/isabele-nails}"
@@ -15,6 +15,21 @@ SCRIPT_PATH="$(readlink -f "$0")"
 
 timestamp() { date -u +%Y%m%dT%H%M%SZ; }
 die() { echo "ERRO: $*" >&2; exit 1; }
+
+validate_pix_environment() {
+  case "${1,,}" in
+    test|production) return 0 ;;
+    *) echo "Ambiente PIX desconhecido; use test ou production." >&2; return 1 ;;
+  esac
+}
+
+# Modo local usado pela suíte automatizada. Sai antes de qualquer acesso a
+# Docker, arquivos de produção, rede ou banco de dados.
+if [[ "$MODE" == "--test-pix-environment" ]]; then
+  [[ $# -eq 2 ]] || die "Uso: $SCRIPT_PATH --test-pix-environment test|production"
+  validate_pix_environment "$2"
+  exit $?
+fi
 
 if [[ "$MODE" == "start" || "$MODE" == "--background" ]]; then
   mkdir -p "$LOG_DIR"
@@ -360,15 +375,24 @@ live_db_image = db_container.get("Config", {}).get("Image")
 if configured_db_image and configured_db_image != live_db_image:
     raise SystemExit("A imagem do PostgreSQL no Compose difere do container ativo. Abortando sem alteracoes.")
 
-# O commit 844398b antecede os novos flags/segredos de webhook. Eles não são
-# exigidos nem injetados: a implementação alvo usa test quando MP_ENVIRONMENT
-# está ausente e só habilita produção com PIX_PRODUCTION_ORDERS_ENABLED="true".
-if api_env.get("MP_ENVIRONMENT", "test").strip().lower() != "test":
-    raise SystemExit("O backend ativo nao esta em ambiente test; abortando sem alteracoes.")
-if api_env.get("PIX_PRODUCTION_ORDERS_ENABLED", "").strip().lower() == "true":
-    raise SystemExit("PIX de producao esta ativo na configuracao efetiva; abortando sem alteracoes.")
-print("Configuracao efetiva conferida para API e PostgreSQL: variaveis, identidade da imagem e volumes iguais aos containers ativos; ambiente test e producao desativada.")
+print("Configuracao efetiva conferida para API e PostgreSQL: variaveis declaradas, identidade da imagem e volumes iguais aos containers ativos.")
 PY
+
+# Aceita sandbox ou produção ativa. A validação não escreve flags: o snapshot
+# efetivo é a única fonte de configuração e os overlays abaixo só alteram imagem/build.
+MP_ENVIRONMENT_EFFECTIVE="$(python3 - "$BACKUP_DIR/effective-before.json" <<'PY'
+import json, sys
+with open(sys.argv[1], encoding="utf-8") as f:
+    config = json.load(f)
+env = (config.get("services", {}).get("api", {}) or {}).get("environment", {}) or {}
+if isinstance(env, list):
+    env = dict(item.split("=", 1) if "=" in item else (item, None) for item in env)
+value = env.get("MP_ENVIRONMENT")
+print("test" if value in (None, "") else str(value))
+PY
+)"
+validate_pix_environment "$MP_ENVIRONMENT_EFFECTIVE" || die "Configuracao MP_ENVIRONMENT nao suportada; abortando sem alteracoes."
+echo "Ambiente PIX efetivo preservado: $MP_ENVIRONMENT_EFFECTIVE; flags financeiros permanecem inalterados."
 
 # Salva status/diff e arquivos nao rastreados; nada e limpo nem sobrescrito.
 git -C "$APP_DIR" fetch --no-tags origin "$BRANCH"
@@ -499,60 +523,84 @@ WITH state AS (
     to_regclass('public.agendamento_cancelamentos') IS NOT NULL AS has_table,
     NOT EXISTS (
       SELECT 1 FROM (VALUES
-        ('agendamento_id'), ('cobranca_id'), ('cliente_uid'), ('solicitante_uid'),
-        ('tipo'), ('estado'), ('calendar_event_id'), ('calendar_estado'),
-        ('calendar_tentativas'), ('calendar_proxima_tentativa_em'),
-        ('calendar_bloqueado_ate'), ('calendar_ultimo_erro'), ('calendar_enviado_em'),
-        ('tentativas'), ('proxima_tentativa_em'), ('bloqueado_ate'), ('ultimo_erro'),
-        ('criado_em'), ('atualizado_em'), ('concluido_em')
-      ) AS esperado(nome)
+        ('agendamento_id', 'text', 'NO'), ('cobranca_id', 'uuid', 'YES'),
+        ('cliente_uid', 'text', 'NO'), ('solicitante_uid', 'text', 'NO'),
+        ('tipo', 'text', 'NO'), ('estado', 'text', 'NO'),
+        ('calendar_event_id', 'text', 'YES'), ('calendar_estado', 'text', 'NO'),
+        ('calendar_tentativas', 'int4', 'NO'), ('calendar_proxima_tentativa_em', 'timestamptz', 'NO'),
+        ('calendar_bloqueado_ate', 'timestamptz', 'YES'), ('calendar_ultimo_erro', 'text', 'YES'),
+        ('calendar_enviado_em', 'timestamptz', 'YES'), ('tentativas', 'int4', 'NO'),
+        ('proxima_tentativa_em', 'timestamptz', 'NO'), ('bloqueado_ate', 'timestamptz', 'YES'),
+        ('ultimo_erro', 'text', 'YES'), ('criado_em', 'timestamptz', 'NO'),
+        ('atualizado_em', 'timestamptz', 'NO'), ('concluido_em', 'timestamptz', 'YES')
+      ) AS esperado(nome, tipo, nullable)
       WHERE NOT EXISTS (
         SELECT 1 FROM information_schema.columns c
         WHERE c.table_schema = 'public'
           AND c.table_name = 'agendamento_cancelamentos'
           AND c.column_name = esperado.nome
+          AND c.udt_name = esperado.tipo
+          AND c.is_nullable = esperado.nullable
       )
     ) AS has_columns,
     EXISTS (
       SELECT 1 FROM pg_constraint
       WHERE conrelid = to_regclass('public.agendamento_cancelamentos')
         AND conname = 'agendamento_cancelamentos_pkey' AND contype = 'p'
+        AND pg_get_constraintdef(oid) = 'PRIMARY KEY (agendamento_id)'
     ) AS has_primary_key,
+    NOT EXISTS (
+      SELECT 1 FROM (VALUES
+        ('estado', '''solicitada''::text'),
+        ('calendar_estado', '''dispensado''::text'),
+        ('calendar_tentativas', '0'), ('tentativas', '0'),
+        ('calendar_proxima_tentativa_em', 'now()'),
+        ('proxima_tentativa_em', 'now()'), ('criado_em', 'now()'),
+        ('atualizado_em', 'now()')
+      ) AS esperado(nome, padrao)
+      WHERE NOT EXISTS (
+        SELECT 1 FROM information_schema.columns c
+        WHERE c.table_schema = 'public'
+          AND c.table_name = 'agendamento_cancelamentos'
+          AND c.column_name = esperado.nome
+          AND c.column_default = esperado.padrao
+      )
+    ) AS has_defaults,
     EXISTS (
       SELECT 1 FROM pg_constraint
       WHERE conrelid = to_regclass('public.agendamento_cancelamentos')
         AND conname = 'agendamento_cancelamentos_cobranca_id_fkey' AND contype = 'f'
+        AND confrelid = to_regclass('public.pix_cobrancas')
+        AND pg_get_constraintdef(oid) LIKE '%REFERENCES pix_cobrancas(id)%'
     ) AS has_charge_fk,
-    NOT EXISTS (
-      SELECT 1 FROM (VALUES
-        ('agendamento_cancelamentos_tipo_check'),
-        ('agendamento_cancelamentos_estado_check'),
-        ('agendamento_cancelamentos_calendar_estado_check'),
-        ('agendamento_cancelamentos_calendar_tentativas_check'),
-        ('agendamento_cancelamentos_tentativas_check'),
-        ('agendamento_cancelamentos_check')
-      ) AS esperado(nome)
-      WHERE NOT EXISTS (
-        SELECT 1 FROM pg_constraint c
-        WHERE c.conrelid = to_regclass('public.agendamento_cancelamentos')
-          AND c.conname = esperado.nome AND c.contype = 'c'
-      )
+    (
+      EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = to_regclass('public.agendamento_cancelamentos') AND conname = 'agendamento_cancelamentos_tipo_check' AND contype = 'c' AND pg_get_constraintdef(oid) LIKE '%cliente%' AND pg_get_constraintdef(oid) LIKE '%profissional%')
+      AND EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = to_regclass('public.agendamento_cancelamentos') AND conname = 'agendamento_cancelamentos_estado_check' AND contype = 'c' AND pg_get_constraintdef(oid) LIKE '%solicitada%' AND pg_get_constraintdef(oid) LIKE '%concluida%' AND pg_get_constraintdef(oid) LIKE '%falha_permanente%')
+      AND EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = to_regclass('public.agendamento_cancelamentos') AND conname = 'agendamento_cancelamentos_calendar_estado_check' AND contype = 'c' AND pg_get_constraintdef(oid) LIKE '%dispensado%' AND pg_get_constraintdef(oid) LIKE '%pendente%' AND pg_get_constraintdef(oid) LIKE '%enviando%' AND pg_get_constraintdef(oid) LIKE '%enviado%')
+      AND EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = to_regclass('public.agendamento_cancelamentos') AND conname = 'agendamento_cancelamentos_calendar_tentativas_check' AND contype = 'c' AND pg_get_constraintdef(oid) LIKE '%calendar_tentativas%' AND pg_get_constraintdef(oid) LIKE '%>= 0%')
+      AND EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = to_regclass('public.agendamento_cancelamentos') AND conname = 'agendamento_cancelamentos_tentativas_check' AND contype = 'c' AND pg_get_constraintdef(oid) LIKE '%tentativas%' AND pg_get_constraintdef(oid) LIKE '%>= 0%')
+      AND EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = to_regclass('public.agendamento_cancelamentos') AND conname = 'agendamento_cancelamentos_check' AND contype = 'c' AND pg_get_constraintdef(oid) LIKE '%calendar_event_id IS NULL%' AND pg_get_constraintdef(oid) LIKE '%calendar_estado%')
     ) AS has_check_constraints,
     EXISTS (
       SELECT 1 FROM pg_index i
       WHERE i.indexrelid = to_regclass('public.idx_agendamento_cancelamentos_pendentes')
         AND i.indisvalid
+        AND pg_get_indexdef(i.indexrelid) LIKE '%(proxima_tentativa_em, criado_em)%'
+        AND pg_get_expr(i.indpred, i.indrelid) = '(estado = ''solicitada''::text)'
     ) AS has_pending_index,
     EXISTS (
       SELECT 1 FROM pg_index i
       WHERE i.indexrelid = to_regclass('public.idx_agendamento_cancelamentos_calendar_pendente')
         AND i.indisvalid
+        AND pg_get_indexdef(i.indexrelid) LIKE '%(calendar_proxima_tentativa_em, criado_em)%'
+        AND pg_get_expr(i.indpred, i.indrelid) LIKE '%pendente%'
+        AND pg_get_expr(i.indpred, i.indrelid) LIKE '%enviando%'
     ) AS has_calendar_index
 )
 SELECT CASE
   WHEN NOT has_charge_table THEN 'missing_charge_table'
   WHEN NOT has_table THEN 'pending'
-  WHEN has_columns AND has_primary_key AND has_charge_fk AND has_check_constraints AND has_pending_index AND has_calendar_index THEN 'applied'
+  WHEN has_columns AND has_primary_key AND has_defaults AND has_charge_fk AND has_check_constraints AND has_pending_index AND has_calendar_index THEN 'applied'
   ELSE 'partial'
 END
 FROM state;
@@ -660,7 +708,7 @@ echo "Backup PostgreSQL concluido ($(du -h "$BACKUP_DIR/postgres-before.dump" | 
 echo "Backup protegido: $BACKUP_DIR"
 echo "Commit alvo: $TARGET_COMMIT"
 echo "Imagem alvo: $TARGET_IMAGE_TAG"
-echo "Configuracao de teste e volumes efetivos foram preservados; PIX real segue desativado."
+echo "Configuracao efetiva e volumes preservados; nenhuma flag financeira foi alterada."
 
 compose_snapshot build "$API_SERVICE"
 [[ "$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$TARGET_IMAGE_TAG" 2>/dev/null || true)" == "$TARGET_COMMIT" ]] || die "A imagem versionada nao foi construida com o commit alvo."
@@ -751,6 +799,6 @@ echo "Atualizacao concluida."
 echo "API: $HEALTH_URL"
 echo "Commit: $TARGET_COMMIT"
 echo "Backup/rollback: $BACKUP_DIR"
-echo "Producao permanece desativada; nenhuma cobranca ou chamada externa foi criada pelo script."
+echo "Ambiente PIX preservado ($MP_ENVIRONMENT_EFFECTIVE); o script nao cria cobrancas nem solicita reembolsos."
 echo "Fim: $(date -Is)"
 trap - EXIT
