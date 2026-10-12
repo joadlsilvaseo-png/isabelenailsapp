@@ -1106,7 +1106,7 @@ svg {
 }
 
 .admin-service-meta-item--pix {
-  grid-column: 1 / -1;
+  grid-column: auto;
 }
 
 .admin-pix-deposit {

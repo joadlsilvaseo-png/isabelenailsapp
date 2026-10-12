@@ -183,6 +183,133 @@ async function resolveNomeServicoVisual(dados) {
   return "Serviço Agendado";
 }
 
+/* ============================================================
+   MODAL PERSONALIZADO DE CANCELAMENTO — CLIENTE
+   ============================================================ */
+
+function exibirModalCancelamento({
+  titulo,
+  mensagem,
+  exigirConfirmacao = false,
+}) {
+  return new Promise((resolver) => {
+    const modal = document.getElementById("perfil-cancelamento-modal");
+    const painel = modal?.querySelector(".perfil-cancelamento-painel");
+    const tituloElement = document.getElementById("perfil-cancelamento-titulo");
+    const descricao = document.getElementById("perfil-cancelamento-descricao");
+    const aviso = modal?.querySelector(".perfil-cancelamento-aviso");
+    const acoes = modal?.querySelector(".perfil-cancelamento-acoes");
+    const botaoVoltar = document.getElementById("perfil-cancelamento-voltar");
+    const botaoConfirmar = document.getElementById(
+      "perfil-cancelamento-confirmar",
+    );
+    const overlay = modal?.querySelector(".perfil-cancelamento-overlay");
+
+    if (
+      !modal ||
+      !painel ||
+      !tituloElement ||
+      !descricao ||
+      !aviso ||
+      !acoes ||
+      !botaoVoltar ||
+      !botaoConfirmar
+    ) {
+      console.error("Modal de cancelamento não encontrado no HTML.");
+      resolver(false);
+      return;
+    }
+
+    if (!modal.hidden) {
+      resolver(false);
+      return;
+    }
+
+    const focoAnterior = document.activeElement;
+    const overflowAnterior = document.body.style.overflow;
+    const eventos = new AbortController();
+
+    tituloElement.textContent = titulo;
+    descricao.textContent = mensagem;
+
+    aviso.hidden = !exigirConfirmacao;
+    botaoConfirmar.hidden = !exigirConfirmacao;
+
+    botaoVoltar.textContent = exigirConfirmacao ? "Voltar" : "Entendi";
+
+    botaoConfirmar.textContent = "Confirmar cancelamento";
+
+    acoes.style.gridTemplateColumns = exigirConfirmacao
+      ? "repeat(2, minmax(0, 1fr))"
+      : "minmax(0, 1fr)";
+
+    modal.hidden = false;
+    document.body.style.overflow = "hidden";
+    botaoVoltar.focus();
+
+    function fechar(confirmado = false) {
+      if (modal.hidden) return;
+
+      eventos.abort();
+      modal.hidden = true;
+      document.body.style.overflow = overflowAnterior;
+
+      if (
+        focoAnterior?.isConnected &&
+        typeof focoAnterior.focus === "function"
+      ) {
+        focoAnterior.focus();
+      }
+
+      resolver(confirmado);
+    }
+
+    botaoVoltar.addEventListener("click", () => fechar(false), {
+      signal: eventos.signal,
+    });
+
+    botaoConfirmar.addEventListener("click", () => fechar(true), {
+      signal: eventos.signal,
+    });
+
+    overlay?.addEventListener("click", () => fechar(false), {
+      signal: eventos.signal,
+    });
+
+    document.addEventListener(
+      "keydown",
+      (event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          fechar(false);
+          return;
+        }
+
+        if (event.key !== "Tab") return;
+
+        const botoes = exigirConfirmacao
+          ? [botaoVoltar, botaoConfirmar]
+          : [botaoVoltar];
+
+        const primeiro = botoes[0];
+        const ultimo = botoes[botoes.length - 1];
+
+        if (!botoes.includes(document.activeElement)) {
+          event.preventDefault();
+          primeiro.focus();
+        } else if (event.shiftKey && document.activeElement === primeiro) {
+          event.preventDefault();
+          ultimo.focus();
+        } else if (!event.shiftKey && document.activeElement === ultimo) {
+          event.preventDefault();
+          primeiro.focus();
+        }
+      },
+      { signal: eventos.signal },
+    );
+  });
+}
+
 function criarCardAtivo({
   titulo,
   data,
@@ -239,24 +366,27 @@ function criarCardAtivo({
   cancelButton.type = "button";
   cancelButton.className = "perfil-button btn-cancelar";
   cancelButton.textContent = "Cancelar";
+
   cancelButton.addEventListener("click", async () => {
-    const confirmDelete = window.confirm(
-      "Deseja realmente cancelar esse agendamento? O cancelamento não estorna o PIX. Se o sinal já foi pago, eventual reembolso deverá ser tratado diretamente com a profissional.",
-    );
-    if (!confirmDelete) return;
+    const confirmado = await exibirModalCancelamento({
+      titulo: "Cancelar agendamento?",
+      mensagem: `Deseja cancelar ${titulo}, no dia ${data}, às ${horario}?`,
+      exigirConfirmacao: true,
+    });
+
+    if (!confirmado) return;
 
     cancelButton.disabled = true;
     cancelButton.textContent = "Cancelando...";
 
     try {
-      // STATUS SÓ PODE SER ALTERADO POR AÇÃO DO USUÁRIO (CLIQUE NO BOTÃO)
-      // ALTERAÇÃO PARA STATUS EM VEZ DE DELETAR O REGISTRO
+      // Mantém a ação original no backend.
       const cancelamento = await executarAcaoAgendamento(auth, {
         agendamentoId: id,
         acao: "cancelar_cliente",
       });
 
-      // Grava evento de notificação para Cancelamento pelo Cliente
+      // Mantém o registro de notificação existente.
       const eventPayloadCancelCliente = {
         tipo: "cancelamento_cliente",
         clienteId: auth.currentUser?.uid || null,
@@ -264,6 +394,7 @@ function criarCardAtivo({
         processado: false,
         timestamp: new Date().toISOString(),
       };
+
       if (cancelamento.firestoreCancelado) {
         try {
           await addDoc(
@@ -271,43 +402,69 @@ function criarCardAtivo({
             eventPayloadCancelCliente,
           );
         } catch (erroNotificacao) {
-          console.warn("Cancelamento salvo, mas o aviso externo não foi registrado:", erroNotificacao);
+          console.warn(
+            "Cancelamento salvo, mas o aviso externo não foi registrado:",
+            erroNotificacao,
+          );
         }
+
         (async () => {
           try {
             await fetch(webhookUrl, {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers: {
+                "Content-Type": "application/json",
+              },
               body: JSON.stringify(eventPayloadCancelCliente),
             });
           } catch (err) {
-            console.error("Falha ao comunicar o cancelamento ao webhook existente:", err);
+            console.error(
+              "Falha ao comunicar o cancelamento ao webhook existente:",
+              err,
+            );
           }
         })();
       }
 
+      // Resultado personalizado, sem alert nativo.
+      let tituloResultado = "Agendamento cancelado!";
+      let mensagemResultado = "Agendamento cancelado com sucesso!";
+
       if (cancelamento.cancelamentoPendente) {
-        window.alert(cancelamento.firestoreCancelado
+        tituloResultado = "Cancelamento em andamento";
+
+        mensagemResultado = cancelamento.firestoreCancelado
           ? "O cancelamento foi registrado. A liberação do horário está sendo concluída em segundo plano."
-          : "Sua solicitação foi recebida e será concluída após a sincronização dos sistemas.");
+          : "Sua solicitação foi recebida e será concluída após a sincronização dos sistemas.";
       } else if (cancelamento.pixPago) {
-        window.alert("Agendamento cancelado. O sinal PIX continua registrado como pago; eventual reembolso será tratado diretamente com a profissional.");
-      } else {
-        window.alert("Agendamento cancelado com sucesso!");
+        mensagemResultado =
+          "Agendamento cancelado. O sinal PIX continua registrado como pago. Eventual reembolso deverá ser tratado diretamente com a profissional.";
       }
+
+      await exibirModalCancelamento({
+        titulo: tituloResultado,
+        mensagem: mensagemResultado,
+      });
 
       if (cancelamento.firestoreCancelado) {
         card.remove();
-        if (auth.currentUser) await carregarAgendamentos(auth.currentUser.uid);
+
+        if (auth.currentUser) {
+          await carregarAgendamentos(auth.currentUser.uid);
+        }
       } else {
         cancelButton.disabled = false;
         cancelButton.textContent = "Cancelar";
       }
     } catch (error) {
       console.error("Erro ao cancelar agendamento:", error);
-      window.alert(
-        "Não foi possível cancelar o agendamento. Tente novamente mais tarde.",
-      );
+
+      await exibirModalCancelamento({
+        titulo: "Não foi possível cancelar",
+        mensagem:
+          "Ocorreu um problema ao cancelar seu agendamento. Tente novamente mais tarde.",
+      });
+
       cancelButton.disabled = false;
       cancelButton.textContent = "Cancelar";
     }
@@ -692,4 +849,3 @@ document.addEventListener("DOMContentLoaded", () => {
     await carregarAgendamentos(user.uid);
   });
 });
-

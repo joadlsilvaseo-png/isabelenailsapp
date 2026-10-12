@@ -250,6 +250,47 @@
     </nav>
   </div>
 
+  <!-- MODAL DE CANCELAMENTO -->
+  <div id="perfil-cancelamento-modal" class="perfil-cancelamento-modal" hidden>
+
+    <div class="perfil-cancelamento-overlay"></div>
+
+    <section class="perfil-cancelamento-painel" role="dialog" aria-modal="true" aria-labelledby="perfil-cancelamento-titulo" aria-describedby="perfil-cancelamento-descricao" tabindex="-1">
+
+      <div class="perfil-cancelamento-icone" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none">
+          <path d="M12 8v5M12 17h.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+          <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8" />
+        </svg>
+      </div>
+
+      <h2 id="perfil-cancelamento-titulo">
+        Cancelar agendamento?
+      </h2>
+
+      <p id="perfil-cancelamento-descricao">
+        Tem certeza de que deseja cancelar seu atendimento?
+      </p>
+
+      <div class="perfil-cancelamento-aviso">
+        O cancelamento não estorna o sinal PIX.
+        Se necessário, o reembolso deverá ser combinado
+        diretamente com a profissional.
+      </div>
+
+      <div class="perfil-cancelamento-acoes">
+        <button type="button" id="perfil-cancelamento-voltar">
+          Voltar
+        </button>
+
+        <button type="button" id="perfil-cancelamento-confirmar">
+          Confirmar cancelamento
+        </button>
+      </div>
+
+    </section>
+  </div>
+
   <script type="module" src="meu-perfil.js?v=2.0.0"></script>
 
   <script src="app.js?v=1.0.4" defer></script>
