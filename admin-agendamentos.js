@@ -1608,6 +1608,7 @@ function exibirModalCancelamentoAdmin({
   titulo,
   mensagem,
   exigirConfirmacao = false,
+  sucesso = false,
 }) {
   return new Promise((resolver) => {
     const modal = document.getElementById("admin-cancelamento-modal");
@@ -1615,6 +1616,8 @@ function exibirModalCancelamentoAdmin({
     const tituloElemento = document.getElementById("admin-cancelamento-titulo");
     const descricao = document.getElementById("admin-cancelamento-descricao");
     const aviso = modal?.querySelector(".admin-cancelamento-aviso");
+    const icone = modal?.querySelector(".admin-cancelamento-icone");
+    const simbolo = icone?.querySelector("svg path");
     const acoes = modal?.querySelector(".admin-cancelamento-acoes");
     const botaoVoltar = document.getElementById("admin-cancelamento-voltar");
     const botaoConfirmar = document.getElementById(
@@ -1650,6 +1653,12 @@ function exibirModalCancelamentoAdmin({
     descricao.textContent = mensagem;
 
     aviso.hidden = !exigirConfirmacao;
+    icone?.classList.toggle("admin-cancelamento-icone--sucesso", sucesso);
+
+    simbolo?.setAttribute(
+      "d",
+      sucesso ? "M7 12.5l3 3 7-7" : "M12 8v5M12 17h.01",
+    );
     botaoConfirmar.hidden = !exigirConfirmacao;
 
     botaoVoltar.textContent = exigirConfirmacao ? "Voltar" : "Entendi";
@@ -1784,6 +1793,9 @@ async function cancelarAgendamento(agendamento) {
     await exibirModalCancelamentoAdmin({
       titulo: tituloResultado,
       mensagem: mensagemResultado,
+      sucesso:
+        cancelamento.firestoreCancelado === true &&
+        !cancelamento.cancelamentoPendente,
     });
   } catch (error) {
     console.error("Erro ao cancelar agendamento:", error);

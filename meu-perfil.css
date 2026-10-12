@@ -1234,3 +1234,7 @@ button {
     transition: none;
   }
 }
+.perfil-cancelamento-icone--sucesso {
+  color: #2f7a50;
+  background: #e9f7ef;
+}

@@ -2084,3 +2084,7 @@ body[data-access-state="denied"] #admin-refresh-button {
     transition: none;
   }
 }
+.admin-cancelamento-icone--sucesso {
+  color: #2f7a50;
+  background: #e9f7ef;
+}

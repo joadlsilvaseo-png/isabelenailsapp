@@ -187,10 +187,20 @@ async function resolveNomeServicoVisual(dados) {
    MODAL PERSONALIZADO DE CANCELAMENTO — CLIENTE
    ============================================================ */
 
+function formatarDataCancelamento(data) {
+  const texto = String(data || "").trim();
+  const partes = /^(\d{4})-(\d{2})-(\d{2})$/.exec(texto);
+
+  if (!partes) return texto;
+
+  return `${partes[3]}/${partes[2]}/${partes[1]}`;
+}
+
 function exibirModalCancelamento({
   titulo,
   mensagem,
   exigirConfirmacao = false,
+  sucesso = false,
 }) {
   return new Promise((resolver) => {
     const modal = document.getElementById("perfil-cancelamento-modal");
@@ -198,6 +208,8 @@ function exibirModalCancelamento({
     const tituloElement = document.getElementById("perfil-cancelamento-titulo");
     const descricao = document.getElementById("perfil-cancelamento-descricao");
     const aviso = modal?.querySelector(".perfil-cancelamento-aviso");
+    const icone = modal?.querySelector(".perfil-cancelamento-icone");
+    const simbolo = icone?.querySelector("svg path");
     const acoes = modal?.querySelector(".perfil-cancelamento-acoes");
     const botaoVoltar = document.getElementById("perfil-cancelamento-voltar");
     const botaoConfirmar = document.getElementById(
@@ -233,6 +245,12 @@ function exibirModalCancelamento({
     descricao.textContent = mensagem;
 
     aviso.hidden = !exigirConfirmacao;
+    icone?.classList.toggle("perfil-cancelamento-icone--sucesso", sucesso);
+
+    simbolo?.setAttribute(
+      "d",
+      sucesso ? "M7 12.5l3 3 7-7" : "M12 8v5M12 17h.01",
+    );
     botaoConfirmar.hidden = !exigirConfirmacao;
 
     botaoVoltar.textContent = exigirConfirmacao ? "Voltar" : "Entendi";
@@ -370,7 +388,7 @@ function criarCardAtivo({
   cancelButton.addEventListener("click", async () => {
     const confirmado = await exibirModalCancelamento({
       titulo: "Cancelar agendamento?",
-      mensagem: `Deseja cancelar ${titulo}, no dia ${data}, às ${horario}?`,
+      mensagem: `Deseja cancelar ${titulo}, no dia ${formatarDataCancelamento(data)}, às ${horario}?`,
       exigirConfirmacao: true,
     });
 
@@ -444,6 +462,9 @@ function criarCardAtivo({
       await exibirModalCancelamento({
         titulo: tituloResultado,
         mensagem: mensagemResultado,
+        sucesso:
+          cancelamento.firestoreCancelado === true &&
+          !cancelamento.cancelamentoPendente,
       });
 
       if (cancelamento.firestoreCancelado) {
