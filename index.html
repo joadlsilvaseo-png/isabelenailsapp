@@ -40,7 +40,7 @@
 
   <link rel="stylesheet" href="base.css?v=1.0.4">
 
-  <link rel="stylesheet" href="index.css?v=3.0.0">
+  <link rel="stylesheet" href="index.css?v=3.0.1">
 </head>
 
 <body data-page="landing">
@@ -123,9 +123,40 @@
 
   <script type="module" src="analytics.js?v=1.0.1"></script>
 
+  <!-- Orientação de instalação no iPhone -->
+  <div id="ios-install-overlay" class="ios-install-overlay" hidden>
+    <section class="ios-install-modal" role="dialog" aria-modal="true" aria-labelledby="ios-install-title">
+      <button type="button" class="ios-install-close" aria-label="Fechar orientação">×</button>
+
+      <span class="ios-install-icon" aria-hidden="true">📲</span>
+
+      <h2 id="ios-install-title">
+        Tenha nosso app no seu iPhone!
+      </h2>
+
+      <p>
+        Adicione o aplicativo à Tela de Início para acompanhar
+        seus agendamentos e receber notificações.
+      </p>
+
+      <ol class="ios-install-steps">
+        <li>Toque em <strong>Compartilhar</strong> no Safari.</li>
+        <li>Selecione <strong>Adicionar à Tela de Início</strong>.</li>
+        <li>Abra o app, faça login e ative as notificações.</li>
+      </ol>
+
+      <button type="button" class="ios-install-confirm">
+        Entendi!
+      </button>
+
+      <small>Você também pode continuar pelo navegador.</small>
+    </section>
+  </div>
+
+
   <script type="module" src="index-auth.js?v=1.0.0"></script>
 
-  <script src="app.js?v=2.0.0" defer></script>
+  <script src="app.js?v=2.0.1" defer></script>
 
 </body>
 

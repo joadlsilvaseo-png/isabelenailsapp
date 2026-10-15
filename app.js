@@ -132,6 +132,56 @@
 
   App.onReady(() => {
     App.registerServiceWorker();
+
+    /* AVISO DE INSTALAÇÃO NO IPHONE */
+    const avisoIos = document.getElementById("ios-install-overlay");
+
+    const dispositivoIphone = /iPhone|iPod/i.test(navigator.userAgent);
+
+    const aplicativoInstalado =
+      window.navigator.standalone === true ||
+      window.matchMedia("(display-mode: standalone)").matches;
+
+    if (avisoIos && dispositivoIphone && !aplicativoInstalado) {
+      let avisoDispensado = false;
+
+      try {
+        avisoDispensado =
+          sessionStorage.getItem("isabele-ios-install-dismissed") === "1";
+      } catch (erro) {
+        console.warn("[PWA] Armazenamento indisponível:", erro);
+      }
+
+      if (!avisoDispensado) {
+        const fecharAviso = () => {
+          avisoIos.hidden = true;
+
+          try {
+            sessionStorage.setItem("isabele-ios-install-dismissed", "1");
+          } catch (erro) {
+            console.warn("[PWA] Não foi possível salvar preferência:", erro);
+          }
+        };
+
+        const botaoFechar = avisoIos.querySelector(".ios-install-close");
+        const botaoConfirmar = avisoIos.querySelector(".ios-install-confirm");
+
+        botaoFechar?.addEventListener("click", fecharAviso);
+        botaoConfirmar?.addEventListener("click", fecharAviso);
+
+        avisoIos.addEventListener("click", (evento) => {
+          if (evento.target === avisoIos) fecharAviso();
+        });
+
+        avisoIos.addEventListener("keydown", (evento) => {
+          if (evento.key === "Escape") fecharAviso();
+        });
+
+        avisoIos.hidden = false;
+        botaoFechar?.focus();
+      }
+    }
+
     App.initHistoryBackLinks();
     App.enableTouchFeedback([
       "button",
