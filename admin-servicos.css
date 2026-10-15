@@ -1132,6 +1132,12 @@ svg {
   line-height: 1.5;
 }
 
+/* Campos de configuração do sinal PIX com fundo branco */
+#admin-service-pix-signal-type,
+#admin-service-pix-signal-value {
+  background: var(--admin-white);
+}
+
 .admin-pix-deposit-preview {
   display: grid;
   gap: 4px;
