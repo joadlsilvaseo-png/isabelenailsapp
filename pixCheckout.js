@@ -25,14 +25,19 @@ function salvarReservaPix() {
   try {
     sessionStorage.setItem(STORAGE_RESERVA_PIX, JSON.stringify(reservaAtual));
   } catch (erro) {
-    console.warn("[PIX] Não foi possível guardar a reserva nesta sessão:", erro.message);
+    console.warn(
+      "[PIX] Não foi possível guardar a reserva nesta sessão:",
+      erro.message,
+    );
   }
 }
 
 function restaurarReservaPix() {
   if (reservaAtual) return;
   try {
-    const salva = JSON.parse(sessionStorage.getItem(STORAGE_RESERVA_PIX) || "null");
+    const salva = JSON.parse(
+      sessionStorage.getItem(STORAGE_RESERVA_PIX) || "null",
+    );
     if (
       salva &&
       typeof salva.reservaId === "string" &&
@@ -48,7 +53,8 @@ function restaurarReservaPix() {
 
 function moeda(centavos) {
   return new Intl.NumberFormat("pt-BR", {
-    style: "currency", currency: "BRL",
+    style: "currency",
+    currency: "BRL",
   }).format(Number(centavos) / 100);
 }
 
@@ -86,7 +92,9 @@ function configurarModal() {
   caixaPix = modal.querySelector(".im-pix-conteudo");
   btnRepetir = modal.querySelector(".im-pix-repetir");
   btnCopiar = modal.querySelector(".im-pix-copiar");
-  modal.querySelector(".im-pix-fechar").addEventListener("click", () => modal.close());
+  modal
+    .querySelector(".im-pix-fechar")
+    .addEventListener("click", () => modal.close());
   btnCopiar.addEventListener("click", async () => {
     if (!codigoPix) return;
     try {
@@ -125,26 +133,56 @@ async function postApi(caminho, dados) {
     cache: "no-store",
   });
   const tipo = resposta.headers.get("content-type") || "";
+
+  if (resposta.status === 502) {
+    console.error("[PIX Checkout] HTTP 502", {
+      rota: caminho,
+      status: resposta.status,
+    });
+
+    throw new Error(
+      "Tivemos uma instabilidade momentânea. " +
+        "Aguarde alguns instantes e tente novamente. " +
+        "Se o problema continuar, entre em contato com a Isabele. " +
+        "Código de atendimento: P02.",
+    );
+  }
+
   if (!tipo.includes("application/json")) {
-    throw new Error(`A API PIX não respondeu corretamente (HTTP ${resposta.status}).`);
+    throw new Error(
+      `A API PIX não respondeu corretamente (HTTP ${resposta.status}).`,
+    );
   }
   const corpo = await resposta.json();
-  if (!resposta.ok) throw new Error(corpo.erro || `Falha HTTP ${resposta.status}`);
+  if (!resposta.ok)
+    throw new Error(corpo.erro || `Falha HTTP ${resposta.status}`);
   return corpo;
 }
 
 function selecionarDados() {
   const servicoId = params.get("id");
-  const data = document.querySelector(".agendamento-date--active")?.dataset.dateIso;
-  const horario = document.querySelector(".agendamento-time--active")?.dataset.time;
+  const data = document.querySelector(".agendamento-date--active")?.dataset
+    .dateIso;
+  const horario = document.querySelector(".agendamento-time--active")?.dataset
+    .time;
   const nome = document.querySelector("#nomeCliente")?.value.trim();
-  if (!servicoId || !/^\d{4}-\d{2}-\d{2}$/.test(data || "") ||
-      !/^([01]\d|2[0-3]):[0-5]\d$/.test(horario || "") || !nome) {
-    throw new Error("Preencha seu nome e selecione uma data e um horário válidos.");
+  if (
+    !servicoId ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(data || "") ||
+    !/^([01]\d|2[0-3]):[0-5]\d$/.test(horario || "") ||
+    !nome
+  ) {
+    throw new Error(
+      "Preencha seu nome e selecione uma data e um horário válidos.",
+    );
   }
   return {
-    servicoId, data, horario, nome,
-    nomeServico: document.querySelector("#service-name")?.textContent?.trim() || "Serviço",
+    servicoId,
+    data,
+    horario,
+    nome,
+    nomeServico:
+      document.querySelector("#service-name")?.textContent?.trim() || "Serviço",
   };
 }
 
@@ -152,10 +190,16 @@ function mostrarPedido(pedido) {
   const pix = pedido.pix || {};
   codigoPix = pix.copiaECola || "";
   if (!codigoPix && !pix.qrCodeBase64) {
-    throw new Error("O Mercado Pago não retornou o QR Code PIX. Tente novamente.");
+    throw new Error(
+      "O Mercado Pago não retornou o QR Code PIX. Tente novamente.",
+    );
   }
-  modal.querySelector("#im-pix-sinal").textContent = moeda(reservaAtual.valorSinalCentavos);
-  modal.querySelector("#im-pix-restante").textContent = moeda(reservaAtual.valorRestanteCentavos);
+  modal.querySelector("#im-pix-sinal").textContent = moeda(
+    reservaAtual.valorSinalCentavos,
+  );
+  modal.querySelector("#im-pix-restante").textContent = moeda(
+    reservaAtual.valorRestanteCentavos,
+  );
   const img = modal.querySelector(".im-pix-qr");
   if (/^[A-Za-z0-9+/=\r\n]+$/.test(pix.qrCodeBase64 || "")) {
     img.src = `data:image/png;base64,${pix.qrCodeBase64.replace(/\s/g, "")}`;
@@ -174,7 +218,9 @@ function mostrarPedido(pedido) {
 
 async function emitirAteObterPedido() {
   for (let tentativa = 0; tentativa < 5; tentativa += 1) {
-    const pedido = await postApi("/pix/emitir", { reservaId: reservaAtual.reservaId });
+    const pedido = await postApi("/pix/emitir", {
+      reservaId: reservaAtual.reservaId,
+    });
     if (pedido.status === "processando") {
       mensagem("Mercado Pago está preparando o PIX. Aguarde...");
       await new Promise((resolve) => setTimeout(resolve, 12000));
@@ -205,31 +251,45 @@ function concluirAgendamento() {
   localStorage.setItem("servicoAgendamento", reservaAtual.nomeServico);
   localStorage.setItem("isabelePixReservaId", reservaAtual.reservaId);
   sessionStorage.removeItem(STORAGE_RESERVA_PIX);
-  setTimeout(() => { window.location.assign("confirmacao.html"); }, 1400);
+  setTimeout(() => {
+    window.location.assign("confirmacao.html");
+  }, 1400);
 }
 
 async function conferirPagamento() {
   if (conferindo || !reservaAtual || concluido) return;
   conferindo = true;
   try {
-    const retorno = await postApi("/pix/status", { reservaId: reservaAtual.reservaId });
+    const retorno = await postApi("/pix/status", {
+      reservaId: reservaAtual.reservaId,
+    });
     if (retorno.agendamentoConfirmado === true) {
       concluirAgendamento();
     } else if (retorno.pagamentoCreditado === true) {
       mensagem("PIX creditado! Finalizando a confirmação do horário...");
-    } else if (["revisao_financeira", "pago_requer_analise"].includes(retorno.situacao)) {
+    } else if (
+      ["revisao_financeira", "pago_requer_analise"].includes(retorno.situacao)
+    ) {
       pararConsulta();
       btnRepetir.textContent = "Consultar novamente";
       btnRepetir.hidden = false;
-      mensagem("Não foi possível concluir a confirmação automaticamente. Não faça outro pagamento; consulte novamente ou fale com o salão.", true);
-    } else if (["expirada", "cancelada", "estornada", "falha"].includes(retorno.situacao)) {
+      mensagem(
+        "Não foi possível concluir a confirmação automaticamente. Não faça outro pagamento; consulte novamente ou fale com o salão.",
+        true,
+      );
+    } else if (
+      ["expirada", "cancelada", "estornada", "falha"].includes(retorno.situacao)
+    ) {
       pararConsulta();
       reservaAtual = null;
       codigoPix = "";
       sessionStorage.removeItem(STORAGE_RESERVA_PIX);
       btnRepetir.textContent = "Tentar nova reserva";
       btnRepetir.hidden = false;
-      mensagem("Esta cobrança não está mais disponível. Inicie uma nova reserva.", true);
+      mensagem(
+        "Esta cobrança não está mais disponível. Inicie uma nova reserva.",
+        true,
+      );
     } else {
       mensagem("Aguardando a identificação do pagamento PIX...");
     }
@@ -289,13 +349,17 @@ async function iniciarCheckout() {
 // Captura antes do listener legado de agendamento.js, que faz addDoc
 // diretamente no Firestore. Reagendamentos e Admin nao sao interceptados.
 if (novoAgendamentoCliente) {
-  document.addEventListener("click", (evento) => {
-    const alvo = evento.target;
-    if (!(alvo instanceof Element)) return;
-    const botao = alvo.closest(".agendamento-button");
-    if (!botao || botao.disabled) return;
-    evento.preventDefault();
-    evento.stopImmediatePropagation();
-    void iniciarCheckout();
-  }, true);
+  document.addEventListener(
+    "click",
+    (evento) => {
+      const alvo = evento.target;
+      if (!(alvo instanceof Element)) return;
+      const botao = alvo.closest(".agendamento-button");
+      if (!botao || botao.disabled) return;
+      evento.preventDefault();
+      evento.stopImmediatePropagation();
+      void iniciarCheckout();
+    },
+    true,
+  );
 }
