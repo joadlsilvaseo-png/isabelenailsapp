@@ -503,7 +503,7 @@ async function loadManicureServices() {
 
   const servicesQuery = query(
     servicesRef,
-    where("categoria", "==", categoryName),
+    where("categoria", "in", [categoryName, "manicure"]),
   );
 
   try {

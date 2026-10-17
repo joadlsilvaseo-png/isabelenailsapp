@@ -1,15 +1,3 @@
-import {
-  initializeApp,
-  applicationDefault,
-  getApps
-} from "firebase-admin/app";
-
-import { getAuth } from "firebase-admin/auth";
-
-import {
-  confirmarAgendamentoPixNoFirestore
-} from "./pixConfirmacaoFirestore.js";
-
 import { gerarIdAgendamentoPix } from "./pixRegrasConfirmacao.js";
 
 function requerAnalise(mensagem) {
@@ -21,8 +9,27 @@ function requerAnalise(mensagem) {
 export async function efetivarAgendamentoPix({
   pool,
   cobrancaId,
-  uid
+  uid,
+  dependencias = {}
 }) {
+  const confirmarFirestore = dependencias.confirmarFirestore ||
+    (async (dados) => {
+      const modulo = await import("./pixConfirmacaoFirestore.js");
+      return modulo.confirmarAgendamentoPixNoFirestore(dados);
+    });
+  const obterNome = dependencias.obterNomeCliente || (async (clienteUid) => {
+    const { initializeApp, applicationDefault, getApps } =
+      await import("firebase-admin/app");
+    const { getAuth } = await import("firebase-admin/auth");
+    if (!getApps().length) {
+      initializeApp({
+        credential: applicationDefault(),
+        projectId: "isabele-nails-app"
+      });
+    }
+    return (await getAuth().getUser(clienteUid)).displayName;
+  });
+
   const conexao = await pool.connect();
 
   try {
@@ -88,10 +95,11 @@ export async function efetivarAgendamentoPix({
       data_iso: registro.reserva_data_iso
     };
 
-    if (
-      !["reservada", "confirmada"]
-        .includes(reserva.estado)
-    ) {
+    if (reserva.estado === "cancelada") {
+      throw requerAnalise("Agendamento cancelado não pode ser reativado pela conciliação PIX");
+    }
+
+    if (!["reservada", "confirmada", "expirada"].includes(reserva.estado)) {
       throw requerAnalise("Reserva indisponivel");
     }
 
@@ -99,25 +107,16 @@ export async function efetivarAgendamentoPix({
     // A reserva vencida so pode recuperar um documento existente,
     // nunca criar um agendamento novo.
 
-    if (!getApps().length) {
-      initializeApp({
-        credential: applicationDefault(),
-        projectId: "isabele-nails-app"
-      });
-    }
-
-    const usuario = await getAuth().getUser(uid);
-
     const nomeCliente =
-      usuario.displayName ||
       registro.reserva_dados?.nomeCliente ||
+      await obterNome(uid) ||
       "Cliente";
 
     // ID deterministico: repetir nao cria outro documento.
     let confirmado;
 
     try {
-      confirmado = await confirmarAgendamentoPixNoFirestore({
+      confirmado = await confirmarFirestore({
         cobranca: registro,
         reserva,
         nomeCliente
@@ -167,6 +166,30 @@ export async function efetivarAgendamentoPix({
       WHERE id = $1
     `, [registro.id, confirmado.agendamentoId]);
 
+    const duracaoMinutos = Number(reserva.fim_minuto) - Number(reserva.inicio_minuto);
+    const dataEvento = registro.reserva_data_iso;
+    const horarioEvento = `${String(Math.floor(Number(reserva.inicio_minuto) / 60)).padStart(2, "0")}:${String(Number(reserva.inicio_minuto) % 60).padStart(2, "0")}`;
+    const eventId = `evt_${confirmado.agendamentoId}`;
+
+    // A fila só recebe o atendimento depois da confirmação no Firestore.
+    // O eventId determinístico e a chave única tornam as consultas repetidas idempotentes.
+    await conexao.query(`
+      INSERT INTO public.pix_calendar_outbox (
+        event_id, agendamento_id, nome_cliente, servico,
+        data_servico, horario, duracao_minutos
+      )
+      VALUES ($1, $2, $3, $4, $5::date, $6::time, $7)
+      ON CONFLICT (event_id) DO NOTHING
+    `, [
+      eventId,
+      confirmado.agendamentoId,
+      nomeCliente,
+      registro.reserva_dados?.nomeServico || reserva.servico_id,
+      dataEvento,
+      horarioEvento,
+      duracaoMinutos
+    ]);
+
     await conexao.query(`
       INSERT INTO public.pix_eventos (
         cobranca_id,
@@ -187,7 +210,8 @@ export async function efetivarAgendamentoPix({
     return {
       situacao: "agendamento_confirmado",
       agendamentoConfirmado: true,
-      agendamentoId: confirmado.agendamentoId
+      agendamentoId: confirmado.agendamentoId,
+      sincronizacaoCalendar: "pendente"
     };
   } catch (erro) {
     await conexao.query("ROLLBACK").catch(() => {});
@@ -196,3 +220,4 @@ export async function efetivarAgendamentoPix({
     conexao.release();
   }
 }
+

@@ -9,6 +9,18 @@ import { getFirestore } from "firebase-admin/firestore";
 import { verificarUsuario } from "./pushSubscriptions.js";
 import { validarHorarioPix } from "./pixDisponibilidade.js";
 import { verificarConflitoFirestore } from "./pixAgendaFirestore.js";
+import {
+  ambienteMercadoPagoAtual,
+  consultarPedidoPixComLock,
+  mercadoPagoHabilitado
+} from "./pixMercadoPago.js";
+import { validarRetornoPagamentoPix } from "./pixValidacaoPagamento.js";
+import {
+  encerrarCobrancaPixSemPagamento,
+  registrarCreditoPix
+} from "./pixConciliacao.js";
+import { efetivarAgendamentoPix } from "./pixEfetivacao.js";
+import { calcularSinalServico } from "./pixSinalServico.js";
 
 class ErroReserva extends Error {
   constructor(status, mensagem) {
@@ -90,61 +102,78 @@ function validarDataFutura(data, horario) {
   }
 }
 
-function calcularValores(preco, regra) {
-  if (
-    typeof preco !== "number" ||
-    !Number.isFinite(preco) ||
-    preco <= 0
-  ) {
-    throw new ErroReserva(422, "Preco do servico invalido");
-  }
+async function reconciliarReservasVencidasDoDia(pool, data) {
+  const consulta = await pool.query(`
+    SELECT
+      c.id,
+      c.cliente_uid,
+      c.mp_order_id,
+      c.referencia_externa,
+      c.valor_sinal_centavos,
+      c.mp_environment,
+      r.id AS reserva_id
+    FROM public.pix_reservas r
+    JOIN public.pix_cobrancas c ON c.id = r.cobranca_id
+    WHERE r.data_servico = $1
+      AND r.estado = 'reservada'
+      AND r.vence_em <= NOW()
+      AND c.estado = 'pendente'
+      AND c.mp_order_id IS NOT NULL
+    ORDER BY r.vence_em
+    LIMIT 10
+  `, [data]);
 
-  const valorTotal = Math.round(preco * 100);
+  await Promise.allSettled(consulta.rows.map(async (cobranca) => {
+    try {
+      const ambiente = cobranca.mp_environment || "test";
+      if (!mercadoPagoHabilitado(ambiente)) return;
+      const pedido = await consultarPedidoPixComLock(pool, cobranca.mp_order_id, ambiente);
+      const validacao = validarRetornoPagamentoPix(pedido, cobranca);
 
-  if (
-    !Number.isSafeInteger(valorTotal) ||
-    Math.abs(preco * 100 - valorTotal) > 1e-7
-  ) {
-    throw new ErroReserva(422, "Preco do servico invalido");
-  }
+      if (validacao.creditado) {
+        const credito = await registrarCreditoPix({
+          pool,
+          cobrancaId: cobranca.id,
+          uid: cobranca.cliente_uid,
+          pedido
+        });
 
-  let valorSinal;
+        // O ID estavel permite recuperar um documento ja criado antes
+        // de uma falha entre Firestore e PostgreSQL. Reserva vencida
+        // sem documento novo nunca e convertida em agendamento.
+        try {
+          await efetivarAgendamentoPix({
+            pool,
+            cobrancaId: cobranca.id,
+            uid: cobranca.cliente_uid
+          });
+        } catch (erro) {
+          if (!erro?.requerAnalise) throw erro;
+          await pool.query(`
+            UPDATE public.pix_reservas
+            SET estado = 'expirada', atualizado_em = NOW()
+            WHERE id = $1
+              AND estado = 'reservada'
+              AND vence_em <= NOW()
+          `, [cobranca.reserva_id]);
+        }
+        return credito;
+      }
 
-  if (regra.tipo_sinal_padrao === "fixo") {
-    valorSinal = Number(regra.valor_fixo_padrao_centavos);
-  } else if (regra.tipo_sinal_padrao === "percentual") {
-    const percentual = Number(regra.percentual_padrao);
-    const pontos = Math.round(percentual * 100);
-
-    if (
-      !Number.isFinite(percentual) ||
-      pontos <= 0 ||
-      pontos > 10000
-    ) {
-      throw new ErroReserva(422, "Percentual invalido");
+      if (["expirada", "cancelada"].includes(validacao.situacao)) {
+        await encerrarCobrancaPixSemPagamento({
+          pool,
+          cobrancaId: cobranca.id,
+          uid: cobranca.cliente_uid,
+          situacao: validacao.situacao
+        });
+      }
+    } catch (erro) {
+      // Se Mercado Pago estiver indisponivel, mantemos o bloqueio.
+      // Liberar sem confirmar o estado externo poderia duplicar horarios.
+      console.warn("[PIX Reserva] Nao foi possivel reconciliar pedido vencido:", erro.message);
     }
-
-    valorSinal = Math.round(valorTotal * pontos / 10000);
-  } else {
-    throw new ErroReserva(422, "Tipo de sinal invalido");
-  }
-
-  if (
-    !Number.isSafeInteger(valorSinal) ||
-    valorSinal <= 0 ||
-    valorSinal > valorTotal
-  ) {
-    throw new ErroReserva(
-      422,
-      "Sinal invalido para o valor do servico"
-    );
-  }
-
-  return {
-    valorTotalCentavos: valorTotal,
-    valorSinalCentavos: valorSinal,
-    valorRestanteCentavos: valorTotal - valorSinal
-  };
+  }));
 }
 
 export async function criarReservaPix(req, res, pool) {
@@ -160,6 +189,14 @@ export async function criarReservaPix(req, res, pool) {
   try {
     const dados = await lerJson(req);
     const { servicoId, data, horario } = dados;
+    const nomeCliente =
+      typeof dados.nomeCliente === "string"
+        ? dados.nomeCliente.trim().slice(0, 120)
+        : "";
+
+    if (!nomeCliente) {
+      throw new ErroReserva(400, "Nome da cliente invalido");
+    }
 
     if (
       typeof servicoId !== "string" ||
@@ -168,7 +205,11 @@ export async function criarReservaPix(req, res, pool) {
       throw new ErroReserva(400, "Servico invalido");
     }
 
-    // Recurso desativado durante o desenvolvimento.
+    const ambienteMP = ambienteMercadoPagoAtual();
+    if (!mercadoPagoHabilitado(ambienteMP)) {
+      throw new ErroReserva(409, `PIX desativado para ${ambienteMP}`);
+    }
+
     const habilitacao = await pool.query(
       "SELECT ativo FROM public.pix_configuracao WHERE id = 1"
     );
@@ -200,6 +241,12 @@ export async function criarReservaPix(req, res, pool) {
 
     validarDataFutura(data, horario);
 
+    // Com o worker ativo, o acompanhamento das Orders vencidas ocorre pela
+    // fila persistente; evita uma segunda consulta concorrente no fluxo de reserva.
+    if (process.env.PIX_POLLING_WORKER_ENABLED !== "true") {
+      await reconciliarReservasVencidasDoDia(pool, data);
+    }
+
     const conexao = await pool.connect();
     let resultado;
 
@@ -215,9 +262,6 @@ export async function criarReservaPix(req, res, pool) {
       const config = await conexao.query(`
         SELECT
           ativo,
-          tipo_sinal_padrao,
-          valor_fixo_padrao_centavos,
-          percentual_padrao,
           reserva_minutos
         FROM public.pix_configuracao
         WHERE id = 1
@@ -243,7 +287,12 @@ export async function criarReservaPix(req, res, pool) {
         );
       }
 
-      const valores = calcularValores(servico.preco, regra);
+      let valores;
+      try {
+        valores = calcularSinalServico(servico);
+      } catch (erro) {
+        throw new ErroReserva(422, erro.message);
+      }
 
       // Libera somente reservas sem pedido enviado ao MP.
       // Antes de chamar a API externa, a cobranca devera
@@ -293,19 +342,13 @@ export async function criarReservaPix(req, res, pool) {
 
       const venceEm = vencimento.rows[0].vence_em;
 
-      const percentual =
-        regra.tipo_sinal_padrao === "percentual"
-          ? Number(regra.percentual_padrao)
-          : null;
-
-      const valorFixo =
-        regra.tipo_sinal_padrao === "fixo"
-          ? Number(regra.valor_fixo_padrao_centavos)
-          : null;
-
       const reservaDados = {
         servicoId,
         nomeServico: servico.nome || "Servico",
+        pixSinalTipo: valores.tipoSinal,
+        pixSinalPercentual: valores.percentualSinal,
+        pixSinalValorCentavos: valores.valorFixoConfiguradoCentavos,
+        nomeCliente,
         data,
         horario,
         duracaoMinutos: duracao
@@ -323,6 +366,7 @@ export async function criarReservaPix(req, res, pool) {
           percentual_sinal,
           valor_sinal_centavos,
           valor_restante_centavos,
+          mp_environment,
           estado,
           vence_em,
           tipo_sinal,
@@ -330,8 +374,8 @@ export async function criarReservaPix(req, res, pool) {
         )
         VALUES (
           $1, $2, $3::jsonb, $4, $5,
-          $6, $7, $8, $9,
-          'criada', $10, $11, $12
+          $6, $7, $8, $9, $10,
+          'criada', $11, $12, $13
         )
       `, [
         cobrancaId,
@@ -340,12 +384,13 @@ export async function criarReservaPix(req, res, pool) {
         referenciaExterna,
         chaveIdempotencia,
         valores.valorTotalCentavos,
-        percentual,
+        valores.percentualSinal,
         valores.valorSinalCentavos,
         valores.valorRestanteCentavos,
+        ambienteMP,
         venceEm,
-        regra.tipo_sinal_padrao,
-        valorFixo
+        valores.tipoSinal,
+        valores.valorFixoConfiguradoCentavos
       ]);
 
       // Vincula o horario a cobranca na mesma transacao.

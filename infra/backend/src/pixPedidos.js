@@ -8,8 +8,9 @@ import { getAuth } from "firebase-admin/auth";
 import { verificarUsuario } from "./pushSubscriptions.js";
 
 import {
-  criarPedidoPixTeste,
-  consultarPedidoPixTeste
+  criarPedidoPix,
+  consultarPedidoPixComLock,
+  mercadoPagoHabilitado
 } from "./pixMercadoPago.js";
 
 function responder(res, codigo, dados) {
@@ -115,11 +116,6 @@ export async function emitirPixDaReserva(req, res, pool) {
   }
 
   try {
-    // Dupla protecao durante o desenvolvimento.
-    if (process.env.PIX_TEST_ORDERS_ENABLED !== "true") {
-      throw erroHttp(409, "Emissao PIX ainda desativada");
-    }
-
     const { reservaId } = await lerJson(req);
 
     if (
@@ -160,6 +156,11 @@ export async function emitirPixDaReserva(req, res, pool) {
 
       if (!cobranca) {
         throw erroHttp(404, "Reserva nao encontrada");
+      }
+
+      cobranca.mp_environment ||= "test";
+      if (!mercadoPagoHabilitado(cobranca.mp_environment)) {
+        throw erroHttp(409, `Operacoes PIX desativadas para ${cobranca.mp_environment}`);
       }
 
       if (!cobranca.pix_ativo) {
@@ -271,22 +272,30 @@ export async function emitirPixDaReserva(req, res, pool) {
     // A chave de idempotencia vem do PostgreSQL.
     // O navegador nunca escolhe valor, referencia ou email.
     const pedido = emitir
-      ? await criarPedidoPixTeste({
+      ? await criarPedidoPix({
           valorCentavos: Number(cobranca.valor_sinal_centavos),
           referenciaExterna: cobranca.referencia_externa,
           chaveIdempotencia: cobranca.chave_idempotencia,
           emailPagador: cobranca.reserva_dados.emailPagador,
           prazoMinutos: 30
-        })
-      : await consultarPedidoPixTeste(cobranca.mp_order_id);
+        }, cobranca.mp_environment)
+      : await consultarPedidoPixComLock(pool, cobranca.mp_order_id, cobranca.mp_environment);
 
     conferirPedido(pedido, cobranca);
 
     if (emitir) {
+      const intervaloPolling = Number.parseInt(process.env.PIX_POLLING_INITIAL_INTERVAL_SECONDS || "30", 10);
+      const proximaConsultaEmSegundos = Number.isInteger(intervaloPolling)
+        ? Math.max(15, Math.min(900, intervaloPolling))
+        : 30;
       const atualizado = await pool.query(`
         UPDATE public.pix_cobrancas
         SET
           mp_order_id = $2,
+          pix_polling_next_at = NOW() + ($3 * INTERVAL '1 second'),
+          pix_polling_attempts = 0,
+          pix_polling_lease_until = NULL,
+          pix_polling_last_error = NULL,
           atualizado_em = NOW()
         WHERE id = $1
           AND estado = 'pendente'
@@ -295,7 +304,7 @@ export async function emitirPixDaReserva(req, res, pool) {
             OR mp_order_id = $2
           )
         RETURNING id
-      `, [cobranca.id, pedido.pedidoId]);
+      `, [cobranca.id, pedido.pedidoId, proximaConsultaEmSegundos]);
 
       if (atualizado.rowCount !== 1) {
         throw new Error(

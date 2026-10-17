@@ -254,7 +254,7 @@
 
     const servicesQuery = firestore.query(
       servicesRef,
-      firestore.where("categoria", "==", categoryName),
+      firestore.where("categoria", "in", [categoryName, "unhas-em-gel"]),
     );
 
     const querySnapshot = await firestore.getDocs(servicesQuery);

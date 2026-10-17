@@ -51,6 +51,29 @@ export function validarRetornoPagamentoPix(pedido, cobranca) {
   if (creditado) {
     situacao = "creditado_aguardando_confirmacao";
   } else if (
+    ["expired", "cancelled"].includes(pedido.statusPedido) ||
+    ["expired", "cancelled"].includes(pedido.statusPagamento)
+  ) {
+    situacao = pedido.statusPedido === "expired" ||
+      pedido.statusPagamento === "expired"
+      ? "expirada"
+      : "cancelada";
+  } else if (
+    pedido.statusPedido === "refunded" || pedido.statusPagamento === "refunded" ||
+    pedido.detalhePedido === "refunded" || pedido.detalhePagamento === "refunded"
+  ) {
+    situacao = "estornada";
+  } else if (
+    pedido.statusPedido === "partially_refunded" || pedido.statusPagamento === "partially_refunded" ||
+    pedido.detalhePedido === "partially_refunded" || pedido.detalhePagamento === "partially_refunded"
+  ) {
+    situacao = "revisao_financeira";
+  } else if (
+    ["rejected", "failed"].includes(pedido.statusPedido) ||
+    ["rejected", "failed"].includes(pedido.statusPagamento)
+  ) {
+    situacao = "recusada";
+  } else if (
     ["created", "processing", "action_required"].includes(
       pedido.statusPedido
     )

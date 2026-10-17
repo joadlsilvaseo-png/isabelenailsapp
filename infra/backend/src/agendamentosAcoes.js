@@ -10,6 +10,10 @@ import {
 } from "firebase-admin/firestore";
 
 import { verificarUsuario } from "./pushSubscriptions.js";
+import {
+  ErroCancelamento,
+  solicitarCancelamentoAgendamento
+} from "./agendamentoCancelamentos.js";
 
 const ACOES = new Set([
   "cancelar_cliente",
@@ -93,7 +97,7 @@ function validarValorFinal(valor) {
   return centavos / 100;
 }
 
-export async function atenderAcaoAgendamento(req, res) {
+export async function atenderAcaoAgendamento(req, res, pool) {
   let uid;
 
   try {
@@ -119,6 +123,25 @@ export async function atenderAcaoAgendamento(req, res) {
     const db = bancoFirestore();
     const referencia = db.collection("agendamentos").doc(agendamentoId);
     const acaoAdmin = acao.endsWith("_admin");
+
+    if (acao === "cancelar_cliente" || acao === "cancelar_admin") {
+      if (!pool) throw new ErroAcao(503, "Cancelamento temporariamente indisponível");
+      const resultado = await solicitarCancelamentoAgendamento({
+        pool,
+        firestore: db,
+        uid,
+        agendamentoId,
+        acao
+      });
+      const status = resultado.cancelamentoPendente ? 202 : 200;
+      responder(res, status, {
+        sucesso: true,
+        agendamentoId,
+        status: acao === "cancelar_cliente" ? "cancelado_cliente" : "cancelado_profissional",
+        ...resultado
+      });
+      return;
+    }
 
     const resultado = await db.runTransaction(async (transacao) => {
       if (acaoAdmin) {
@@ -158,18 +181,14 @@ export async function atenderAcaoAgendamento(req, res) {
           throw new ErroAcao(409, "Cancelamento nao permitido");
         }
 
-        if (agendamento.pixCobrancaId || agendamento.pixPagamentoId) {
-          throw new ErroAcao(
-            409,
-            "Agendamento com PIX requer tratamento financeiro"
-          );
-        }
-
         novoStatus = "cancelado_cliente";
         atualizacoes.canceladoEm = FieldValue.serverTimestamp();
       }
 
       if (acao === "confirmar_admin") {
+        if (agendamento.pixCobrancaId || agendamento.pixPagamentoId) {
+          throw new ErroAcao(409, "Agendamento PIX confirmado automaticamente apos conciliacao financeira");
+        }
         if (!["agendado", "reagendado"].includes(statusAtual)) {
           throw new ErroAcao(409, "Agendamento nao pode ser confirmado");
         }
@@ -193,13 +212,6 @@ export async function atenderAcaoAgendamento(req, res) {
           throw new ErroAcao(409, "Cancelamento nao permitido");
         }
 
-        if (agendamento.pixCobrancaId || agendamento.pixPagamentoId) {
-          throw new ErroAcao(
-            409,
-            "Agendamento com PIX requer tratamento financeiro"
-          );
-        }
-
         novoStatus = "cancelado_profissional";
         atualizacoes.canceladoEm = FieldValue.serverTimestamp();
       }
@@ -220,6 +232,11 @@ export async function atenderAcaoAgendamento(req, res) {
       return;
     }
 
+    if (erro instanceof ErroCancelamento) {
+      responder(res, erro.status, { erro: erro.message });
+      return;
+    }
+
     console.error("[Agendamentos] Falha:", erro.message);
 
     responder(res, 500, {
@@ -227,3 +244,4 @@ export async function atenderAcaoAgendamento(req, res) {
     });
   }
 }
+

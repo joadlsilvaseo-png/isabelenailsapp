@@ -1105,6 +1105,47 @@ svg {
   gap: 8px;
 }
 
+.admin-service-meta-item--pix {
+  grid-column: 1 / -1;
+}
+
+.admin-pix-deposit {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--admin-border);
+  border-radius: 16px;
+  background: var(--admin-surface-soft);
+}
+
+.admin-pix-deposit-heading h3 {
+  margin: 4px 0;
+  color: var(--admin-dark);
+  font-size: 15px;
+}
+
+.admin-pix-deposit-heading p,
+.admin-pix-deposit-preview span {
+  margin: 0;
+  color: var(--admin-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.admin-pix-deposit-preview {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid var(--admin-border);
+  border-radius: 12px;
+  background: var(--admin-white);
+}
+
+.admin-pix-deposit-preview strong {
+  color: var(--admin-dark);
+  font-size: 12px;
+}
+
 .admin-service-meta-item {
   width: 100%;
   max-width: 100%;
@@ -1405,6 +1446,10 @@ svg {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 6px;
+}
+
+.admin-form-field[hidden] {
+  display: none;
 }
 
 .admin-form-field > span {

@@ -1,3 +1,5 @@
+import { auth } from "./firebase-config.js";
+
 document.addEventListener("DOMContentLoaded", () => {
   const confCliente = document.getElementById("conf-cliente");
 
@@ -16,6 +18,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnWhatsapp = document.getElementById("btn-whatsapp");
 
   const messageElement = document.getElementById("confirmacao-message");
+  const eyebrow = document.getElementById("confirmacao-eyebrow");
+  const intro = document.getElementById("confirmacao-intro");
+  const statusBadge = document.getElementById("confirmacao-status");
 
   const urlParams = new URLSearchParams(window.location.search);
 
@@ -58,6 +63,60 @@ document.addEventListener("DOMContentLoaded", () => {
     messageElement.hidden = !mensagem;
 
     messageElement.classList.toggle("is-error", tipo === "erro");
+  }
+
+  function moedaCentavos(valor) {
+    return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" })
+      .format(Number(valor || 0) / 100);
+  }
+
+  async function carregarConfirmacaoPix(reservaId) {
+    try {
+      const usuario = auth.currentUser;
+      if (!usuario) throw new Error("Entre na sua conta para consultar o agendamento.");
+      const token = await usuario.getIdToken();
+      const resposta = await fetch("/api/pix/agendamento/confirmacao", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ reservaId }),
+        cache: "no-store"
+      });
+      const dados = await resposta.json();
+      if (!resposta.ok) throw new Error(dados.erro || "Falha ao consultar agendamento.");
+      if (!dados.agendamentoConfirmado) {
+        if (successTitle) successTitle.textContent = "Pagamento em verificação";
+        if (eyebrow) eyebrow.textContent = "Aguardando confirmação";
+        if (intro) intro.textContent = "Assim que o backend confirmar o pagamento e o horário, os detalhes serão exibidos aqui.";
+        if (statusBadge) statusBadge.lastChild.textContent = " Aguardando confirmação do PIX.";
+        mostrarMensagem("O pagamento ainda não confirmou o agendamento. Esta página será atualizada quando a confirmação estiver disponível.");
+        setTimeout(() => carregarConfirmacaoPix(reservaId), 5000);
+        return;
+      }
+      if (confCliente) confCliente.textContent = dados.cliente;
+      if (confServico) confServico.textContent = dados.servico;
+      if (confData) confData.textContent = formatarDataConfirmacao(dados.data);
+      if (confHorario) confHorario.textContent = dados.horario;
+      if (successTitle) successTitle.textContent = "Agendamento confirmado!";
+      if (eyebrow) eyebrow.textContent = "Pagamento identificado";
+      if (intro) intro.textContent = "Seu pagamento foi identificado e seu horário está confirmado com a Isabele Mariana Nails.";
+      if (statusBadge) statusBadge.lastChild.textContent = dados.statusFinanceiro === "estornado"
+        ? " Pagamento PIX estornado — atendimento confirmado."
+        : " Sinal PIX recebido — Agendamento confirmado.";
+      const finance = [
+        ["confirmacao-total-row", "conf-total", dados.valorTotalCentavos],
+        ["confirmacao-sinal-row", "conf-sinal", dados.sinalPagoCentavos],
+        ["confirmacao-restante-row", "conf-restante", dados.valorRestanteCentavos]
+      ];
+      for (const [rowId, valueId, value] of finance) {
+        const row = document.getElementById(rowId);
+        const field = document.getElementById(valueId);
+        if (row && field) { field.textContent = moedaCentavos(value); row.hidden = false; }
+      }
+      mostrarMensagem("");
+    } catch (erro) {
+      mostrarMensagem("Não foi possível validar a confirmação agora. Seus dados serão consultados novamente.");
+      setTimeout(() => carregarConfirmacaoPix(reservaId), 8000);
+    }
   }
 
   const nomeClienteTexto =
@@ -113,6 +172,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (successTitle && primeiroNome) {
     successTitle.textContent = `Tudo certo, ${primeiroNome}!`;
+  }
+
+  const reservaPixId = localStorage.getItem("isabelePixReservaId");
+  if (reservaPixId) {
+    if (successTitle) successTitle.textContent = "Verificando pagamento";
+    if (eyebrow) eyebrow.textContent = "Confirmação PIX";
+    if (intro) intro.textContent = "Consultando o estado atualizado do pagamento e do agendamento.";
+    carregarConfirmacaoPix(reservaPixId);
   }
 
   if (btnWhatsapp) {

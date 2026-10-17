@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+  "test": "node test/pixRegras.test.js && node test/agendamentoCancelamentos.test.js",
     "start": "node src/server.js"
   },
   "dependencies": {
@@ -13,3 +14,4 @@
     "firebase-admin": "^13.0.0"
   }
 }
+

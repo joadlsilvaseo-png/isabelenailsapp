@@ -61,7 +61,7 @@
           </span>
         </div>
 
-        <span class="confirmacao-eyebrow">
+        <span id="confirmacao-eyebrow" class="confirmacao-eyebrow">
           Reserva concluída
         </span>
 
@@ -69,12 +69,12 @@
           Tudo certo!
         </h2>
 
-        <p>
+        <p id="confirmacao-intro">
           Seu horário foi reservado com sucesso. Confira abaixo
           os detalhes do seu atendimento.
         </p>
 
-        <span class="confirmacao-status">
+        <span id="confirmacao-status" class="confirmacao-status">
           <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8" />
 
@@ -111,6 +111,10 @@
         </header>
 
         <div class="confirmacao-details">
+
+          <div class="detalhe-row confirmacao-financeiro" id="confirmacao-total-row" hidden><div class="detalhe-content"><span class="detalhe-label">Valor total</span><strong id="conf-total" class="detalhe-value">—</strong></div></div>
+          <div class="detalhe-row confirmacao-financeiro" id="confirmacao-sinal-row" hidden><div class="detalhe-content"><span class="detalhe-label">Sinal pago via PIX</span><strong id="conf-sinal" class="detalhe-value">—</strong></div></div>
+          <div class="detalhe-row confirmacao-financeiro" id="confirmacao-restante-row" hidden><div class="detalhe-content"><span class="detalhe-label">Valor restante no atendimento</span><strong id="conf-restante" class="detalhe-value">—</strong></div></div>
 
           <div class="detalhe-row">
             <span class="detalhe-icon" aria-hidden="true">
@@ -329,7 +333,7 @@
 
   </div>
 
-  <script src="confirmacao.js?v=2.0.0" defer></script>
+  <script type="module" src="confirmacao.js?v=2.1.0"></script>
   <script src="app.js?v=2.0.0" defer></script>
 
 </body>

@@ -1,5 +1,9 @@
 const UUID = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
 
+export function pagamentoPixConfirmadoManualmente(agendamento) {
+  return Boolean(agendamento?.pixCobrancaId || agendamento?.pixPagamentoId);
+}
+
 export function gerarIdAgendamentoPix(cobrancaId) {
   if (typeof cobrancaId !== "string" || !UUID.test(cobrancaId)) {
     throw new Error("ID da cobranca invalido");

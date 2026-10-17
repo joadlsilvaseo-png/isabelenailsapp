@@ -136,3 +136,118 @@ export async function registrarCreditoPix({
     conexao.release();
   }
 }
+
+export async function encerrarCobrancaPixSemPagamento({
+  pool,
+  cobrancaId,
+  uid,
+  situacao
+}) {
+  const estados = {
+    expirada: { cobranca: "expirada", reserva: "expirada" },
+    cancelada: { cobranca: "cancelada", reserva: "cancelada" },
+    recusada: { cobranca: "falha", reserva: "cancelada" }
+  };
+  const destino = estados[situacao];
+
+  if (!destino || typeof cobrancaId !== "string" || !uid) {
+    throw new Error("Encerramento da cobranca invalido");
+  }
+
+  const conexao = await pool.connect();
+  try {
+    await conexao.query("BEGIN");
+    const consulta = await conexao.query(`
+      SELECT c.estado, r.estado AS reserva_estado
+      FROM public.pix_cobrancas c
+      JOIN public.pix_reservas r ON r.cobranca_id = c.id
+      WHERE c.id = $1 AND c.cliente_uid = $2 AND r.cliente_uid = $2
+      FOR UPDATE OF c, r
+    `, [cobrancaId, uid]);
+    const atual = consulta.rows[0];
+
+    if (!atual) throw new Error("Cobranca nao encontrada");
+
+    if (
+      atual.estado === "paga" ||
+      atual.estado === "estornada" ||
+      atual.reserva_estado === "confirmada"
+    ) {
+      await conexao.query("COMMIT");
+      return {
+        situacao: atual.estado === "paga"
+          ? "pago_requer_analise"
+          : "revisao_financeira",
+        agendamentoConfirmado: false
+      };
+    }
+
+    await conexao.query(`
+      UPDATE public.pix_cobrancas
+      SET estado = $2, atualizado_em = NOW()
+      WHERE id = $1
+    `, [cobrancaId, destino.cobranca]);
+    await conexao.query(`
+      UPDATE public.pix_reservas
+      SET estado = $2, atualizado_em = NOW()
+      WHERE cobranca_id = $1 AND estado = 'reservada'
+    `, [cobrancaId, destino.reserva]);
+    await conexao.query(`
+      INSERT INTO public.pix_eventos (cobranca_id, chave_evento, tipo, mp_order_id)
+      SELECT id, $2, $3, mp_order_id
+      FROM public.pix_cobrancas WHERE id = $1
+      ON CONFLICT (chave_evento) DO NOTHING
+    `, [cobrancaId, `mercadopago:${situacao}:${cobrancaId}`, situacao]);
+    await conexao.query("COMMIT");
+    return { situacao, agendamentoConfirmado: false };
+  } catch (erro) {
+    await conexao.query("ROLLBACK").catch(() => {});
+    throw erro;
+  } finally {
+    conexao.release();
+  }
+}
+
+export async function registrarEstornoPix({ pool, cobrancaId, pedido, atualizarFirestore }) {
+  const conexao = await pool.connect();
+  let agendamentoId;
+  try {
+    await conexao.query("BEGIN");
+    const consulta = await conexao.query(`
+      SELECT c.id, c.estado, c.mp_order_id, c.referencia_externa,
+        c.valor_sinal_centavos, c.agendamento_id
+      FROM public.pix_cobrancas c WHERE c.id = $1 FOR UPDATE
+    `, [cobrancaId]);
+    const cobranca = consulta.rows[0];
+    if (!cobranca) throw new Error("Cobranca nao encontrada");
+    const validacao = validarRetornoPagamentoPix(pedido, cobranca);
+    if (validacao.situacao !== "estornada") throw new Error("Estorno integral nao confirmado");
+    await conexao.query(`UPDATE public.pix_cobrancas
+      SET estado = 'estornada', atualizado_em = NOW() WHERE id = $1`, [cobrancaId]);
+    await conexao.query(`INSERT INTO public.pix_eventos
+      (cobranca_id, chave_evento, tipo, mp_order_id)
+      VALUES ($1, $2, 'pagamento_estornado', $3)
+      ON CONFLICT (chave_evento) DO NOTHING`,
+    [cobrancaId, `mercadopago:estorno:${pedido.pedidoId}`, pedido.pedidoId]);
+    agendamentoId = cobranca.agendamento_id;
+    await conexao.query("COMMIT");
+  } catch (erro) {
+    await conexao.query("ROLLBACK").catch(() => {});
+    throw erro;
+  } finally {
+    conexao.release();
+  }
+  if (agendamentoId) {
+    const atualizar = atualizarFirestore || (async (id, dados) => {
+      const { initializeApp, applicationDefault, getApps } = await import("firebase-admin/app");
+      const { getFirestore } = await import("firebase-admin/firestore");
+      if (!getApps().length) initializeApp({ credential: applicationDefault(), projectId: "isabele-nails-app" });
+      await getFirestore().collection("agendamentos").doc(id).update(dados);
+    });
+    await atualizar(agendamentoId, {
+      pixStatusFinanceiro: "estornado",
+      pixEstornadoEm: new Date().toISOString()
+    });
+  }
+  return { situacao: "estornada", agendamentoConfirmado: Boolean(agendamentoId) };
+}

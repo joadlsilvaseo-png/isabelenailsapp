@@ -6,11 +6,16 @@ import { iniciarMonitorAgendamentos } from "./agendaMonitor.js";
 import { iniciarWorkerPush } from "./pushWorker.js";
 import { atenderCentralNotificacoes } from "./centralNotificacoes.js";
 import { atenderAcaoAgendamento } from "./agendamentosAcoes.js";
+import { iniciarWorkerAgendamentoCancelamentos } from "./agendamentoCancelamentos.js";
 import { criarReservaPix } from "./pixReservas.js";
 import { emitirPixDaReserva } from "./pixPedidos.js";
 import { consultarStatusPagamentoPix } from "./pixConsultaPagamento.js";
 import { atenderWebhookPix } from "./pixWebhook.js";
 import { cotarSinalPix } from "./pixCotacao.js";
+import { iniciarWorkerPixCalendar } from "./pixCalendarWorker.js";
+import { atenderConfirmacaoAgendamentoPix } from "./pixAgendamentoConfirmacao.js";
+import { iniciarWorkerPixWebhook } from "./pixWebhookWorker.js";
+import { iniciarWorkerPixPolling } from "./pixPollingWorker.js";
 
 const { Pool } = pg;
 
@@ -63,7 +68,7 @@ const server = http.createServer(async (req, res) => {
 
   // Acoes protegidas de agendamentos
   if (req.method === "POST" && req.url === "/agendamentos/acao") {
-    await atenderAcaoAgendamento(req, res);
+    await atenderAcaoAgendamento(req, res, pool);
     return;
   }
 
@@ -82,6 +87,11 @@ const server = http.createServer(async (req, res) => {
   // PIX - Consulta autenticada do pagamento
   if (req.method === "POST" && req.url === "/pix/status") {
     await consultarStatusPagamentoPix(req, res, pool);
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/pix/agendamento/confirmacao") {
+    await atenderConfirmacaoAgendamentoPix(req, res, pool);
     return;
   }
 
@@ -132,6 +142,19 @@ server.listen(PORT, "0.0.0.0", () => {
   console.log(`API Isabele Nails iniciada na porta ${PORT}`);
 
   iniciarWorkerPush(pool);
+  iniciarWorkerAgendamentoCancelamentos(pool);
+
+  if (process.env.PIX_WEBHOOK_ENABLED === "true" && process.env.PIX_WEBHOOK_WORKER_ENABLED === "true") {
+    iniciarWorkerPixWebhook(pool);
+  }
+
+  // O polling permanece desativado até PIX_POLLING_WORKER_ENABLED=true.
+  // Quando ativado, confirma pagamentos sem depender do navegador.
+  iniciarWorkerPixPolling(pool);
+
+  if (process.env.PIX_CALENDAR_WORKER_ENABLED === "true") {
+    iniciarWorkerPixCalendar(pool);
+  }
 
   iniciarMonitorAgendamentos(pool).catch((erro) => {
     console.error("Falha ao iniciar monitor de agendamentos:", erro);
@@ -139,3 +162,4 @@ server.listen(PORT, "0.0.0.0", () => {
     process.exit(1);
   });
 });
+

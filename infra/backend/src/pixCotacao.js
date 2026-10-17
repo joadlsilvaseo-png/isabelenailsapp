@@ -2,6 +2,7 @@ import { initializeApp, applicationDefault, getApps } from "firebase-admin/app";
 
 import { getFirestore } from "firebase-admin/firestore";
 import { verificarUsuario } from "./pushSubscriptions.js";
+import { calcularSinalServico } from "./pixSinalServico.js";
 
 function responder(res, status, dados) {
   res.writeHead(status, {
@@ -11,50 +12,6 @@ function responder(res, status, dados) {
   });
 
   res.end(JSON.stringify(dados));
-}
-
-function converterPrecoCentavos(valor) {
-  if (typeof valor === "number") {
-    const centavos = Math.round(valor * 100);
-
-    if (!Number.isSafeInteger(centavos) || centavos <= 0) {
-      throw new Error("Preco invalido");
-    }
-
-    return centavos;
-  }
-
-  const texto = String(valor ?? "")
-    .trim()
-    .replace(/^R\$\s*/i, "")
-    .replace(/\s/g, "");
-
-  let normalizado;
-
-  if (texto.includes(",")) {
-    // Exemplo: R$ 1.250,50
-    normalizado = texto.replace(/\./g, "").replace(",", ".");
-  } else if (/^\d{1,3}(\.\d{3})+$/.test(texto)) {
-    // Exemplo: 1.250
-    normalizado = texto.replace(/\./g, "");
-  } else {
-    // Exemplo: 125.50
-    normalizado = texto;
-  }
-
-  if (!/^\d+(\.\d{1,2})?$/.test(normalizado)) {
-    throw new Error("Preco invalido");
-  }
-
-  const [inteiros, decimais = ""] = normalizado.split(".");
-
-  const centavos = Number(inteiros) * 100 + Number(decimais.padEnd(2, "0"));
-
-  if (!Number.isSafeInteger(centavos) || centavos <= 0) {
-    throw new Error("Preco invalido");
-  }
-
-  return centavos;
 }
 
 async function lerDados(req) {
@@ -105,9 +62,10 @@ export async function cotarSinalPix(req, res, pool) {
       return;
     }
 
-    // Configuracao financeira controlada no PostgreSQL.
+    // O PostgreSQL controla a habilitacao e o prazo da reserva. O valor do
+    // sinal vem exclusivamente do documento do servico no Firestore.
     const configuracao = await pool.query(`
-      SELECT ativo, tipo_sinal_padrao, percentual_padrao, valor_fixo_padrao_centavos, reserva_minutos
+      SELECT ativo, reserva_minutos
       FROM public.pix_configuracao
       WHERE id = 1
     `);
@@ -143,65 +101,12 @@ export async function cotarSinalPix(req, res, pool) {
 
     const dadosServico = servico.data();
 
-    let valorTotal;
-
+    let valores;
     try {
-      valorTotal = converterPrecoCentavos(dadosServico.preco);
-    } catch {
+      valores = calcularSinalServico(dadosServico);
+    } catch (erro) {
       responder(res, 422, {
-        erro: "Servico sem preco valido para pagamento",
-      });
-      return;
-    }
-
-    const tipoSinal = regra.tipo_sinal_padrao;
-
-    let percentual = null;
-    let valorFixo = null;
-    let valorSinal = 0;
-
-    if (tipoSinal === "fixo") {
-      valorFixo = Number(regra.valor_fixo_padrao_centavos);
-
-      if (!Number.isSafeInteger(valorFixo) || valorFixo <= 0) {
-        responder(res, 422, {
-          erro: "Valor fixo do sinal invalido",
-        });
-        return;
-      }
-
-      valorSinal = valorFixo;
-
-    } else if (tipoSinal === "percentual") {
-      percentual = Number(regra.percentual_padrao);
-
-      const pontosPercentuais = Math.round(percentual * 100);
-
-      if (
-        !Number.isFinite(percentual) ||
-        pontosPercentuais < 1 ||
-        pontosPercentuais > 10000
-      ) {
-        responder(res, 422, {
-          erro: "Percentual de sinal invalido",
-        });
-        return;
-      }
-
-      valorSinal = Math.round(
-        (valorTotal * pontosPercentuais) / 10000,
-      );
-
-    } else {
-      responder(res, 422, {
-        erro: "Tipo de sinal invalido",
-      });
-      return;
-    }
-
-    if (valorSinal <= 0 || valorSinal > valorTotal) {
-      responder(res, 422, {
-        erro: "Sinal maior que o valor do servico ou invalido",
+        erro: erro.message,
       });
       return;
     }
@@ -209,12 +114,7 @@ export async function cotarSinalPix(req, res, pool) {
     responder(res, 200, {
       servicoId,
       servico: dadosServico.nome || "Servico",
-      valorTotalCentavos: valorTotal,
-      tipoSinal,
-      percentualSinal: percentual,
-      valorFixoConfiguradoCentavos: valorFixo,
-      valorSinalCentavos: valorSinal,
-      valorRestanteCentavos: valorTotal - valorSinal,
+      ...valores,
       reservaMinutos: regra.reserva_minutos,
       cobrancaCriada: false,
     });

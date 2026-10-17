@@ -56,7 +56,9 @@ export function validarAssinaturaWebhookPix({
   }
 
   const manifesto =
-    `id:${pedidoId.toLowerCase()};` +
+    // O SDK oficial atual usa o data.id recebido, preservando a caixa.
+    // A API Orders gera IDs em maiusculas; normalizar aqui muda o HMAC.
+    `id:${pedidoId};` +
     `request-id:${requisicaoId};` +
     `ts:${ts};`;
 
@@ -69,6 +71,25 @@ export function validarAssinaturaWebhookPix({
   return timingSafeEqual(esperado, recebido);
 }
 
+function diagnosticoRejeicaoAssinatura({ assinatura, requisicaoId, pedidoId, correspondencias }) {
+  let motivo = "assinatura_ou_manifesto_nao_corresponde";
+
+  if (!assinatura) motivo = "cabecalho_x_signature_ausente";
+  else if (!requisicaoId) motivo = "cabecalho_x_request_id_ausente";
+  else if (!pedidoId) motivo = "parametro_data_id_ausente";
+  else if (correspondencias > 1) motivo = "mais_de_um_ambiente_validou";
+
+  return {
+    motivo,
+    xSignaturePresente: Boolean(assinatura),
+    xRequestIdPresente: Boolean(requisicaoId),
+    xRequestIdFormatoValido: typeof requisicaoId === "string" && /^[A-Za-z0-9._-]{1,128}$/.test(requisicaoId),
+    dataIdPresente: Boolean(pedidoId),
+    dataIdFormatoValido: typeof pedidoId === "string" && /^[A-Za-z0-9_-]{3,128}$/.test(pedidoId),
+    ambientesCorrespondentes: correspondencias
+  };
+}
+
 export async function atenderWebhookPix(req, res, pool) {
   // Desativado por padrao, inclusive na VPS.
   if (process.env.PIX_WEBHOOK_ENABLED !== "true") {
@@ -76,9 +97,13 @@ export async function atenderWebhookPix(req, res, pool) {
     return;
   }
 
-  const segredo = process.env.MP_WEBHOOK_SECRET_TEST;
+  const configuracoes = [
+    { ambiente: "test", segredo: process.env.MP_WEBHOOK_SECRET_TEST },
+    { ambiente: "production", segredo: process.env.MP_WEBHOOK_SECRET_PRODUCTION }
+  ].filter(({ ambiente, segredo }) => segredo &&
+    process.env[ambiente === "test" ? "PIX_TEST_ORDERS_ENABLED" : "PIX_PRODUCTION_ORDERS_ENABLED"] === "true");
 
-  if (!segredo) {
+  if (!configuracoes.length) {
     responder(res, 503, {
       erro: "Webhook nao configurado"
     });
@@ -90,19 +115,30 @@ export async function atenderWebhookPix(req, res, pool) {
   const pedidoId = url.searchParams.get("data.id");
   const tipo = url.searchParams.get("type");
 
-  const valido = validarAssinaturaWebhookPix({
-    assinatura: req.headers["x-signature"],
-    requisicaoId: req.headers["x-request-id"],
-    pedidoId,
-    segredo
-  });
+  const correspondencias = configuracoes.filter(({ segredo }) =>
+    validarAssinaturaWebhookPix({
+      assinatura: req.headers["x-signature"],
+      requisicaoId: req.headers["x-request-id"],
+      pedidoId,
+      segredo
+    }));
 
-  if (!valido) {
+  if (correspondencias.length !== 1) {
+    console.warn(
+      "[PIX Webhook] Notificacao rejeitada:",
+      JSON.stringify(diagnosticoRejeicaoAssinatura({
+        assinatura: req.headers["x-signature"],
+        requisicaoId: req.headers["x-request-id"],
+        pedidoId,
+        correspondencias: correspondencias.length
+      }))
+    );
     responder(res, 401, {
       erro: "Assinatura invalida"
     });
     return;
   }
+  const ambiente = correspondencias[0].ambiente;
 
   if (tipo !== "order") {
     responder(res, 200, {
@@ -153,20 +189,26 @@ export async function atenderWebhookPix(req, res, pool) {
       return;
     }
 
+    if (typeof dados.live_mode === "boolean" && dados.live_mode !== (ambiente === "production")) {
+      responder(res, 400, { erro: "Ambiente da notificacao divergente" });
+      return;
+    }
+
     // Armazena a notificacao para processamento posterior.
     // O webhook nao confia no status informado pelo body.
     await pool.query(`
       INSERT INTO public.pix_webhook_inbox (
+        mp_environment,
         mp_order_id
       )
-      VALUES ($1)
-      ON CONFLICT (mp_order_id)
+      VALUES ($1, $2)
+      ON CONFLICT (mp_environment, mp_order_id)
       DO UPDATE SET
         ultima_notificacao_em = NOW(),
         proxima_tentativa_em = NOW(),
         processado_em = NULL,
         ultimo_erro = NULL
-    `, [pedidoId.toUpperCase()]);
+    `, [ambiente, pedidoId.toUpperCase()]);
 
     // Confirma o recebimento somente apos persistir.
     responder(res, 200, {

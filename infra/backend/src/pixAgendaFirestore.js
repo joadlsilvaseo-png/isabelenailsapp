@@ -7,6 +7,7 @@ import {
 import { getFirestore } from "firebase-admin/firestore";
 
 import { possuiSobreposicao } from "./pixDisponibilidade.js";
+import { obterDuracaoAgendamentoPix } from "./pixDocumentoAgendamento.js";
 
 const STATUS_OCUPADOS = new Set([
   "agendado",
@@ -73,17 +74,7 @@ export async function verificarConflitoFirestore(
 
     const inicio = horas * 60 + minutos;
 
-    const duracao = Number(dados.duracao) || 90;
-
-    if (
-      !Number.isFinite(duracao) ||
-      duracao <= 0 ||
-      duracao > 1440
-    ) {
-      throw new Error(
-        "Agendamento ativo com duracao invalida",
-      );
-    }
+    const duracao = obterDuracaoAgendamentoPix(dados.duracao);
 
     intervalosOcupados.push({
       inicioMinuto: inicio,
