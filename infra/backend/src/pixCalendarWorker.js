@@ -73,7 +73,11 @@ async function obterDetalhesAgendamento(agendamentoId) {
   const { getFirestore } = await import("firebase-admin/firestore");
   if (!getApps().length) initializeApp({ credential: applicationDefault(), projectId: "isabele-nails-app" });
   const documento = await getFirestore().collection("agendamentos").doc(agendamentoId).get();
-  if (!documento.exists) throw new Error("Agendamento ausente no Firestore");
+  if (!documento.exists) {
+    throw Object.assign(new Error("Agendamento ausente no Firestore"), {
+      code: "CALENDAR_AGENDAMENTO_AUSENTE"
+    });
+  }
   const dados = documento.data();
   const data = String(dados.data || "");
   const horario = String(dados.horario || "").slice(0, 5);
@@ -88,7 +92,28 @@ async function obterDetalhesAgendamento(agendamentoId) {
 export async function enviarCancelamentoCalendar(evento, fetcher = fetch, obterDados = obterDetalhesAgendamento) {
   const payload = montarPayloadCancelamentoCalendar(evento);
   if (!payload.eventId) throw new Error("Identificador do evento Calendar ausente");
-  if (evento.agendamento_id) Object.assign(payload, await obterDados(evento.agendamento_id));
+  if (evento.agendamento_id) {
+    try {
+      // Mantem os dados atuais do Firestore como primeira fonte.
+      Object.assign(payload, await obterDados(evento.agendamento_id));
+    } catch (erro) {
+      if (erro?.code !== "CALENDAR_AGENDAMENTO_AUSENTE") throw erro;
+
+      // Cancelamentos historicos podem nao ter mais o documento no Firestore.
+      // A outbox possui o snapshot original, inclusive depois de dispensada.
+      const data = String(evento.origem_data_servico_iso || "");
+      const horario = String(evento.origem_horario || "").slice(0, 5);
+      const nomeCliente = String(evento.origem_nome_cliente || "").trim();
+      const servico = String(evento.origem_servico || "").trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(data) ||
+          !/^\d{2}:\d{2}$/.test(horario) || !nomeCliente || !servico) {
+        throw new Error("Agendamento ausente no Firestore e sem dados historicos no Calendar");
+      }
+      Object.assign(payload, {
+        nomeCliente, servico, dataInicio: data + "T" + horario + ":00"
+      });
+    }
+  }
   return enviarAcaoCalendar(payload, fetcher);
 }
 
@@ -168,8 +193,14 @@ async function obterCancelamentoCalendarPendente(pool) {
     await conexao.query("BEGIN");
     const resultado = await conexao.query(`
       WITH proximo AS (
-        SELECT cancelamento.agendamento_id
+        SELECT cancelamento.agendamento_id,
+               origem.nome_cliente AS origem_nome_cliente,
+               origem.servico AS origem_servico,
+               TO_CHAR(origem.data_servico, 'YYYY-MM-DD') AS origem_data_servico_iso,
+               TO_CHAR(origem.horario, 'HH24:MI') AS origem_horario
         FROM public.agendamento_cancelamentos AS cancelamento
+        LEFT JOIN public.pix_calendar_outbox AS origem
+          ON origem.agendamento_id = cancelamento.agendamento_id
         WHERE cancelamento.estado = 'concluida'
           AND cancelamento.calendar_event_id IS NOT NULL
           AND (
@@ -212,7 +243,11 @@ async function obterCancelamentoCalendarPendente(pool) {
           atualizado_em = NOW()
       FROM proximo
       WHERE fila.agendamento_id = proximo.agendamento_id
-      RETURNING fila.*
+      RETURNING fila.*,
+                proximo.origem_nome_cliente,
+                proximo.origem_servico,
+                proximo.origem_data_servico_iso,
+                proximo.origem_horario
     `);
     await conexao.query("COMMIT");
     return resultado.rows[0] || null;
