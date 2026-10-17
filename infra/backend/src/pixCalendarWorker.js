@@ -43,9 +43,13 @@ async function enviarAcaoCalendar(payload, fetcher = fetch) {
   });
   if (!resposta.ok) throw new Error(`Apps Script respondeu HTTP ${resposta.status}`);
   const texto = typeof resposta.text === "function" ? await resposta.text() : "";
+  if (!texto.trim()) throw new Error("Apps Script nao retornou confirmacao");
   if (texto.trim()) {
     let corpo;
     try { corpo = JSON.parse(texto); } catch { corpo = null; }
+    if (!corpo || typeof corpo !== "object" || corpo.ok !== true) {
+      throw new Error("Apps Script nao confirmou sucesso");
+    }
     if (corpo && typeof corpo === "object") {
       const status = String(corpo.status || "").toLowerCase();
       if (
@@ -64,9 +68,27 @@ export async function enviarEventoCalendar(evento, fetcher = fetch) {
   return enviarAcaoCalendar(payload, fetcher);
 }
 
-export async function enviarCancelamentoCalendar(evento, fetcher = fetch) {
+async function obterDetalhesAgendamento(agendamentoId) {
+  const { getApps, initializeApp, applicationDefault } = await import("firebase-admin/app");
+  const { getFirestore } = await import("firebase-admin/firestore");
+  if (!getApps().length) initializeApp({ credential: applicationDefault(), projectId: "isabele-nails-app" });
+  const documento = await getFirestore().collection("agendamentos").doc(agendamentoId).get();
+  if (!documento.exists) throw new Error("Agendamento ausente no Firestore");
+  const dados = documento.data();
+  const data = String(dados.data || "");
+  const horario = String(dados.horario || "").slice(0, 5);
+  const nomeCliente = String(dados.nomeCliente || "");
+  const servico = String(dados.servico || "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(data) || !/^\d{2}:\d{2}$/.test(horario) || !nomeCliente || !servico) {
+    throw new Error("Dados insuficientes para localizar evento na agenda");
+  }
+  return { dataInicio: data + "T" + horario + ":00", nomeCliente, servico };
+}
+
+export async function enviarCancelamentoCalendar(evento, fetcher = fetch, obterDados = obterDetalhesAgendamento) {
   const payload = montarPayloadCancelamentoCalendar(evento);
   if (!payload.eventId) throw new Error("Identificador do evento Calendar ausente");
+  if (evento.agendamento_id) Object.assign(payload, await obterDados(evento.agendamento_id));
   return enviarAcaoCalendar(payload, fetcher);
 }
 
