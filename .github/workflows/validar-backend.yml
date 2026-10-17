@@ -1,0 +1,38 @@
+name: Validar backend Isabele Nails
+
+on:
+  push:
+    branches:
+      - codex/calendar-cancelamentos-teste-20261017
+  pull_request:
+    paths:
+      - "infra/backend/**"
+      - "infra/migrations/**"
+      - "infra/scripts/**"
+      - ".github/workflows/validar-backend.yml"
+
+jobs:
+  validar:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra/backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Instalar dependencias
+        run: npm install --no-package-lock --ignore-scripts
+      - name: Verificar sintaxe de modulos
+        run: |
+          node --check src/pixCalendarWorker.js
+          node --check src/agendamentoCancelamentos.js
+          node --check test/agendamentoCancelamentos.test.js
+      - name: Testar backend
+        run: npm test
+      - name: Verificar script de deploy (sem executar)
+        working-directory: .
+        run: bash -n infra/scripts/atualizar-vps-pix.sh
