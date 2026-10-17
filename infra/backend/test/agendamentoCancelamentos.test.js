@@ -367,6 +367,61 @@ test("Calendar usa o mesmo ID estável e retry repete a ação CANCELAR", async 
   assert.deepEqual(payload, { acao: "CANCELAR", eventId: "evt_abc" });
 });
 
+test("Calendar descarta criacao pendente antes de concluir cancelamento", async () => {
+  const queries = [];
+  const pool = {
+    async connect() {
+      return {
+        async query(sql) {
+          queries.push(sql);
+          if (sql.includes("WITH proximo AS")) return { rows: [{
+            agendamento_id: AGENDAMENTO_ID, calendar_event_id: "evt_pix_ab12cd34",
+            calendar_tentativas: 1
+          }] };
+          return { rows: [] };
+        },
+        release() {}
+      };
+    },
+    async query(sql) { queries.push(sql); return { rowCount: 1, rows: [] }; }
+  };
+  let envios = 0;
+  const resultado = await processarProximoCancelamentoCalendar(pool, async () => {
+    envios += 1;
+  });
+  assert.equal(resultado.enviado, true);
+  assert.equal(envios, 1);
+  const consulta = queries.find((sql) => sql.includes("WITH proximo AS"));
+  assert.match(consulta, /criacao\.status = 'enviando'/);
+  assert.match(consulta, /criacao\.bloqueado_ate > NOW\(\)/);
+  assert.match(consulta, /UPDATE public\.pix_calendar_outbox AS criacao/);
+  assert.match(consulta, /status = 'dispensado'/);
+  assert.match(consulta, /criacao\.status = 'pendente'/);
+  assert.doesNotMatch(consulta, /criacao\.status <> 'enviado'/);
+});
+
+test("Calendar sem criacao correspondente ainda processa cancelamento", async () => {
+  const consultas = [];
+  const pool = {
+    async connect() {
+      return {
+        async query(sql) {
+          consultas.push(sql);
+          if (sql.includes("WITH proximo AS")) return { rows: [{
+            agendamento_id: AGENDAMENTO_ID, calendar_event_id: "evt_legacy", calendar_tentativas: 1
+          }] };
+          return { rows: [] };
+        },
+        release() {}
+      };
+    },
+    async query() { return { rowCount: 1, rows: [] }; }
+  };
+  const resultado = await processarProximoCancelamentoCalendar(pool, async () => {});
+  assert.equal(resultado.enviado, true);
+  assert.match(consultas.find((sql) => sql.includes("WITH proximo AS")), /NOT EXISTS/);
+});
+
 test("falha informada pelo Apps Script agenda nova tentativa sem request real", async () => {
   await assert.rejects(enviarCancelamentoCalendar(
     { calendar_event_id: "evt_abc" },
