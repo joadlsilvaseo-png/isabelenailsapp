@@ -427,6 +427,8 @@ MIGRATION_011="$RELEASE_DIR/infra/migrations/011_pix_polling_worker.sql"
 [[ -f "$MIGRATION_011" ]] || die "Migracao 011 nao encontrada no commit alvo."
 MIGRATION_012="$RELEASE_DIR/infra/migrations/012_agendamento_cancelamentos.sql"
 [[ -f "$MIGRATION_012" ]] || die "Migracao 012 nao encontrada no commit alvo."
+MIGRATION_014="$RELEASE_DIR/infra/migrations/014_calendar_criacoes_dispensadas.sql"
+[[ -f "$MIGRATION_014" ]] || die "Migracao 014 nao encontrada no commit alvo."
 
 UPDATE_OVERRIDE="$BACKUP_DIR/update-compose.yaml"
 TARGET_IMAGE_TAG="isabele-nails-api:release-${TARGET_COMMIT}"
@@ -700,6 +702,41 @@ case "$MIGRATION_011_STATE" in
   *) die "Nao foi possivel determinar o estado da migracao 011 (resultado: $MIGRATION_011_STATE)." ;;
 esac
 
+# 014 apenas amplia o CHECK da fila Calendar, sem tocar agendamentos.
+MIGRATION_014_STATE_SQL="$BACKUP_DIR/migration-014-state.sql"
+cat >"$MIGRATION_014_STATE_SQL" <<'SQL'
+SELECT CASE
+  WHEN to_regclass('public.pix_calendar_outbox') IS NULL THEN 'missing'
+  WHEN NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'public.pix_calendar_outbox'::regclass
+      AND conname = 'pix_calendar_outbox_status_check'
+      AND contype = 'c'
+  ) THEN 'partial'
+  WHEN EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'public.pix_calendar_outbox'::regclass
+      AND conname = 'pix_calendar_outbox_status_check'
+      AND pg_get_constraintdef(oid) LIKE '%dispensado%'
+  ) THEN 'applied'
+  WHEN EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'public.pix_calendar_outbox'::regclass
+      AND conname = 'pix_calendar_outbox_status_check'
+      AND pg_get_constraintdef(oid) LIKE '%pendente%'
+      AND pg_get_constraintdef(oid) LIKE '%enviando%'
+      AND pg_get_constraintdef(oid) LIKE '%enviado%'
+  ) THEN 'pending'
+  ELSE 'partial'
+END;
+SQL
+chmod 600 "$MIGRATION_014_STATE_SQL"
+MIGRATION_014_STATE="$(compose_snapshot exec -T "$DB_SERVICE" sh -lc 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At' <"$MIGRATION_014_STATE_SQL" | tr -d '\r\n')"
+case "$MIGRATION_014_STATE" in
+  applied|pending) echo "Estado da migracao 014: $MIGRATION_014_STATE" ;;
+  *) die "Migracao 014 com estrutura inesperada: $MIGRATION_014_STATE" ;;
+esac
+
 printf '%s\n' "$DB_CONTAINER" >"$BACKUP_DIR/db-container-id"
 compose_snapshot exec -T "$DB_SERVICE" sh -lc 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' >"$BACKUP_DIR/postgres-before.dump"
 [[ -s "$BACKUP_DIR/postgres-before.dump" ]] || die "Backup PostgreSQL vazio; atualizacao cancelada."
@@ -716,6 +753,7 @@ API_STOPPED=false
 MIGRATION_APPLIED=false
 MIGRATION_011_APPLIED=false
 MIGRATION_012_APPLIED=false
+MIGRATION_014_APPLIED=false
 NEW_API_STARTED=false
 restore_old_api_on_error() {
   local rc=$?
@@ -766,6 +804,12 @@ if [[ "$MIGRATION_012_STATE" == pending ]]; then
   MIGRATION_012_APPLIED=true
 else
   echo "Pulando migracao 012 ja aplicada; banco e dados serao mantidos."
+fi
+if [[ "$MIGRATION_014_STATE" == pending ]]; then
+  compose_snapshot exec -T "$DB_SERVICE" sh -lc 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <"$MIGRATION_014"
+  MIGRATION_014_APPLIED=true
+else
+  echo "Pulando migracao 014 ja aplicada."
 fi
 NEW_API_STARTED=true
 compose_snapshot up -d --no-deps "$API_SERVICE"
