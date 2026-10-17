@@ -154,6 +154,7 @@ function criarFixture({ isenta = true, reservas = [], documentos = {}, falharCom
             pendingReservations.push({ tipo: "update", id, dados: { servicoId, data, inicio, fim, estado: "confirmada" } });
             return { rows: [], rowCount: 1 };
           }
+          if (sql.includes("INSERT INTO public.pix_calendar_outbox")) return { rows: [], rowCount: 1 };
           throw new Error(`SQL transacional inesperado: ${sql}`);
         },
         release() { pendingReservations = null; release?.(); release = null; },
@@ -187,6 +188,7 @@ test("cliente isenta confirma agendamento sem criar cobrança PIX", async () => 
   assert.equal(documento.origemPagamento, "isencao_sinal_pix");
   assert.equal(documento.clienteId, UID);
   assert.equal(documento.sinalPixIsento, true);
+  assert.equal(f.state.sqlStatements.filter((sql) => sql.includes("INSERT INTO public.pix_calendar_outbox")).length, 1);
   assert.equal("pixCobrancaId" in documento, false);
   assert.equal(f.state.sqlStatements.some((sql) => /insert\s+into\s+public\.pix_cobrancas/i.test(sql)), false);
 });
