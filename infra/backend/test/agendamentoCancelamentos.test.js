@@ -367,6 +367,56 @@ test("Calendar usa o mesmo ID estável e retry repete a ação CANCELAR", async 
   assert.deepEqual(payload, { acao: "CANCELAR", eventId: "evt_abc" });
 });
 
+test("Calendar dispensa criacao pendente e libera cancelamento na mesma transacao", async () => {
+  const sqls = [];
+  const pool = {
+    async connect() {
+      return {
+        async query(sql) {
+          sqls.push(sql);
+          if (sql.includes("WITH proximo AS")) return { rows: [{
+            agendamento_id: AGENDAMENTO_ID, calendar_event_id: "evt_teste",
+            calendar_tentativas: 1
+          }] };
+          return { rows: [] };
+        },
+        release() {}
+      };
+    },
+    async query() { return { rowCount: 1, rows: [] }; }
+  };
+  let enviados = 0;
+  const resultado = await processarProximoCancelamentoCalendar(pool, async () => { enviados++; });
+  assert.equal(resultado.enviado, true);
+  assert.equal(enviados, 1);
+  const selecao = sqls.find(sql => sql.includes("WITH proximo AS"));
+  assert.match(selecao, /criacao\.status = 'enviando'/);
+  assert.match(selecao, /criacao\.bloqueado_ate > NOW\(\)/);
+  assert.match(selecao, /UPDATE public\.pix_calendar_outbox AS criacao/);
+  assert.match(selecao, /status = 'dispensado'/);
+  assert.doesNotMatch(selecao, /criacao\.status <> 'enviado'/);
+});
+
+test("Calendar processa cancelamento sem criacao na outbox", async () => {
+  const pool = {
+    async connect() {
+      return {
+        async query(sql) {
+          if (sql.includes("WITH proximo AS")) return { rows: [{
+            agendamento_id: AGENDAMENTO_ID,
+            calendar_event_id: "evt_sem_criacao", calendar_tentativas: 1
+          }] };
+          return { rows: [] };
+        },
+        release() {}
+      };
+    },
+    async query() { return { rowCount: 1, rows: [] }; }
+  };
+  const resultado = await processarProximoCancelamentoCalendar(pool, async () => {});
+  assert.equal(resultado.enviado, true);
+});
+
 test("falha informada pelo Apps Script agenda nova tentativa sem request real", async () => {
   await assert.rejects(enviarCancelamentoCalendar(
     { calendar_event_id: "evt_abc" },
