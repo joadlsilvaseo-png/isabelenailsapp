@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-  "test": "node test/pixRegras.test.js && node test/agendamentoCancelamentos.test.js",
+  "test": "node test/pixRegras.test.js && node test/agendamentoCancelamentos.test.js && node test/agendamentosIsencaoPix.test.js",
     "start": "node src/server.js"
   },
   "dependencies": {

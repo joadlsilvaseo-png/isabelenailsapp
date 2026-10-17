@@ -33,3 +33,18 @@ export async function executarAcaoAgendamento(
 
   return dados;
 }
+
+export async function reagendarAgendamentoApi(auth, dados) {
+  const usuario = auth?.currentUser;
+  if (!usuario) throw new Error("Faça login para continuar.");
+  const token = await usuario.getIdToken();
+  const resposta = await fetch("/api/agendamentos/reagendar", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify(dados),
+    cache: "no-store",
+  });
+  const resultado = await resposta.json().catch(() => ({}));
+  if (!resposta.ok) throw new Error(resultado.erro || "Não foi possível reagendar.");
+  return resultado;
+}

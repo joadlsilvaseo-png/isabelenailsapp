@@ -1,4 +1,5 @@
 import { auth, db } from "./firebase-config.js";
+import { reagendarAgendamentoApi } from "./agendamentosApi.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
 import {
   collection,
@@ -7,9 +8,6 @@ import {
   getDocs,
   query,
   where,
-  addDoc,
-  updateDoc,
-  serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
 
 // Funções de ajuda para seleção única de data e horário
@@ -992,39 +990,19 @@ async function inicializarAgendamento() {
         eventId: idEvento,
       };
 
-      const payload = {
-        nomeCliente,
-        servico,
-        data,
-        horario,
-        observacoes,
-        idServico: serviceId || null,
-        calendarEventId: idEvento, // Incluímos aqui para simplificar
-        duracao: parseInt(serviceDuration, 10),
-      };
-
-      if (reagendarId) {
-        payload.status = "reagendado";
-        payload.reagendadoEm = serverTimestamp();
-        payload.reagendadoPor = user.uid;
-      }
-
       try {
         if (reagendarId) {
-          await updateDoc(doc(db, "agendamentos", reagendarId), payload);
+          const resultadoReagendamento = await reagendarAgendamentoApi(auth, {
+            agendamentoId: reagendarId,
+            servicoId: serviceId,
+            data,
+            horario,
+            observacoes,
+          });
+          idEvento = resultadoReagendamento.calendarEventId || idEvento;
+          payloadWebhook.eventId = idEvento;
         } else {
-          const agendamentoData = {
-            ...payload,
-
-            clienteId: user.uid,
-
-            precoSnapshot: servicePrice,
-            duracaoSnapshot: serviceDuration,
-
-            dataCriacao: serverTimestamp(),
-            status: "agendado",
-          };
-          await addDoc(collection(db, "agendamentos"), agendamentoData);
+          throw new Error("Confirme o novo agendamento pelo fluxo seguro da agenda.");
         }
 
         const googleScriptUrl =

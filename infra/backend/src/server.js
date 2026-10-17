@@ -16,6 +16,7 @@ import { iniciarWorkerPixCalendar } from "./pixCalendarWorker.js";
 import { atenderConfirmacaoAgendamentoPix } from "./pixAgendamentoConfirmacao.js";
 import { iniciarWorkerPixWebhook } from "./pixWebhookWorker.js";
 import { iniciarWorkerPixPolling } from "./pixPollingWorker.js";
+import { atenderAgendamentoIsencao } from "./agendamentosIsencaoPix.js";
 
 const { Pool } = pg;
 
@@ -69,6 +70,17 @@ const server = http.createServer(async (req, res) => {
   // Acoes protegidas de agendamentos
   if (req.method === "POST" && req.url === "/agendamentos/acao") {
     await atenderAcaoAgendamento(req, res, pool);
+    return;
+  }
+
+  if ([
+    "/agendamentos/isencao",
+    "/agendamentos/sem-pix",
+    "/agendamentos/reagendar",
+    "/admin/isencoes-sinal-pix",
+    "/admin/clientes/isencao-sinal-pix",
+  ].includes(new URL(req.url, "http://localhost").pathname)) {
+    await atenderAgendamentoIsencao(req, res, pool);
     return;
   }
 

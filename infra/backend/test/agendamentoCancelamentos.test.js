@@ -20,7 +20,7 @@ const COBRANCA_ID = "11111111-2222-4333-8444-555555555555";
 const UID_CLIENTE = "cliente-123";
 const UID_ADMIN = "admin-123";
 
-function fixture({ tipo = "cliente", falharSql = null, falharFirestore = false } = {}) {
+function fixture({ tipo = "cliente", falharSql = null, falharFirestore = false, semPix = false } = {}) {
   const dados = {
     status: "confirmado",
     clienteId: UID_CLIENTE,
@@ -32,9 +32,13 @@ function fixture({ tipo = "cliente", falharSql = null, falharFirestore = false }
     [`agendamentos:${AGENDAMENTO_ID}`, structuredClone(dados)],
     [`usuarios:${UID_ADMIN}`, { role: "admin", ativo: true }]
   ]);
+  if (semPix) {
+    delete dados.pixCobrancaId;
+    docs.set(`agendamentos:${AGENDAMENTO_ID}`, structuredClone(dados));
+  }
   const state = {
-    charge: { id: COBRANCA_ID, estado: "paga", agendamento_id: AGENDAMENTO_ID },
-    reservation: { id: "reserva-1", cobranca_id: COBRANCA_ID, estado: "confirmada", agendamento_id: AGENDAMENTO_ID, inicio_minuto: 600, fim_minuto: 660 },
+    charge: semPix ? null : { id: COBRANCA_ID, estado: "paga", agendamento_id: AGENDAMENTO_ID },
+    reservation: { id: "reserva-1", cobranca_id: semPix ? null : COBRANCA_ID, estado: "confirmada", agendamento_id: AGENDAMENTO_ID, inicio_minuto: 600, fim_minuto: 660 },
     cancellation: null,
     calendarAttempts: 0,
     failAt: falharSql,
@@ -122,6 +126,9 @@ function fixture({ tipo = "cliente", falharSql = null, falharFirestore = false }
             }] };
           }
           if (normalized.startsWith("update public.pix_reservas")) {
+            if (normalized.includes("cobranca_id is null") && state.reservation.cobranca_id !== null) {
+              return { rowCount: 0, rows: [] };
+            }
             if (state.failAt === "reservation") {
               state.failAt = null;
               throw new Error("PostgreSQL unavailable during reservation release");
@@ -411,6 +418,18 @@ test("agendamento antigo sem PIX ainda pode ser cancelado pelo fluxo existente",
   assert.equal(result.concluido, true);
   assert.equal(f.state.docs.get(`agendamentos:${AGENDAMENTO_ID}`).status, "cancelado_cliente");
   assert.equal(f.state.reservation.estado, "confirmada");
+});
+
+test("cancelamento de agendamento sem PIX libera a reserva persistida sem alterar cobranças", async () => {
+  const f = fixture({ semPix: true });
+  const result = await solicitarCancelamentoAgendamento({
+    pool: f.pool, firestore: f.firestore, uid: f.uid,
+    agendamentoId: AGENDAMENTO_ID, acao: f.action, dependencies: f.dependencies
+  });
+  assert.equal(result.concluido, true);
+  assert.equal(f.state.docs.get(`agendamentos:${AGENDAMENTO_ID}`).status, "cancelado_cliente");
+  assert.equal(f.state.reservation.estado, "cancelada");
+  assert.equal(f.state.charge, null);
 });
 
 test("polling de cobrança paga não tenta confirmar novamente uma reserva cancelada", async () => {
