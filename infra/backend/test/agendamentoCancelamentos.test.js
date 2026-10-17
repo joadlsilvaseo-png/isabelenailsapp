@@ -417,6 +417,59 @@ test("Calendar processa cancelamento sem criacao na outbox", async () => {
   assert.equal(resultado.enviado, true);
 });
 
+test("Calendar usa snapshot historico se documento desapareceu do Firestore", async () => {
+  let payload;
+  const evento = {
+    agendamento_id: AGENDAMENTO_ID, calendar_event_id: "evt_historico",
+    origem_nome_cliente: "Cliente Antigo",
+    origem_servico: "Manicure",
+    origem_data_servico_iso: "2026-11-04",
+    origem_horario: "10:00"
+  };
+  await enviarCancelamentoCalendar(evento,
+    async (_url, options) => {
+      payload = JSON.parse(options.body);
+      return { ok: true, status: 200, async text() { return '{"ok":true,"status":"CANCELADO"}'; } };
+    },
+    async () => { throw Object.assign(new Error("Agendamento ausente no Firestore"), { code: "CALENDAR_AGENDAMENTO_AUSENTE" }); }
+  );
+  assert.deepEqual(payload, {
+    acao: "CANCELAR", eventId: "evt_historico",
+    nomeCliente: "Cliente Antigo", servico: "Manicure",
+    dataInicio: "2026-11-04T10:00:00"
+  });
+});
+
+test("Calendar nao confirma cancelamento sem Firestore nem snapshot", async () => {
+  let chamadas = 0;
+  await assert.rejects(
+    enviarCancelamentoCalendar(
+      { agendamento_id: AGENDAMENTO_ID, calendar_event_id: "evt_sem_dados" },
+      async () => { chamadas++; throw new Error("Nao deveria enviar"); },
+      async () => { throw Object.assign(new Error("Agendamento ausente no Firestore"), { code: "CALENDAR_AGENDAMENTO_AUSENTE" }); }
+    ),
+    /sem dados historicos/
+  );
+  assert.equal(chamadas, 0);
+});
+
+test("Calendar nao mascara erros de acesso ao Firestore com snapshot", async () => {
+  let chamadas = 0;
+  await assert.rejects(
+    enviarCancelamentoCalendar(
+      {
+        agendamento_id: AGENDAMENTO_ID, calendar_event_id: "evt_falha",
+        origem_nome_cliente: "Cliente", origem_servico: "Manicure",
+        origem_data_servico_iso: "2026-11-04", origem_horario: "10:00"
+      },
+      async () => { chamadas++; throw new Error("Nao deveria enviar"); },
+      async () => { throw new Error("Firestore indisponivel"); }
+    ),
+    /Firestore indisponivel/
+  );
+  assert.equal(chamadas, 0);
+});
+
 test("falha informada pelo Apps Script agenda nova tentativa sem request real", async () => {
   await assert.rejects(enviarCancelamentoCalendar(
     { calendar_event_id: "evt_abc" },
