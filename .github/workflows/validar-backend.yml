@@ -24,10 +24,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: npm
-          cache-dependency-path: infra/backend/package-lock.json
       - name: Instalar dependencias
-        run: npm ci
+        run: npm install --no-package-lock --ignore-scripts
       - name: Verificar sintaxe de modulos
         run: |
           node --check src/pixCalendarWorker.js
