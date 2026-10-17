@@ -279,6 +279,20 @@ export async function criarAgendamentoIsento({ pool, db, uid, dados, dependencie
       documentoCriado = true;
     });
 
+    // Somente um agendamento confirmado entra na fila duravel do Calendar.
+    // A mesma fila e processada pelo worker para PIX pago e sinal isento.
+    await conexao.query(`
+      INSERT INTO public.pix_calendar_outbox (
+        event_id, agendamento_id, nome_cliente, servico,
+        data_servico, horario, duracao_minutos
+      ) VALUES ($1, $2, $3, $4, $5::date, $6::time, $7)
+      ON CONFLICT (event_id) DO NOTHING
+    `, [
+      `evt_${agendamentoId}`, agendamentoId, nomeCliente,
+      String(servico.nome || "Serviço").slice(0, 120),
+      data, horario, duracao
+    ]);
+
     await conexao.query("COMMIT");
     confirmouSql = true;
     return { agendamentoId, duracaoMinutos: duracao, agendamentoConfirmado: true, idempotente: !documentoCriado };
