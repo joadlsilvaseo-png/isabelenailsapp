@@ -77,10 +77,19 @@ async function obterEventoPendente(pool) {
     const resultado = await conexao.query(`
       WITH proximo AS (
         SELECT id
-        FROM public.pix_calendar_outbox
-        WHERE (status = 'pendente' AND proxima_tentativa_em <= NOW())
-           OR (status = 'enviando' AND bloqueado_ate <= NOW())
-        ORDER BY criado_em
+        FROM public.pix_calendar_outbox AS criacao
+        WHERE (
+          (criacao.status = 'pendente' AND criacao.proxima_tentativa_em <= NOW())
+          OR (criacao.status = 'enviando' AND criacao.bloqueado_ate <= NOW())
+        )
+        -- Uma intencao de cancelamento bloqueia novas criacoes, mesmo
+        -- antes de a saga concluir no Firestore.
+        AND NOT EXISTS (
+          SELECT 1
+          FROM public.agendamento_cancelamentos AS cancelamento
+          WHERE cancelamento.agendamento_id = criacao.agendamento_id
+        )
+        ORDER BY criacao.criado_em
         FOR UPDATE SKIP LOCKED
         LIMIT 1
       )
@@ -148,15 +157,35 @@ async function obterCancelamentoCalendarPendente(pool) {
             OR (cancelamento.calendar_estado = 'enviando'
               AND cancelamento.calendar_bloqueado_ate <= NOW())
           )
+          -- Apenas uma criacao REALMENTE em voo impede cancelar agora.
+          -- Criacao pendente nunca deve ser enviada depois do cancelamento.
           AND NOT EXISTS (
             SELECT 1
             FROM public.pix_calendar_outbox AS criacao
             WHERE criacao.agendamento_id = cancelamento.agendamento_id
-              AND criacao.status <> 'enviado'
+              AND criacao.status = 'enviando'
+              AND criacao.bloqueado_ate > NOW()
           )
         ORDER BY cancelamento.criado_em
         FOR UPDATE OF cancelamento SKIP LOCKED
         LIMIT 1
+      ),
+      dispensadas AS (
+        -- Descarta de forma duravel a criacao nao enviada, na mesma
+        -- transacao que reserva o cancelamento para sincronizacao.
+        UPDATE public.pix_calendar_outbox AS criacao
+        SET status = 'dispensado', bloqueado_ate = NULL,
+            ultimo_erro = NULL, atualizado_em = NOW()
+        FROM proximo
+        WHERE criacao.agendamento_id = proximo.agendamento_id
+          AND (
+            criacao.status = 'pendente'
+            OR (
+              criacao.status = 'enviando'
+              AND (criacao.bloqueado_ate IS NULL OR criacao.bloqueado_ate <= NOW())
+            )
+          )
+        RETURNING criacao.id
       )
       UPDATE public.agendamento_cancelamentos AS fila
       SET calendar_estado = 'enviando',
