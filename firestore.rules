@@ -1,0 +1,233 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // =========================
+    // FUNÇÕES AUXILIARES
+    // =========================
+
+    function estaAutenticado() {
+      return request.auth != null;
+    }
+
+    function ehProprioUsuario(userId) {
+      return estaAutenticado()
+        && request.auth.uid == userId;
+    }
+
+    /*
+     * Nova estrutura administrativa.
+     *
+     * usuarios/{uid}
+     * role: "admin"
+     * ativo: true
+     */
+    function ehAdminPorUsuarios() {
+      return estaAutenticado()
+        && exists(
+          /databases/$(database)/documents/usuarios/$(request.auth.uid)
+        )
+        && get(
+          /databases/$(database)/documents/usuarios/$(request.auth.uid)
+        ).data.role == 'admin'
+        && get(
+          /databases/$(database)/documents/usuarios/$(request.auth.uid)
+        ).data.ativo == true;
+    }
+
+    /*
+     * Compatibilidade com a estrutura antiga.
+     *
+     * Mantemos esta verificação para não quebrar
+     * telas que ainda dependem de clientes/{uid}.role.
+     */
+    function ehAdminLegado() {
+      return estaAutenticado()
+        && exists(
+          /databases/$(database)/documents/clientes/$(request.auth.uid)
+        )
+        && get(
+          /databases/$(database)/documents/clientes/$(request.auth.uid)
+        ).data.role == 'admin';
+    }
+
+    function ehAdmin() {
+      return ehAdminPorUsuarios();
+    }
+
+    // =========================
+    // B.I.
+    // =========================
+
+    match /B.I./{document=**} {
+      allow read, write: if ehAdmin();
+    }
+
+    // =========================
+    // AGENDAMENTOS
+    // =========================
+
+    /*
+     * Regra atual preservada para não quebrar
+     * o funcionamento existente do aplicativo.
+     */
+    match /agendamentos/{document} {
+      allow read: if true;
+      allow create, update, delete: if ehAdmin();
+    }
+
+    // =========================
+    // SERVIÇOS
+    // =========================
+
+    match /servicos/{document} {
+      allow read: if true;
+
+      allow create, update, delete:
+        if ehAdmin();
+    }
+
+    // =========================
+    // USUÁRIOS
+    // =========================
+
+    /*
+     * Esta coleção controla o acesso ao app:
+     *
+     * usuarios/{uid}
+     * role: "cliente" ou "admin"
+     * ativo: true ou false
+     */
+    match /usuarios/{userId} {
+
+      /*
+       * O usuário pode criar apenas o próprio perfil
+       * como cliente ativo.
+       *
+       * Administradores também podem criar perfis.
+       */
+      allow create:
+        if ehAdmin()
+        || (
+          ehProprioUsuario(userId)
+          && request.resource.data.role == 'cliente'
+          && request.resource.data.ativo == true
+        );
+
+      /*
+       * Cada usuário pode ler o próprio perfil.
+       * Administradores podem ler todos.
+       */
+      allow read:
+        if ehProprioUsuario(userId)
+        || ehAdmin();
+
+      /*
+       * Administradores podem alterar qualquer perfil.
+       *
+       * Clientes podem editar o próprio documento,
+       * mas não podem alterar role ou ativo.
+       */
+      allow update:
+        if ehAdmin()
+        || (
+          ehProprioUsuario(userId)
+          && !request.resource.data
+            .diff(resource.data)
+            .affectedKeys()
+            .hasAny([
+              'role',
+              'ativo'
+            ])
+        );
+
+      /*
+       * Apenas administradores podem apagar perfis.
+       */
+      allow delete:
+        if ehAdmin();
+    }
+
+    // =========================
+    // CLIENTES
+    // =========================
+
+    match /clientes/{userId} {
+
+      allow create: if ehAdmin()
+        || (
+          ehProprioUsuario(userId)
+          && request.resource.data.get('role', 'cliente') == 'cliente'
+        );
+
+      allow read: if ehProprioUsuario(userId)
+        || ehAdmin();
+
+      allow update: if ehAdmin()
+        || (
+          ehProprioUsuario(userId)
+          && !request.resource.data.diff(resource.data)
+            .affectedKeys().hasAny(['role', 'ativo'])
+        );
+
+      allow delete: if ehAdmin();
+    }
+
+    // =========================
+    // GALERIA
+    // =========================
+
+    match /galeria/{document} {
+      allow read: if true;
+
+      allow create, update, delete:
+        if ehAdmin();
+    }
+
+    // =========================
+    // FCM TOKENS
+    // Push Notifications
+    // =========================
+
+    match /fcmTokens/{userId} {
+
+      allow create:
+        if ehProprioUsuario(userId);
+
+      allow update:
+        if ehProprioUsuario(userId);
+
+      allow read:
+        if ehProprioUsuario(userId);
+
+      allow read, write:
+        if ehAdmin();
+    }
+
+    // =========================
+    // EVENTOS DE NOTIFICAÇÃO
+    // Push / Automação
+    // =========================
+
+    match /eventos_notificacao/{eventId} {
+
+      /*
+       * Regra atual preservada para manter
+       * o fluxo existente de notificações.
+       */
+      allow create: if true;
+
+      allow read:
+        if ehAdmin()
+        || estaAutenticado();
+
+      /*
+       * No navegador, os eventos são imutáveis.
+       * As Cloud Functions usam o Admin SDK.
+       */
+      allow update, delete: if false;
+    }
+
+  }
+}
