@@ -374,7 +374,7 @@ test("falha informada pelo Apps Script agenda nova tentativa sem request real", 
       assert.equal(JSON.parse(options.body).eventId, "evt_abc");
       return { ok: true, status: 200, async text() { return JSON.stringify({ success: false, error: "calendar unavailable" }); } };
     }
-  ), /Apps Script informou falha/);
+  ), /Apps Script nao confirmou sucesso/);
 
   let estadoFila = "enviando";
   let requestCount = 0;
