@@ -178,15 +178,33 @@ async function obterCancelamentoCalendarPendente(pool) {
             OR (cancelamento.calendar_estado = 'enviando'
               AND cancelamento.calendar_bloqueado_ate <= NOW())
           )
+          -- Somente uma criacao em voo com lease valido deve adiar o cancelamento.
+          -- Uma criacao pendente nao deve jamais ser enviada apos cancelar.
           AND NOT EXISTS (
             SELECT 1
             FROM public.pix_calendar_outbox AS criacao
             WHERE criacao.agendamento_id = cancelamento.agendamento_id
-              AND criacao.status <> 'enviado'
+              AND criacao.status = 'enviando'
+              AND criacao.bloqueado_ate > NOW()
           )
         ORDER BY cancelamento.criado_em
         FOR UPDATE OF cancelamento SKIP LOCKED
         LIMIT 1
+      ),
+      dispensadas AS (
+        UPDATE public.pix_calendar_outbox AS criacao
+        SET status = 'dispensado', bloqueado_ate = NULL,
+            ultimo_erro = NULL, atualizado_em = NOW()
+        FROM proximo
+        WHERE criacao.agendamento_id = proximo.agendamento_id
+          AND (
+            criacao.status = 'pendente'
+            OR (
+              criacao.status = 'enviando'
+              AND (criacao.bloqueado_ate IS NULL OR criacao.bloqueado_ate <= NOW())
+            )
+          )
+        RETURNING criacao.id
       )
       UPDATE public.agendamento_cancelamentos AS fila
       SET calendar_estado = 'enviando',
