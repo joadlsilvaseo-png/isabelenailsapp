@@ -48,3 +48,21 @@ export async function reagendarAgendamentoApi(auth, dados) {
   if (!resposta.ok) throw new Error(resultado.erro || "Não foi possível reagendar.");
   return resultado;
 }
+
+export async function consultarDisponibilidadePix(auth, data, agendamentoId = null) {
+  const usuario = auth?.currentUser;
+  if (!usuario) throw new Error("Entre na sua conta para consultar os horários.");
+  const token = await usuario.getIdToken();
+  const parametros = new URLSearchParams({ data });
+  if (agendamentoId) parametros.set("agendamentoId", agendamentoId);
+  const resposta = await fetch(`/api/pix/disponibilidade?${parametros}`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+    signal: AbortSignal.timeout(10000),
+  });
+  const resultado = await resposta.json().catch(() => ({}));
+  if (!resposta.ok) {
+    throw new Error(resultado.erro || "Não foi possível confirmar a disponibilidade.");
+  }
+  return resultado.intervalos;
+}
