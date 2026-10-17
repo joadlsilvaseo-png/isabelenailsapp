@@ -53,12 +53,9 @@ async function timestampPadrao() {
 
 async function conferirAdmin(db, uid) {
   const usuario = await db.collection("usuarios").doc(uid).get();
-  if (usuario.exists) {
-    const dados = usuario.data();
-    return dados.role === "admin" && dados.ativo === true;
-  }
-  const cliente = await db.collection("clientes").doc(uid).get();
-  return cliente.exists && String(cliente.data()?.role || "").toLowerCase() === "admin";
+  if (!usuario.exists) return false;
+  const dados = usuario.data();
+  return dados.role === "admin" && dados.ativo === true;
 }
 
 function converterPreco(valor) {
