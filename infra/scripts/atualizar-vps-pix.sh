@@ -5,7 +5,7 @@ umask 077
 # Atualizacao incremental PIX: preserva a configuracao efetiva do Compose.
 # O script preserva o ambiente PIX ativo; nao cria cobrancas nem solicita reembolsos.
 
-BRANCH="${BRANCH:-codex/correcao-pix-20261010}"
+BRANCH="${BRANCH:-codex/calendar-cancelamentos-teste-20261017}"
 APP_DIR="${APP_DIR:-/opt/isabele-nails}"
 BACKUP_ROOT="${BACKUP_ROOT:-/opt/isabele-nails-backups}"
 RELEASE_ROOT="${RELEASE_ROOT:-/opt/isabele-nails-releases}"
@@ -427,6 +427,8 @@ MIGRATION_011="$RELEASE_DIR/infra/migrations/011_pix_polling_worker.sql"
 [[ -f "$MIGRATION_011" ]] || die "Migracao 011 nao encontrada no commit alvo."
 MIGRATION_012="$RELEASE_DIR/infra/migrations/012_agendamento_cancelamentos.sql"
 [[ -f "$MIGRATION_012" ]] || die "Migracao 012 nao encontrada no commit alvo."
+MIGRATION_013="$RELEASE_DIR/infra/migrations/013_calendar_cancelamentos_dispensados.sql"
+[[ -f "$MIGRATION_013" ]] || die "Migracao 013 nao encontrada no commit alvo."
 
 UPDATE_OVERRIDE="$BACKUP_DIR/update-compose.yaml"
 TARGET_IMAGE_TAG="isabele-nails-api:release-${TARGET_COMMIT}"
@@ -700,6 +702,36 @@ case "$MIGRATION_011_STATE" in
   *) die "Nao foi possivel determinar o estado da migracao 011 (resultado: $MIGRATION_011_STATE)." ;;
 esac
 
+# Confere a constraint antes de alterar o banco, evitando mudancas em estado parcial.
+MIGRATION_013_STATE_SQL="$BACKUP_DIR/migration-013-state.sql"
+cat >"$MIGRATION_013_STATE_SQL" <<'SQL'
+WITH estados AS (
+  SELECT
+    to_regclass('public.pix_calendar_outbox') IS NOT NULL AS tabela,
+    (SELECT pg_get_constraintdef(oid)
+     FROM pg_constraint
+     WHERE conrelid = to_regclass('public.pix_calendar_outbox')
+       AND conname = 'pix_calendar_outbox_status_check'
+     LIMIT 1) AS definicao
+)
+SELECT CASE
+  WHEN NOT tabela THEN 'missing_table'
+  WHEN definicao IS NULL THEN 'partial'
+  WHEN definicao LIKE '%dispensado%' THEN 'applied'
+  WHEN definicao LIKE '%pendente%' AND definicao LIKE '%enviando%'
+       AND definicao LIKE '%enviado%' THEN 'pending'
+  ELSE 'partial'
+END
+FROM estados;
+SQL
+chmod 600 "$MIGRATION_013_STATE_SQL"
+MIGRATION_013_STATE="$(compose_snapshot exec -T "$DB_SERVICE" sh -lc 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At' <"$MIGRATION_013_STATE_SQL" | tr -d '\r\n')"
+case "$MIGRATION_013_STATE" in
+  applied) echo "Migracao 013 ja aplicada; preservada." ;;
+  pending) echo "Migracao 013 pendente; sera aplicada na atualizacao." ;;
+  *) die "Estado inseguro da migracao 013: $MIGRATION_013_STATE." ;;
+esac
+
 printf '%s\n' "$DB_CONTAINER" >"$BACKUP_DIR/db-container-id"
 compose_snapshot exec -T "$DB_SERVICE" sh -lc 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' >"$BACKUP_DIR/postgres-before.dump"
 [[ -s "$BACKUP_DIR/postgres-before.dump" ]] || die "Backup PostgreSQL vazio; atualizacao cancelada."
@@ -716,6 +748,7 @@ API_STOPPED=false
 MIGRATION_APPLIED=false
 MIGRATION_011_APPLIED=false
 MIGRATION_012_APPLIED=false
+MIGRATION_013_APPLIED=false
 NEW_API_STARTED=false
 restore_old_api_on_error() {
   local rc=$?
@@ -766,6 +799,12 @@ if [[ "$MIGRATION_012_STATE" == pending ]]; then
   MIGRATION_012_APPLIED=true
 else
   echo "Pulando migracao 012 ja aplicada; banco e dados serao mantidos."
+fi
+if [[ "$MIGRATION_013_STATE" == pending ]]; then
+  compose_snapshot exec -T "$DB_SERVICE" sh -lc 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <"$MIGRATION_013"
+  MIGRATION_013_APPLIED=true
+else
+  echo "Pulando migracao 013 ja aplicada; banco e dados serao mantidos."
 fi
 NEW_API_STARTED=true
 compose_snapshot up -d --no-deps "$API_SERVICE"
