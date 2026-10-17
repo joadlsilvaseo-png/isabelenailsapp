@@ -482,3 +482,26 @@ test("cliente não cancela agendamento alheio e usuário sem perfil ativo não c
     agendamentoId: AGENDAMENTO_ID, acao: "cancelar_admin", dependencies: admin.dependencies
   }), /Acesso administrativo negado/);
 });
+
+
+test("Apps Script exige confirmacao JSON de sucesso antes de registrar cancelamento", async () => {
+  await assert.rejects(enviarCancelamentoCalendar(
+    { calendar_event_id: "evt_abc" },
+    async () => ({ ok: true, status: 200, async text() { return "CANCELADO COM SUCESSO"; } })
+  ), /Apps Script nao confirmou sucesso/);
+
+  let enviado;
+  const resultado = await enviarCancelamentoCalendar(
+    { agendamento_id: "isento_teste", calendar_event_id: "evt_isento_teste" },
+    async (_url, opcoes) => {
+      enviado = JSON.parse(opcoes.body);
+      return { ok: true, status: 200, async text() { return '{"ok":true,"status":"CANCELADO"}'; } };
+    },
+    async () => ({ nomeCliente: "joad lima", servico: "Manicure e Pedicure", dataInicio: "2026-11-04T09:00:00" })
+  );
+  assert.equal(resultado.eventId, "evt_isento_teste");
+  assert.deepEqual(enviado, {
+    acao: "CANCELAR", eventId: "evt_isento_teste",
+    nomeCliente: "joad lima", servico: "Manicure e Pedicure", dataInicio: "2026-11-04T09:00:00"
+  });
+});
