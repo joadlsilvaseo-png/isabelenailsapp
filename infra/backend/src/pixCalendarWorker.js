@@ -100,8 +100,16 @@ async function obterEventoPendente(pool) {
       WITH proximo AS (
         SELECT id
         FROM public.pix_calendar_outbox
-        WHERE (status = 'pendente' AND proxima_tentativa_em <= NOW())
-           OR (status = 'enviando' AND bloqueado_ate <= NOW())
+        WHERE (
+          (status = 'pendente' AND proxima_tentativa_em <= NOW())
+          OR (status = 'enviando' AND bloqueado_ate <= NOW())
+        )
+          AND data_servico >= CURRENT_DATE
+          AND NOT EXISTS (
+            SELECT 1 FROM public.agendamento_cancelamentos AS cancelamento
+            WHERE cancelamento.agendamento_id = pix_calendar_outbox.agendamento_id
+              AND cancelamento.estado IN ('concluida', 'solicitada')
+          )
         ORDER BY criado_em
         FOR UPDATE SKIP LOCKED
         LIMIT 1
