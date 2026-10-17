@@ -18,10 +18,10 @@ function criarPool(reservas) {
     chamadas,
     async query(sql, params) {
       chamadas.push({ sql, params });
-      const [data, agendamentoId, uid] = params;
+      const [data, agendamentoId, clienteUidExcluido] = params;
       const rows = reservas.filter((reserva) => reserva.data === data &&
         ["reservada", "confirmada"].includes(reserva.estado) &&
-        (agendamentoId === null || reserva.agendamentoId !== agendamentoId || reserva.clienteUid !== uid));
+        (agendamentoId === null || reserva.agendamentoId !== agendamentoId || reserva.clienteUid !== clienteUidExcluido));
       return { rows: rows.map(({ inicio, fim }) => ({ inicio_minuto: inicio, fim_minuto: fim })) };
     },
   };
@@ -51,6 +51,7 @@ test("disponibilidade inclui reservas PIX pendentes, vencidas ainda reservadas e
   assert.equal(resposta.headers["Cache-Control"], "no-store");
   assert.match(pool.chamadas[0].sql, /estado IN \('reservada', 'confirmada'\)/);
   assert.equal(pool.chamadas[0].sql.trim().toLowerCase().startsWith("select"), true);
+  assert.doesNotMatch(pool.chamadas[0].sql, /\b(insert|update|delete|upsert)\b/i);
 });
 
 test("consulta de disponibilidade é autenticada e valida a data", async () => {
@@ -98,6 +99,63 @@ test("somente exclui reserva do próprio agendamento autorizado ao reagendar", a
   assert.equal(resposta.status, 200);
   assert.deepEqual(resposta.body.intervalos, [{ inicioMinuto: 840, fimMinuto: 900 }]);
   assert.deepEqual(pool.chamadas[0].params, ["2026-11-05", "meu-agendamento", "cliente-1"]);
+});
+
+test("admin autorizado exclui somente a reserva original da cliente no reagendamento", async () => {
+  const db = {
+    collection(nome) {
+      return { doc(id) {
+        return { async get() {
+          if (nome === "agendamentos" && id === "agendamento-cliente") {
+            return { exists: true, data: () => ({ clienteId: "cliente-proprietaria", status: "confirmado" }) };
+          }
+          if (nome === "usuarios" && id === "admin-1") {
+            return { exists: true, data: () => ({ role: "admin", ativo: true }) };
+          }
+          return { exists: false, data: () => null };
+        } };
+      } };
+    },
+  };
+  const pool = criarPool([
+    { data: "2026-11-05", inicio: 810, fim: 870, estado: "confirmada", agendamentoId: "agendamento-cliente", clienteUid: "cliente-proprietaria" },
+    { data: "2026-11-05", inicio: 840, fim: 900, estado: "reservada", agendamentoId: "agendamento-terceiro", clienteUid: "cliente-terceiro" },
+  ]);
+  const resposta = criarResposta();
+  await consultarDisponibilidadePix(
+    { method: "GET", url: "/pix/disponibilidade?data=2026-11-05&agendamentoId=agendamento-cliente", headers: {} },
+    resposta, pool,
+    { verificarUsuario: async () => "admin-1", firestore: db },
+  );
+
+  assert.equal(resposta.status, 200);
+  assert.deepEqual(resposta.body.intervalos, [{ inicioMinuto: 840, fimMinuto: 900 }]);
+  assert.deepEqual(pool.chamadas[0].params, ["2026-11-05", "agendamento-cliente", "cliente-proprietaria"]);
+});
+
+test("agendamento PIX que exige conciliação não pode ter sua reserva excluída", async () => {
+  const db = {
+    collection(nome) {
+      return { doc() { return { async get() {
+        if (nome === "agendamentos") {
+          return { exists: true, data: () => ({ clienteId: "cliente-1", status: "confirmado", pixCobrancaId: "charge-1" }) };
+        }
+        return { exists: true, data: () => ({ role: "admin", ativo: true }) };
+      } }; } };
+    },
+  };
+  const pool = criarPool([
+    { data: "2026-11-05", inicio: 810, fim: 870, estado: "reservada", agendamentoId: "agendamento-pix", clienteUid: "cliente-1" },
+  ]);
+  const resposta = criarResposta();
+  await consultarDisponibilidadePix(
+    { method: "GET", url: "/pix/disponibilidade?data=2026-11-05&agendamentoId=agendamento-pix", headers: {} },
+    resposta, pool,
+    { verificarUsuario: async () => "admin-1", firestore: db },
+  );
+
+  assert.equal(resposta.status, 409);
+  assert.equal(pool.chamadas.length, 0);
 });
 
 test("não permite ocultar a reserva de outra cliente ao consultar reagendamento", async () => {

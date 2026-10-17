@@ -37,11 +37,15 @@ async function validarAgendamentoParaExclusao(db, agendamentoId, uid) {
     return { ok: false, status: 409 };
   }
   if (dados.pixCobrancaId || dados.pixPagamentoId) return { ok: false, status: 409 };
-  if (dados.clienteId === uid) return { ok: true };
+  const clienteUid = dados.clienteId;
+  if (typeof clienteUid !== "string" || clienteUid.length < 1 || clienteUid.length > 128) {
+    return { ok: false, status: 409 };
+  }
+  if (clienteUid === uid) return { ok: true, clienteUid };
 
   const usuario = await db.collection("usuarios").doc(uid).get();
   const perfil = usuario.exists ? usuario.data() : null;
-  if (perfil?.role === "admin" && perfil?.ativo === true) return { ok: true };
+  if (perfil?.role === "admin" && perfil?.ativo === true) return { ok: true, clienteUid };
   return { ok: false, status: 403 };
 }
 
@@ -72,6 +76,7 @@ export async function consultarDisponibilidadePix(req, res, pool, dependencies =
   }
 
   try {
+    let clienteUidExcluido = null;
     if (agendamentoId !== null) {
       const db = dependencies.firestore || await obterFirestore();
       const acesso = await validarAgendamentoParaExclusao(db, agendamentoId, uid);
@@ -84,6 +89,7 @@ export async function consultarDisponibilidadePix(req, res, pool, dependencies =
         responder(res, acesso.status, { erro: mensagens[acesso.status] });
         return;
       }
+      clienteUidExcluido = acesso.clienteUid;
     }
 
     const resultado = await pool.query(`
@@ -91,9 +97,9 @@ export async function consultarDisponibilidadePix(req, res, pool, dependencies =
       FROM public.pix_reservas
       WHERE data_servico = $1
         AND estado IN ('reservada', 'confirmada')
-        AND ($2::text IS NULL OR agendamento_id IS DISTINCT FROM $2 OR cliente_uid <> $3)
+        AND ($2::text IS NULL OR agendamento_id IS DISTINCT FROM $2 OR cliente_uid IS DISTINCT FROM $3)
       ORDER BY inicio_minuto, fim_minuto
-    `, [data, agendamentoId, uid]);
+    `, [data, agendamentoId, clienteUidExcluido]);
 
     const intervalos = resultado.rows.map((linha) => ({
       inicioMinuto: Number(linha.inicio_minuto),
