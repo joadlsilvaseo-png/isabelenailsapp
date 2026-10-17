@@ -369,16 +369,8 @@ async function iniciarCheckout() {
         localStorage.setItem("isabeleAgendamentoSemPixId", agendamento.agendamentoId);
         sessionStorage.removeItem(STORAGE_CHAVE_ISENTO);
 
-        const scriptUrl = "https://script.google.com/macros/s/AKfycbwUwXunAdMAroSPAeMHH2ZQxCOuQage7lmAHH7-llgmeVXug6-Z9KGq6R7NVgQ70XYy/exec";
-        void fetch(scriptUrl, {
-          method: "POST", mode: "no-cors",
-          body: JSON.stringify({
-            acao: "AGENDAR", nomeCliente: dados.nome, servico: dados.nomeServico,
-            dataInicio: `${dados.data}T${dados.horario}:00`,
-            duracaoMinutos: agendamento.duracaoMinutos,
-            eventId: `evt_${agendamento.agendamentoId}`,
-          }),
-        }).catch((erro) => console.warn("[Agenda] Falha na sincronização externa:", erro));
+        // A sincronizacao Calendar e executada de forma duravel pelo backend.
+        // Evita dupla criacao de eventos por requisicao do navegador.
 
         modal.close();
         window.location.assign("confirmacao.html");
