@@ -16,6 +16,57 @@ SCRIPT_PATH="$(readlink -f "$0")"
 timestamp() { date -u +%Y%m%dT%H%M%SZ; }
 die() { echo "ERRO: $*" >&2; exit 1; }
 
+classificar_estado_migracao_012() {
+  local has_charge_table="$1" has_table="$2" has_columns="$3"
+  local has_primary_key="$4" has_defaults="$5" has_charge_fk="$6"
+  local has_tipo_check="$7" has_estado_check="$8" has_calendar_estado_check="$9"
+  local has_calendar_tentativas_check="${10}" has_tentativas_check="${11}"
+  local has_legacy_calendar_check="${12}" has_015_calendar_check="${13}"
+  local calendar_check_count="${14}" has_pending_index="${15}" has_calendar_index="${16}"
+  local -a falhas=()
+
+  if [[ "$has_charge_table" != t ]]; then
+    printf 'missing_charge_table|pix_cobrancas\n'
+    return
+  fi
+  if [[ "$has_table" != t ]]; then
+    printf 'pending|\n'
+    return
+  fi
+
+  [[ "$has_columns" == t ]] || falhas+=("colunas/tipos/nullability")
+  [[ "$has_primary_key" == t ]] || falhas+=("chave_primaria")
+  [[ "$has_defaults" == t ]] || falhas+=("valores_default")
+  [[ "$has_charge_fk" == t ]] || falhas+=("foreign_key_pix_cobrancas")
+  [[ "$has_tipo_check" == t ]] || falhas+=("constraint_tipo")
+  [[ "$has_estado_check" == t ]] || falhas+=("constraint_estado")
+  [[ "$has_calendar_estado_check" == t ]] || falhas+=("constraint_calendar_estado")
+  [[ "$has_calendar_tentativas_check" == t ]] || falhas+=("constraint_calendar_tentativas")
+  [[ "$has_tentativas_check" == t ]] || falhas+=("constraint_tentativas")
+
+  if [[ "$calendar_check_count" != 1 ]]; then
+    falhas+=("constraint_calendar_evento_quantidade")
+  elif [[ "$has_legacy_calendar_check" == t && "$has_015_calendar_check" != t ]]; then
+    : # Estrutura original da migração 012.
+  elif [[ "$has_legacy_calendar_check" != t && "$has_015_calendar_check" == t ]]; then
+    : # Estrutura legítima após a migração 015.
+  elif [[ "$has_legacy_calendar_check" == t && "$has_015_calendar_check" == t ]]; then
+    falhas+=("constraint_calendar_evento_ambigua")
+  else
+    falhas+=("constraint_calendar_evento_formato")
+  fi
+
+  [[ "$has_pending_index" == t ]] || falhas+=("indice_cancelamentos_pendentes")
+  [[ "$has_calendar_index" == t ]] || falhas+=("indice_calendar_pendente")
+
+  if ((${#falhas[@]} == 0)); then
+    printf 'applied|\n'
+  else
+    local IFS=,
+    printf 'partial|%s\n' "${falhas[*]}"
+  fi
+}
+
 validate_pix_environment() {
   case "${1,,}" in
     test|production) return 0 ;;
@@ -29,6 +80,21 @@ if [[ "$MODE" == "--test-pix-environment" ]]; then
   [[ $# -eq 2 ]] || die "Uso: $SCRIPT_PATH --test-pix-environment test|production"
   validate_pix_environment "$2"
   exit $?
+fi
+
+# Modo local para testar o mesmo classificador usado no preflight do PostgreSQL.
+if [[ "$MODE" == "--test-migration-012-state" ]]; then
+  [[ $# -eq 2 ]] || die "Uso: $SCRIPT_PATH --test-migration-012-state pending|before-015|after-015|partial|ambiguous"
+  case "$2" in
+    pending) flags=(t f f f f f f f f f f f f 0 f f) ;;
+    before-015) flags=(t t t t t t t t t t t t f 1 t t) ;;
+    after-015) flags=(t t t t t t t t t t t f t 1 t t) ;;
+    partial) flags=(t t f t t t t t t t t f f 0 t t) ;;
+    ambiguous) flags=(t t t t t t t t t t t t t 2 t t) ;;
+    *) die "Estado de teste desconhecido." ;;
+  esac
+  classificar_estado_migracao_012 "${flags[@]}"
+  exit 0
 fi
 
 if [[ "$MODE" == "start" || "$MODE" == "--background" ]]; then
@@ -518,10 +584,11 @@ case "$MIGRATION_STATE" in
 esac
 
 # A migracao 012 cria o registro duravel de cancelamento e a fila de Calendar.
-# O preflight aceita somente a estrutura completa ou a ausencia total da tabela.
+# O preflight aceita somente a estrutura completa (antes ou depois da 015) ou
+# a ausencia total da tabela. Cada resultado estrutural e identificado abaixo.
 MIGRATION_012_STATE_SQL="$BACKUP_DIR/migration-012-state.sql"
 cat >"$MIGRATION_012_STATE_SQL" <<'SQL'
-WITH state AS (
+WITH flags AS (
   SELECT
     to_regclass('public.pix_cobrancas') IS NOT NULL AS has_charge_table,
     to_regclass('public.agendamento_cancelamentos') IS NOT NULL AS has_table,
@@ -577,14 +644,66 @@ WITH state AS (
         AND confrelid = to_regclass('public.pix_cobrancas')
         AND pg_get_constraintdef(oid) LIKE '%REFERENCES pix_cobrancas(id)%'
     ) AS has_charge_fk,
+    EXISTS (
+      SELECT 1 FROM pg_constraint
+      WHERE conrelid = to_regclass('public.agendamento_cancelamentos')
+        AND conname = 'agendamento_cancelamentos_tipo_check' AND contype = 'c'
+        AND pg_get_constraintdef(oid) LIKE '%cliente%'
+        AND pg_get_constraintdef(oid) LIKE '%profissional%'
+    ) AS has_tipo_check,
+    EXISTS (
+      SELECT 1 FROM pg_constraint
+      WHERE conrelid = to_regclass('public.agendamento_cancelamentos')
+        AND conname = 'agendamento_cancelamentos_estado_check' AND contype = 'c'
+        AND pg_get_constraintdef(oid) LIKE '%solicitada%'
+        AND pg_get_constraintdef(oid) LIKE '%concluida%'
+        AND pg_get_constraintdef(oid) LIKE '%falha_permanente%'
+    ) AS has_estado_check,
+    EXISTS (
+      SELECT 1 FROM pg_constraint
+      WHERE conrelid = to_regclass('public.agendamento_cancelamentos')
+        AND conname = 'agendamento_cancelamentos_calendar_estado_check' AND contype = 'c'
+        AND pg_get_constraintdef(oid) LIKE '%dispensado%'
+        AND pg_get_constraintdef(oid) LIKE '%pendente%'
+        AND pg_get_constraintdef(oid) LIKE '%enviando%'
+        AND pg_get_constraintdef(oid) LIKE '%enviado%'
+    ) AS has_calendar_estado_check,
+    EXISTS (
+      SELECT 1 FROM pg_constraint
+      WHERE conrelid = to_regclass('public.agendamento_cancelamentos')
+        AND conname = 'agendamento_cancelamentos_calendar_tentativas_check' AND contype = 'c'
+        AND pg_get_constraintdef(oid) LIKE '%calendar_tentativas%'
+        AND pg_get_constraintdef(oid) LIKE '%>= 0%'
+    ) AS has_calendar_tentativas_check,
+    EXISTS (
+      SELECT 1 FROM pg_constraint
+      WHERE conrelid = to_regclass('public.agendamento_cancelamentos')
+        AND conname = 'agendamento_cancelamentos_tentativas_check' AND contype = 'c'
+        AND pg_get_constraintdef(oid) LIKE '%tentativas%'
+        AND pg_get_constraintdef(oid) LIKE '%>= 0%'
+    ) AS has_tentativas_check,
+    EXISTS (
+      SELECT 1 FROM pg_constraint
+      WHERE conrelid = to_regclass('public.agendamento_cancelamentos')
+        AND conname = 'agendamento_cancelamentos_check' AND contype = 'c'
+        AND regexp_replace(lower(pg_get_constraintdef(oid)), '[[:space:]()]', '', 'g') =
+          'checkcalendar_event_idisnullandcalendar_estado=''dispensado''::textorcalendar_event_idisnotnullandcalendar_estado<>''dispensado''::text'
+    ) AS has_legacy_calendar_check,
+    EXISTS (
+      SELECT 1 FROM pg_constraint
+      WHERE conrelid = to_regclass('public.agendamento_cancelamentos')
+        AND conname = 'agendamento_cancelamentos_calendar_evento_check' AND contype = 'c'
+        AND regexp_replace(lower(pg_get_constraintdef(oid)), '[[:space:]()]', '', 'g') =
+          'checkcalendar_event_idisnotnullorcalendar_estado=''dispensado''::text'
+    ) AS has_015_calendar_check,
     (
-      EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = to_regclass('public.agendamento_cancelamentos') AND conname = 'agendamento_cancelamentos_tipo_check' AND contype = 'c' AND pg_get_constraintdef(oid) LIKE '%cliente%' AND pg_get_constraintdef(oid) LIKE '%profissional%')
-      AND EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = to_regclass('public.agendamento_cancelamentos') AND conname = 'agendamento_cancelamentos_estado_check' AND contype = 'c' AND pg_get_constraintdef(oid) LIKE '%solicitada%' AND pg_get_constraintdef(oid) LIKE '%concluida%' AND pg_get_constraintdef(oid) LIKE '%falha_permanente%')
-      AND EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = to_regclass('public.agendamento_cancelamentos') AND conname = 'agendamento_cancelamentos_calendar_estado_check' AND contype = 'c' AND pg_get_constraintdef(oid) LIKE '%dispensado%' AND pg_get_constraintdef(oid) LIKE '%pendente%' AND pg_get_constraintdef(oid) LIKE '%enviando%' AND pg_get_constraintdef(oid) LIKE '%enviado%')
-      AND EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = to_regclass('public.agendamento_cancelamentos') AND conname = 'agendamento_cancelamentos_calendar_tentativas_check' AND contype = 'c' AND pg_get_constraintdef(oid) LIKE '%calendar_tentativas%' AND pg_get_constraintdef(oid) LIKE '%>= 0%')
-      AND EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = to_regclass('public.agendamento_cancelamentos') AND conname = 'agendamento_cancelamentos_tentativas_check' AND contype = 'c' AND pg_get_constraintdef(oid) LIKE '%tentativas%' AND pg_get_constraintdef(oid) LIKE '%>= 0%')
-      AND EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = to_regclass('public.agendamento_cancelamentos') AND conname = 'agendamento_cancelamentos_check' AND contype = 'c' AND pg_get_constraintdef(oid) LIKE '%calendar_event_id IS NULL%' AND pg_get_constraintdef(oid) LIKE '%calendar_estado%')
-    ) AS has_check_constraints,
+      SELECT count(*)
+      FROM pg_constraint
+      WHERE conrelid = to_regclass('public.agendamento_cancelamentos')
+        AND contype = 'c'
+        AND pg_get_constraintdef(oid) LIKE '%calendar_event_id%'
+        AND pg_get_constraintdef(oid) LIKE '%calendar_estado%'
+    ) AS calendar_check_count,
     EXISTS (
       SELECT 1 FROM pg_index i
       WHERE i.indexrelid = to_regclass('public.idx_agendamento_cancelamentos_pendentes')
@@ -601,22 +720,35 @@ WITH state AS (
         AND pg_get_expr(i.indpred, i.indrelid) LIKE '%enviando%'
     ) AS has_calendar_index
 )
-SELECT CASE
-  WHEN NOT has_charge_table THEN 'missing_charge_table'
-  WHEN NOT has_table THEN 'pending'
-  WHEN has_columns AND has_primary_key AND has_defaults AND has_charge_fk AND has_check_constraints AND has_pending_index AND has_calendar_index THEN 'applied'
-  ELSE 'partial'
-END
-FROM state;
+SELECT has_charge_table, has_table, has_columns, has_primary_key, has_defaults,
+       has_charge_fk, has_tipo_check, has_estado_check, has_calendar_estado_check,
+       has_calendar_tentativas_check, has_tentativas_check,
+       has_legacy_calendar_check, has_015_calendar_check, calendar_check_count,
+       has_pending_index, has_calendar_index
+FROM flags;
 SQL
 chmod 600 "$MIGRATION_012_STATE_SQL"
-MIGRATION_012_STATE="$(compose_snapshot exec -T "$DB_SERVICE" sh -lc 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At' <"$MIGRATION_012_STATE_SQL" | tr -d '\r\n')"
+MIGRATION_012_STATE_ROW="$(compose_snapshot exec -T "$DB_SERVICE" sh -lc 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At -F "|"' <"$MIGRATION_012_STATE_SQL" | tr -d '\r\n')"
+IFS='|' read -r \
+  HAS_012_CHARGE_TABLE HAS_012_TABLE HAS_012_COLUMNS HAS_012_PRIMARY_KEY HAS_012_DEFAULTS \
+  HAS_012_CHARGE_FK HAS_012_TIPO_CHECK HAS_012_ESTADO_CHECK HAS_012_CALENDAR_ESTADO_CHECK \
+  HAS_012_CALENDAR_TENTATIVAS_CHECK HAS_012_TENTATIVAS_CHECK \
+  HAS_012_LEGACY_CALENDAR_CHECK HAS_012_015_CALENDAR_CHECK HAS_012_CALENDAR_CHECK_COUNT \
+  HAS_012_PENDING_INDEX HAS_012_CALENDAR_INDEX <<<"$MIGRATION_012_STATE_ROW"
+MIGRATION_012_RESULT="$(classificar_estado_migracao_012 \
+  "$HAS_012_CHARGE_TABLE" "$HAS_012_TABLE" "$HAS_012_COLUMNS" "$HAS_012_PRIMARY_KEY" \
+  "$HAS_012_DEFAULTS" "$HAS_012_CHARGE_FK" "$HAS_012_TIPO_CHECK" "$HAS_012_ESTADO_CHECK" \
+  "$HAS_012_CALENDAR_ESTADO_CHECK" "$HAS_012_CALENDAR_TENTATIVAS_CHECK" \
+  "$HAS_012_TENTATIVAS_CHECK" "$HAS_012_LEGACY_CALENDAR_CHECK" \
+  "$HAS_012_015_CALENDAR_CHECK" "$HAS_012_CALENDAR_CHECK_COUNT" \
+  "$HAS_012_PENDING_INDEX" "$HAS_012_CALENDAR_INDEX")"
+IFS='|' read -r MIGRATION_012_STATE MIGRATION_012_DIAGNOSTICS <<<"$MIGRATION_012_RESULT"
 case "$MIGRATION_012_STATE" in
-  applied) echo "Migracao 012 ja aplicada; sera preservada sem nova execucao." ;;
+  applied) echo "Migracao 012 ja aplicada; estrutura de cancelamentos validada e preservada." ;;
   pending) echo "Migracao 012 pendente; sera aplicada uma vez nesta atualizacao." ;;
-  partial) die "Estado parcial da migracao 012; nenhuma migracao foi executada e a API nao sera parada." ;;
-  missing_charge_table) die "Tabela pix_cobrancas ausente; nao e seguro aplicar a migracao 012." ;;
-  *) die "Nao foi possivel determinar o estado da migracao 012 (resultado: $MIGRATION_012_STATE)." ;;
+  partial) die "Estado parcial/inconsistente da migracao 012; verificacoes: $MIGRATION_012_DIAGNOSTICS. Nenhuma migracao foi executada e a API nao sera parada." ;;
+  missing_charge_table) die "Tabela pix_cobrancas ausente; nao e seguro aplicar a migracao 012. Verificacao: $MIGRATION_012_DIAGNOSTICS." ;;
+  *) die "Nao foi possivel determinar o estado da migracao 012; nenhuma migracao foi executada e a API nao sera parada." ;;
 esac
 
 # A migracao 011 adiciona a agenda persistente do polling. Detecta estado
