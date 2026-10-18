@@ -1,4 +1,6 @@
 import { auth, db } from "./firebase-config.js";
+import { consultarDisponibilidadePix, reagendarAgendamentoApi } from "./agendamentosApi.js";
+import { consultarIntervalosDisponibilidade, intervaloSobrepoeDisponibilidade } from "./agendamentoDisponibilidade.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
 import {
   collection,
@@ -7,9 +9,6 @@ import {
   getDocs,
   query,
   where,
-  addDoc,
-  updateDoc,
-  serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
 
 // Funções de ajuda para seleção única de data e horário
@@ -52,6 +51,17 @@ const timeToMins = (s) => {
 const minsToTime = (m) => {
   return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 };
+
+function aguardarUsuarioFirebase() {
+  if (auth.currentUser) return Promise.resolve(auth.currentUser);
+  return new Promise((resolve) => {
+    let parar = () => {};
+    parar = onAuthStateChanged(auth, (usuario) => {
+      parar();
+      resolve(usuario);
+    });
+  });
+}
 
 function validarAgendamento(data, hora) {
   if (!data || !hora) return false;
@@ -454,6 +464,8 @@ function obterIntervalosBloqueadosFixos(dataIso) {
   return [];
 }
 async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null) {
+  const requisicao = (renderizarHorarios.requisicao || 0) + 1;
+  renderizarHorarios.requisicao = requisicao;
   const container = document.querySelector(".agendamento-times");
 
   const availabilityElement = document.getElementById("availability-status");
@@ -475,37 +487,32 @@ async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null) {
   }
 
   try {
-    const consulta = query(
-      collection(db, "agendamentos"),
-      where("data", "==", String(dataIso).trim()),
-    );
-
-    const querySnapshot = await getDocs(consulta);
-
-    const intervalosOcupados = [];
-
     const statusValidos = ["agendado", "reagendado", "confirmado"];
-
-    querySnapshot.forEach((documento) => {
-      const dados = documento.data();
-
-      if (reagendarId && documento.id === reagendarId) {
-        return;
-      }
-
-      if (!dados.horario || !statusValidos.includes(dados.status)) {
-        return;
-      }
-
-      const inicio = timeToMins(dados.horario);
-
-      const duracaoAgendada = Number(dados.duracao) || 90;
-
-      intervalosOcupados.push({
-        start: inicio,
-        end: inicio + duracaoAgendada,
-      });
+    const usuario = await aguardarUsuarioFirebase();
+    if (!usuario) throw new Error("Entre na sua conta para consultar os horários.");
+    const intervalosOcupados = await consultarIntervalosDisponibilidade({
+      async consultarAgendamentosFirestore() {
+        const consulta = query(
+          collection(db, "agendamentos"),
+          where("data", "==", String(dataIso).trim()),
+        );
+        const querySnapshot = await getDocs(consulta);
+        const intervalos = [];
+        querySnapshot.forEach((documento) => {
+          const dados = documento.data();
+          if ((reagendarId && documento.id === reagendarId) ||
+              !dados.horario || !statusValidos.includes(dados.status)) return;
+          const inicio = timeToMins(dados.horario);
+          const duracaoAgendada = Number(dados.duracao) || 90;
+          intervalos.push({ inicioMinuto: inicio, fimMinuto: inicio + duracaoAgendada });
+        });
+        return intervalos;
+      },
+      consultarReservasPix() {
+        return consultarDisponibilidadePix(auth, String(dataIso).trim(), reagendarId);
+      },
     });
+    if (requisicao !== renderizarHorarios.requisicao) return;
 
     const duracaoServico = Number(servicoDuracao) || 60;
 
@@ -522,7 +529,10 @@ async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null) {
       0,
     ).getDay();
 
-    const intervalosBloqueadosFixos = obterIntervalosBloqueadosFixos(dataIso);
+    const intervalosBloqueadosFixos = obterIntervalosBloqueadosFixos(dataIso).map((intervalo) => ({
+      inicioMinuto: intervalo.start,
+      fimMinuto: intervalo.end,
+    }));
 
     const intervalosIndisponiveis = [
       ...intervalosOcupados,
@@ -582,9 +592,7 @@ async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null) {
       const indisponivel =
         bloqueadoPorRegraTerca ||
         bloqueadoPorRegraQuarta ||
-        intervalosIndisponiveis.some(
-          (intervalo) => atual < intervalo.end && fimServico > intervalo.start,
-        );
+        intervaloSobrepoeDisponibilidade(atual, fimServico, intervalosIndisponiveis);
 
       const botao = document.createElement("button");
 
@@ -700,7 +708,10 @@ async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null) {
 
     atualizarResumoAgendamento();
   } catch (error) {
+    if (requisicao !== renderizarHorarios.requisicao) return;
     console.error("Erro ao carregar horários:", error);
+    localStorage.removeItem("horarioAgendamento");
+    localStorage.removeItem("horaAgendamento");
 
     container.innerHTML = `
       <div class="agendamento-time-state">
@@ -992,39 +1003,19 @@ async function inicializarAgendamento() {
         eventId: idEvento,
       };
 
-      const payload = {
-        nomeCliente,
-        servico,
-        data,
-        horario,
-        observacoes,
-        idServico: serviceId || null,
-        calendarEventId: idEvento, // Incluímos aqui para simplificar
-        duracao: parseInt(serviceDuration, 10),
-      };
-
-      if (reagendarId) {
-        payload.status = "reagendado";
-        payload.reagendadoEm = serverTimestamp();
-        payload.reagendadoPor = user.uid;
-      }
-
       try {
         if (reagendarId) {
-          await updateDoc(doc(db, "agendamentos", reagendarId), payload);
+          const resultadoReagendamento = await reagendarAgendamentoApi(auth, {
+            agendamentoId: reagendarId,
+            servicoId: serviceId,
+            data,
+            horario,
+            observacoes,
+          });
+          idEvento = resultadoReagendamento.calendarEventId || idEvento;
+          payloadWebhook.eventId = idEvento;
         } else {
-          const agendamentoData = {
-            ...payload,
-
-            clienteId: user.uid,
-
-            precoSnapshot: servicePrice,
-            duracaoSnapshot: serviceDuration,
-
-            dataCriacao: serverTimestamp(),
-            status: "agendado",
-          };
-          await addDoc(collection(db, "agendamentos"), agendamentoData);
+          throw new Error("Confirme o novo agendamento pelo fluxo seguro da agenda.");
         }
 
         const googleScriptUrl =
@@ -1078,6 +1069,20 @@ async function inicializarAgendamento() {
       await renderizarHorarios(dataIso, serviceDuration, reagendarId);
     }
   }
+
+  let ultimaAtualizacaoVisibilidade = 0;
+  const atualizarAoRetornar = () => {
+    if (document.visibilityState !== "visible") return;
+    const agora = Date.now();
+    if (agora - ultimaAtualizacaoVisibilidade < 1000) return;
+    ultimaAtualizacaoVisibilidade = agora;
+    const dataAtiva = obterDataIso(
+      obterSelecionado(datas, "agendamento-date--active") || datas[0],
+    );
+    if (dataAtiva) void renderizarHorarios(dataAtiva, serviceDuration, reagendarId);
+  };
+  window.addEventListener("pageshow", atualizarAoRetornar);
+  document.addEventListener("visibilitychange", atualizarAoRetornar);
 
   atualizarResumoAgendamento();
 }

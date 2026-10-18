@@ -115,12 +115,76 @@ class TestAtualizacaoVpsPix(unittest.TestCase):
         self.assertIn("nenhum dump foi restaurado", SOURCE)
         self.assertNotRegex(SOURCE, r"pg_restore\s|psql\s+.*-f\s+.*dump")
 
-    def test_migracao_012_somente_pendente_e_estado_parcial_aborta(self):
-        self.assertRegex(SOURCE, r"partial\) die \"Estado parcial da migracao 012")
+    def test_migracao_012_reconhece_estados_anterior_e_posterior_a_015(self):
+        self.assertIn("agendamento_cancelamentos_check", SOURCE)
+        self.assertIn("agendamento_cancelamentos_calendar_evento_check", SOURCE)
+        self.assertIn("has_legacy_calendar_check", SOURCE)
+        self.assertIn("has_015_calendar_check", SOURCE)
+        self.assertIn("calendar_check_count", SOURCE)
+        for scenario in ("before-015", "after-015"):
+            with self.subTest(scenario=scenario):
+                result = subprocess.run(
+                    ["bash", str(SCRIPT), "--test-migration-012-state", scenario],
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout.strip(), "applied|")
+
+    def test_migracao_012_pendente_continua_aplicavel(self):
         self.assertIn('if [[ "$MIGRATION_012_STATE" == pending ]]; then', SOURCE)
+        result = subprocess.run(
+            ["bash", str(SCRIPT), "--test-migration-012-state", "pending"],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), "pending|")
+
+    def test_migracao_012_parcial_aborta_com_diagnostico_sem_segredos(self):
+        result = subprocess.run(
+            ["bash", str(SCRIPT), "--test-migration-012-state", "partial"],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            result.stdout.strip(),
+            "partial|colunas/tipos/nullability,constraint_calendar_evento_quantidade",
+        )
+        self.assertIn("Nenhuma migracao foi executada e a API nao sera parada", SOURCE)
+        self.assertIn("verificacoes: $MIGRATION_012_DIAGNOSTICS", SOURCE)
+        self.assertNotIn("POSTGRES_PASSWORD", result.stdout)
+        self.assertNotIn("MP_ACCESS_TOKEN", result.stdout)
+
+    def test_migracao_012_rejeita_duas_variantes_da_constraint_calendar(self):
+        result = subprocess.run(
+            ["bash", str(SCRIPT), "--test-migration-012-state", "ambiguous"],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            result.stdout.strip(),
+            "partial|constraint_calendar_evento_quantidade",
+        )
+
+    def test_migracao_012_preserva_verificacoes_estruturais_e_sql(self):
         self.assertIn("c.udt_name = esperado.tipo", SOURCE)
         self.assertIn("c.is_nullable = esperado.nullable", SOURCE)
-        self.assertIn("has_defaults AND has_charge_fk AND has_check_constraints", SOURCE)
+        self.assertIn("has_charge_fk", SOURCE)
+        self.assertIn("has_tipo_check", SOURCE)
+        self.assertIn("has_estado_check", SOURCE)
+        self.assertIn("has_calendar_estado_check", SOURCE)
+        self.assertIn("has_calendar_tentativas_check", SOURCE)
+        self.assertIn("has_tentativas_check", SOURCE)
+        self.assertIn("regexp_replace(lower(pg_get_constraintdef(oid))", SOURCE)
+        self.assertIn("checkcalendar_event_idisnullandcalendar_estado", SOURCE)
+        self.assertIn("checkcalendar_event_idisnotnullorcalendar_estado", SOURCE)
         self.assertIn("pg_get_indexdef(i.indexrelid) LIKE '%(calendar_proxima_tentativa_em, criado_em)%'", SOURCE)
         sql = MIGRATION.read_text(encoding="utf-8")
         self.assertIn("BEGIN;", sql)

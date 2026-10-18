@@ -1,4 +1,4 @@
-const URL_APPS_SCRIPT = "https://script.google.com/macros/s/AKfycbwUwXunAdMAroSPAeMHH2ZQxCOuQage7lmAHH7-llgmeVXug6-Z9KGq6R7NVgQ70XYy/exec";
+const URL_APPS_SCRIPT = "https://script.google.com/macros/s/AKfycbzOxH8NT960XH0HSmuq5MPDzXkijMVVymGAWD_8_eFcNzfTKfadnnoy-plj_GCtPCnFcw/exec";
 
 function obterDataIso(evento) {
   // Na fila real, o SELECT entrega um alias formatado pelo PostgreSQL.
@@ -43,9 +43,13 @@ async function enviarAcaoCalendar(payload, fetcher = fetch) {
   });
   if (!resposta.ok) throw new Error(`Apps Script respondeu HTTP ${resposta.status}`);
   const texto = typeof resposta.text === "function" ? await resposta.text() : "";
+  if (!texto.trim()) throw new Error("Apps Script nao retornou confirmacao");
   if (texto.trim()) {
     let corpo;
     try { corpo = JSON.parse(texto); } catch { corpo = null; }
+    if (!corpo || typeof corpo !== "object" || corpo.ok !== true) {
+      throw new Error("Apps Script nao confirmou sucesso");
+    }
     if (corpo && typeof corpo === "object") {
       const status = String(corpo.status || "").toLowerCase();
       if (
@@ -64,9 +68,52 @@ export async function enviarEventoCalendar(evento, fetcher = fetch) {
   return enviarAcaoCalendar(payload, fetcher);
 }
 
-export async function enviarCancelamentoCalendar(evento, fetcher = fetch) {
+async function obterDetalhesAgendamento(agendamentoId) {
+  const { getApps, initializeApp, applicationDefault } = await import("firebase-admin/app");
+  const { getFirestore } = await import("firebase-admin/firestore");
+  if (!getApps().length) initializeApp({ credential: applicationDefault(), projectId: "isabele-nails-app" });
+  const documento = await getFirestore().collection("agendamentos").doc(agendamentoId).get();
+  if (!documento.exists) {
+    throw Object.assign(new Error("Agendamento ausente no Firestore"), {
+      code: "CALENDAR_AGENDAMENTO_AUSENTE"
+    });
+  }
+  const dados = documento.data();
+  const data = String(dados.data || "");
+  const horario = String(dados.horario || "").slice(0, 5);
+  const nomeCliente = String(dados.nomeCliente || "");
+  const servico = String(dados.servico || "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(data) || !/^\d{2}:\d{2}$/.test(horario) || !nomeCliente || !servico) {
+    throw new Error("Dados insuficientes para localizar evento na agenda");
+  }
+  return { dataInicio: data + "T" + horario + ":00", nomeCliente, servico };
+}
+
+export async function enviarCancelamentoCalendar(evento, fetcher = fetch, obterDados = obterDetalhesAgendamento) {
   const payload = montarPayloadCancelamentoCalendar(evento);
   if (!payload.eventId) throw new Error("Identificador do evento Calendar ausente");
+  if (evento.agendamento_id) {
+    try {
+      // Mantem os dados atuais do Firestore como primeira fonte.
+      Object.assign(payload, await obterDados(evento.agendamento_id));
+    } catch (erro) {
+      if (erro?.code !== "CALENDAR_AGENDAMENTO_AUSENTE") throw erro;
+
+      // Cancelamentos historicos podem nao ter mais o documento no Firestore.
+      // A outbox possui o snapshot original, inclusive depois de dispensada.
+      const data = String(evento.origem_data_servico_iso || "");
+      const horario = String(evento.origem_horario || "").slice(0, 5);
+      const nomeCliente = String(evento.origem_nome_cliente || "").trim();
+      const servico = String(evento.origem_servico || "").trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(data) ||
+          !/^\d{2}:\d{2}$/.test(horario) || !nomeCliente || !servico) {
+        throw new Error("Agendamento ausente no Firestore e sem dados historicos no Calendar");
+      }
+      Object.assign(payload, {
+        nomeCliente, servico, dataInicio: data + "T" + horario + ":00"
+      });
+    }
+  }
   return enviarAcaoCalendar(payload, fetcher);
 }
 
@@ -78,8 +125,16 @@ async function obterEventoPendente(pool) {
       WITH proximo AS (
         SELECT id
         FROM public.pix_calendar_outbox
-        WHERE (status = 'pendente' AND proxima_tentativa_em <= NOW())
-           OR (status = 'enviando' AND bloqueado_ate <= NOW())
+        WHERE (
+          (status = 'pendente' AND proxima_tentativa_em <= NOW())
+          OR (status = 'enviando' AND bloqueado_ate <= NOW())
+        )
+          AND data_servico >= CURRENT_DATE
+          AND NOT EXISTS (
+            SELECT 1 FROM public.agendamento_cancelamentos AS cancelamento
+            WHERE cancelamento.agendamento_id = pix_calendar_outbox.agendamento_id
+              AND cancelamento.estado IN ('concluida', 'solicitada')
+          )
         ORDER BY criado_em
         FOR UPDATE SKIP LOCKED
         LIMIT 1
@@ -138,8 +193,14 @@ async function obterCancelamentoCalendarPendente(pool) {
     await conexao.query("BEGIN");
     const resultado = await conexao.query(`
       WITH proximo AS (
-        SELECT cancelamento.agendamento_id
+        SELECT cancelamento.agendamento_id,
+               origem.nome_cliente AS origem_nome_cliente,
+               origem.servico AS origem_servico,
+               TO_CHAR(origem.data_servico, 'YYYY-MM-DD') AS origem_data_servico_iso,
+               TO_CHAR(origem.horario, 'HH24:MI') AS origem_horario
         FROM public.agendamento_cancelamentos AS cancelamento
+        LEFT JOIN public.pix_calendar_outbox AS origem
+          ON origem.agendamento_id = cancelamento.agendamento_id
         WHERE cancelamento.estado = 'concluida'
           AND cancelamento.calendar_event_id IS NOT NULL
           AND (
@@ -148,15 +209,32 @@ async function obterCancelamentoCalendarPendente(pool) {
             OR (cancelamento.calendar_estado = 'enviando'
               AND cancelamento.calendar_bloqueado_ate <= NOW())
           )
+          -- Apenas criacao em andamento com lease valido impede CANCELAR.
+          -- Uma criacao ainda pendente nao precisa ser enviada primeiro.
           AND NOT EXISTS (
             SELECT 1
             FROM public.pix_calendar_outbox AS criacao
             WHERE criacao.agendamento_id = cancelamento.agendamento_id
-              AND criacao.status <> 'enviado'
+              AND criacao.status = 'enviando'
+              AND criacao.bloqueado_ate > NOW()
           )
         ORDER BY cancelamento.criado_em
         FOR UPDATE OF cancelamento SKIP LOCKED
         LIMIT 1
+      ),
+      dispensadas AS (
+        -- Na mesma transacao, impede criacao atrasada de evento cancelado.
+        UPDATE public.pix_calendar_outbox AS criacao
+        SET status = 'dispensado', bloqueado_ate = NULL,
+            ultimo_erro = NULL, atualizado_em = NOW()
+        FROM proximo
+        WHERE criacao.agendamento_id = proximo.agendamento_id
+          AND (
+            criacao.status = 'pendente'
+            OR (criacao.status = 'enviando'
+                AND (criacao.bloqueado_ate IS NULL OR criacao.bloqueado_ate <= NOW()))
+          )
+        RETURNING criacao.id
       )
       UPDATE public.agendamento_cancelamentos AS fila
       SET calendar_estado = 'enviando',
@@ -165,7 +243,11 @@ async function obterCancelamentoCalendarPendente(pool) {
           atualizado_em = NOW()
       FROM proximo
       WHERE fila.agendamento_id = proximo.agendamento_id
-      RETURNING fila.*
+      RETURNING fila.*,
+                proximo.origem_nome_cliente,
+                proximo.origem_servico,
+                proximo.origem_data_servico_iso,
+                proximo.origem_horario
     `);
     await conexao.query("COMMIT");
     return resultado.rows[0] || null;

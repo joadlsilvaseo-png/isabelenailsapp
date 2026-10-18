@@ -27,6 +27,24 @@ export function identificarNotificacoesAgendamento(anterior, atual) {
         }
       ];
     }
+    if (atual.origemPagamento === "isencao_sinal_pix" && atual.status === "confirmado") {
+      return [
+        {
+          tipo: "confirmacao_isencao_cliente",
+          destinatario: "cliente",
+          titulo: "Agendamento confirmado!",
+          mensagem: `Seu atendimento está confirmado para ${atual.data}, às ${atual.horario}. Não foi necessário pagar sinal PIX.`,
+          destino: "./meu-perfil.html"
+        },
+        {
+          tipo: "novo_agendamento_isento_admin",
+          destinatario: "admin",
+          titulo: "Novo agendamento confirmado",
+          mensagem: `${atual.nomeCliente || "Cliente"} agendou ${atual.servico || "atendimento"} para ${atual.data}, às ${atual.horario}, com isenção de sinal PIX.`,
+          destino: "./admin-agendamentos.html"
+        }
+      ];
+    }
     return [{
       tipo: "novo_agendamento",
       destinatario: "admin",

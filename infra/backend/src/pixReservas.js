@@ -21,6 +21,7 @@ import {
 } from "./pixConciliacao.js";
 import { efetivarAgendamentoPix } from "./pixEfetivacao.js";
 import { calcularSinalServico } from "./pixSinalServico.js";
+import { consultarIsencaoPix } from "./agendamentosIsencaoPix.js";
 
 class ErroReserva extends Error {
   constructor(status, mensagem) {
@@ -187,6 +188,10 @@ export async function criarReservaPix(req, res, pool) {
   }
 
   try {
+    if (await consultarIsencaoPix({ pool, uid })) {
+      throw new ErroReserva(409, "Esta conta tem isenção de sinal PIX; confirme o horário pelo fluxo sem cobrança.");
+    }
+
     const dados = await lerJson(req);
     const { servicoId, data, horario } = dados;
     const nomeCliente =

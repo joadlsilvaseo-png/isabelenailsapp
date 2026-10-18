@@ -19,6 +19,20 @@ let conferindo = false;
 let polling = null;
 let concluido = false;
 const STORAGE_RESERVA_PIX = "isabelePixReserva";
+const STORAGE_CHAVE_ISENTO = "isabeleAgendamentoSemPixChave";
+
+function obterChaveIdempotenciaIsento(usuario, dados) {
+  const assinatura = [usuario.uid, dados.servicoId, dados.data, dados.horario].join("|");
+  try {
+    const salva = JSON.parse(sessionStorage.getItem(STORAGE_CHAVE_ISENTO) || "null");
+    if (salva?.assinatura === assinatura && typeof salva.chave === "string") return salva.chave;
+    const chave = crypto.randomUUID();
+    sessionStorage.setItem(STORAGE_CHAVE_ISENTO, JSON.stringify({ assinatura, chave }));
+    return chave;
+  } catch {
+    return crypto.randomUUID();
+  }
+}
 
 function salvarReservaPix() {
   if (!reservaAtual) return;
@@ -119,17 +133,17 @@ function mensagem(texto, erro = false) {
   status.classList.toggle("im-pix-status--erro", erro);
 }
 
-async function postApi(caminho, dados) {
+async function chamarApi(caminho, { method = "POST", dados } = {}) {
   const usuario = auth.currentUser;
   if (!usuario) throw new Error("Entre na sua conta para reservar o horário.");
   const token = await usuario.getIdToken();
   const resposta = await fetch(`/api${caminho}`, {
-    method: "POST",
+    method,
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify(dados),
+    ...(dados ? { body: JSON.stringify(dados) } : {}),
     cache: "no-store",
   });
   const tipo = resposta.headers.get("content-type") || "";
@@ -154,10 +168,16 @@ async function postApi(caminho, dados) {
     );
   }
   const corpo = await resposta.json();
-  if (!resposta.ok)
-    throw new Error(corpo.erro || `Falha HTTP ${resposta.status}`);
+  if (!resposta.ok) {
+    const erro = new Error(corpo.erro || `Falha HTTP ${resposta.status}`);
+    erro.codigo = corpo.codigo;
+    throw erro;
+  }
   return corpo;
 }
+
+const postApi = (caminho, dados) => chamarApi(caminho, { method: "POST", dados });
+const getApi = (caminho) => chamarApi(caminho, { method: "GET" });
 
 function selecionarDados() {
   const servicoId = params.get("id");
@@ -241,6 +261,8 @@ function concluirAgendamento() {
   if (concluido) return;
   concluido = true;
   pararConsulta();
+  localStorage.removeItem("isabeleAgendamentoSemPix");
+  localStorage.removeItem("isabeleAgendamentoSemPixId");
   mensagem("Pagamento identificado! Seu horário foi confirmado.");
   localStorage.setItem("dataAgendamento", reservaAtual.data);
   localStorage.setItem("dataAgendamentoISO", reservaAtual.data);
@@ -320,9 +342,47 @@ async function iniciarCheckout() {
   btnRepetir.hidden = true;
   caixaPix.hidden = true;
   try {
-    mensagem("Preparando a reserva e gerando o PIX de teste...");
+    mensagem("Verificando a autorização para o agendamento...");
+    const dados = selecionarDados();
+
+    // O backend revalida a permissão ao confirmar; esta consulta só escolhe
+    // qual caminho apresentar. O fluxo PIX continua sendo o padrão.
+    const permissao = await getApi("/agendamentos/isencao");
+    if (permissao.isentaSinalPix === true) {
+      try {
+        const agendamento = await postApi("/agendamentos/sem-pix", {
+          servicoId: dados.servicoId,
+          data: dados.data,
+          horario: dados.horario,
+          observacoes: document.querySelector("#agendamento-notes")?.value || "",
+          chaveIdempotencia: obterChaveIdempotenciaIsento(auth.currentUser, dados),
+        });
+        localStorage.setItem("dataAgendamento", dados.data);
+        localStorage.setItem("dataAgendamentoISO", dados.data);
+        localStorage.setItem("horaAgendamento", dados.horario);
+        localStorage.setItem("horarioAgendamento", dados.horario);
+        localStorage.setItem("nomeCliente", dados.nome);
+        localStorage.setItem("nomeUsuario", dados.nome);
+        localStorage.setItem("servicoAgendamento", dados.nomeServico);
+        localStorage.setItem("observacoesAgendamento", document.querySelector("#agendamento-notes")?.value?.trim() || "");
+        localStorage.setItem("isabeleAgendamentoSemPix", "true");
+        localStorage.setItem("isabeleAgendamentoSemPixId", agendamento.agendamentoId);
+        sessionStorage.removeItem(STORAGE_CHAVE_ISENTO);
+
+        // A sincronizacao Calendar e executada de forma duravel pelo backend.
+        // Evita dupla criacao de eventos por requisicao do navegador.
+
+        modal.close();
+        window.location.assign("confirmacao.html");
+        return;
+      } catch (erro) {
+        if (erro.codigo !== "ISENCAO_INATIVA") throw erro;
+        // Uma revogação ocorrida entre a consulta e a gravação volta ao PIX.
+      }
+    }
+
+    mensagem("Preparando a reserva e gerando o PIX...");
     if (!reservaAtual) {
-      const dados = selecionarDados();
       const criada = await postApi("/pix/reservar", {
         servicoId: dados.servicoId,
         nomeCliente: dados.nome,
@@ -346,8 +406,8 @@ async function iniciarCheckout() {
   }
 }
 
-// Captura antes do listener legado de agendamento.js, que faz addDoc
-// diretamente no Firestore. Reagendamentos e Admin nao sao interceptados.
+// Intercepta novos agendamentos de clientes. Reagendamentos, inclusive os
+// iniciados pela administradora, seguem pela validação segura da API.
 if (novoAgendamentoCliente) {
   document.addEventListener(
     "click",

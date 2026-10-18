@@ -19,6 +19,8 @@ import {
    ============================================================ */
 
 let todosAgendamentos = [];
+let clientesIsentasSinalPix = new Set();
+let clientesCadastradas = [];
 let agendamentosFiltrados = [];
 let agendamentoSelecionadoId = null;
 
@@ -107,6 +109,8 @@ function carregarElementos() {
   elements.modalContent = document.getElementById("admin-modal-content");
 
   elements.modalActions = document.getElementById("admin-modal-actions");
+  elements.clientesPixList = document.getElementById("admin-clientes-pix-list");
+  elements.clientesPixSearch = document.getElementById("admin-clientes-pix-search");
 }
 
 /* ============================================================
@@ -565,11 +569,24 @@ async function carregarAgendamentos() {
   }
 
   try {
-    const [agendamentosSnapshot, clientesSnapshot] = await Promise.all([
+    const usuario = auth.currentUser;
+    if (!usuario) throw new Error("Sessão administrativa encerrada.");
+    const token = await usuario.getIdToken();
+    const [agendamentosSnapshot, clientesSnapshot, respostaIsencoes] = await Promise.all([
       getDocs(collection(db, "agendamentos")),
 
       getDocs(collection(db, "clientes")),
+      fetch("/api/admin/isencoes-sinal-pix", {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      }),
     ]);
+
+    const dadosIsencoes = await respostaIsencoes.json().catch(() => ({}));
+    if (!respostaIsencoes.ok) {
+      throw new Error(dadosIsencoes.erro || "Não foi possível carregar as autorizações de sinal PIX.");
+    }
+    clientesIsentasSinalPix = new Set(dadosIsencoes.clientes || []);
 
     const clientesPorId = new Map(
       clientesSnapshot.docs.map((documentoCliente) => [
@@ -577,6 +594,11 @@ async function carregarAgendamentos() {
         documentoCliente.data(),
       ]),
     );
+    clientesCadastradas = clientesSnapshot.docs
+      .map((documentoCliente) => ({ id: documentoCliente.id, ...documentoCliente.data() }))
+      .filter((cliente) => String(cliente.role || "").toLowerCase() !== "admin")
+      .sort((a, b) => String(a.nome || a.nomeCliente || a.email || "").localeCompare(String(b.nome || b.nomeCliente || b.email || ""), "pt-BR"));
+    renderizarClientesPix();
 
     todosAgendamentos = agendamentosSnapshot.docs.map((documento) => {
       const dadosAgendamento = documento.data();
@@ -614,6 +636,7 @@ async function carregarAgendamentos() {
           ["foto", "photoURL", "fotoPerfil"],
           obterFotoCliente(dadosAgendamento),
         ),
+        isentaSinalPix: clientesIsentasSinalPix.has(clienteId),
       };
     });
 
@@ -632,6 +655,43 @@ async function carregarAgendamentos() {
       elements.refreshButton.disabled = false;
     }
   }
+}
+
+function renderizarClientesPix() {
+  if (!elements.clientesPixList) return;
+  const filtro = normalizarTexto(elements.clientesPixSearch?.value || "");
+  const clientes = clientesCadastradas.filter((cliente) => {
+    const texto = normalizarTexto([
+      cliente.nome, cliente.nomeCliente, cliente.email, cliente.telefone,
+      cliente.celular, cliente.whatsapp,
+    ].filter(Boolean).join(" "));
+    return !filtro || texto.includes(filtro);
+  });
+
+  if (!clientes.length) {
+    elements.clientesPixList.innerHTML = '<p class="admin-clientes-pix-empty">Nenhuma cliente encontrada.</p>';
+    return;
+  }
+
+  elements.clientesPixList.innerHTML = clientes.map((cliente) => {
+    const nome = obterPrimeiroValor(cliente, ["nome", "nomeCliente"], "Cliente");
+    const contato = obterPrimeiroValor(cliente, ["email", "telefone", "celular", "whatsapp"], "Cadastro de cliente");
+    const ativa = clientesIsentasSinalPix.has(cliente.id);
+    return `
+      <article class="admin-cliente-pix-card">
+        <div class="admin-cliente-pix-identidade">
+          <strong>${escaparHTML(nome)}</strong>
+          <span>${escaparHTML(contato)}</span>
+        </div>
+        <label class="admin-pix-exemption-control" for="cliente-isencao-${escaparHTML(cliente.id)}">
+          <input id="cliente-isencao-${escaparHTML(cliente.id)}" type="checkbox" data-cliente-isencao="${escaparHTML(cliente.id)}" ${ativa ? "checked" : ""}>
+          <span>Isenta de sinal PIX</span>
+        </label>
+        <p>Permitir que esta cliente realize agendamentos sem pagamento antecipado.</p>
+        <span class="admin-cliente-pix-feedback" role="status" aria-live="polite"></span>
+      </article>
+    `;
+  }).join("");
 }
 
 function ordenarAgendamentos() {
@@ -1869,6 +1929,41 @@ function configurarEventos() {
     buscaAtual = elements.searchInput.value.trim();
 
     aplicarFiltros();
+  });
+
+  elements.clientesPixSearch?.addEventListener("input", renderizarClientesPix);
+  elements.clientesPixList?.addEventListener("change", async (event) => {
+    const controle = event.target.closest("[data-cliente-isencao]");
+    if (!controle) return;
+    const clienteUid = controle.dataset.clienteIsencao;
+    const feedback = controle.closest(".admin-cliente-pix-card")?.querySelector(".admin-cliente-pix-feedback");
+    const valorAnterior = !controle.checked;
+    controle.disabled = true;
+    if (feedback) feedback.textContent = "Salvando autorização…";
+    try {
+      const usuario = auth.currentUser;
+      if (!usuario) throw new Error("Sessão administrativa encerrada.");
+      const token = await usuario.getIdToken();
+      const resposta = await fetch("/api/admin/clientes/isencao-sinal-pix", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ clienteUid, ativa: controle.checked }),
+        cache: "no-store",
+      });
+      const resultado = await resposta.json().catch(() => ({}));
+      if (!resposta.ok) throw new Error(resultado.erro || "Não foi possível salvar a autorização.");
+      if (resultado.ativa) clientesIsentasSinalPix.add(clienteUid);
+      else clientesIsentasSinalPix.delete(clienteUid);
+      todosAgendamentos.forEach((item) => {
+        if (item.clienteId === clienteUid) item.isentaSinalPix = resultado.ativa;
+      });
+      if (feedback) feedback.textContent = resultado.ativa ? "Autorização ativa." : "Autorização revogada.";
+    } catch (erro) {
+      controle.checked = valorAnterior;
+      if (feedback) feedback.textContent = erro.message;
+    } finally {
+      controle.disabled = false;
+    }
   });
 
   elements.dateFilter?.addEventListener("change", () => {

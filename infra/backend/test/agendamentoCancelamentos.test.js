@@ -20,7 +20,7 @@ const COBRANCA_ID = "11111111-2222-4333-8444-555555555555";
 const UID_CLIENTE = "cliente-123";
 const UID_ADMIN = "admin-123";
 
-function fixture({ tipo = "cliente", falharSql = null, falharFirestore = false } = {}) {
+function fixture({ tipo = "cliente", falharSql = null, falharFirestore = false, semPix = false } = {}) {
   const dados = {
     status: "confirmado",
     clienteId: UID_CLIENTE,
@@ -32,9 +32,13 @@ function fixture({ tipo = "cliente", falharSql = null, falharFirestore = false }
     [`agendamentos:${AGENDAMENTO_ID}`, structuredClone(dados)],
     [`usuarios:${UID_ADMIN}`, { role: "admin", ativo: true }]
   ]);
+  if (semPix) {
+    delete dados.pixCobrancaId;
+    docs.set(`agendamentos:${AGENDAMENTO_ID}`, structuredClone(dados));
+  }
   const state = {
-    charge: { id: COBRANCA_ID, estado: "paga", agendamento_id: AGENDAMENTO_ID },
-    reservation: { id: "reserva-1", cobranca_id: COBRANCA_ID, estado: "confirmada", agendamento_id: AGENDAMENTO_ID, inicio_minuto: 600, fim_minuto: 660 },
+    charge: semPix ? null : { id: COBRANCA_ID, estado: "paga", agendamento_id: AGENDAMENTO_ID },
+    reservation: { id: "reserva-1", cobranca_id: semPix ? null : COBRANCA_ID, estado: "confirmada", agendamento_id: AGENDAMENTO_ID, inicio_minuto: 600, fim_minuto: 660 },
     cancellation: null,
     calendarAttempts: 0,
     failAt: falharSql,
@@ -122,6 +126,9 @@ function fixture({ tipo = "cliente", falharSql = null, falharFirestore = false }
             }] };
           }
           if (normalized.startsWith("update public.pix_reservas")) {
+            if (normalized.includes("cobranca_id is null") && state.reservation.cobranca_id !== null) {
+              return { rowCount: 0, rows: [] };
+            }
             if (state.failAt === "reservation") {
               state.failAt = null;
               throw new Error("PostgreSQL unavailable during reservation release");
@@ -360,6 +367,109 @@ test("Calendar usa o mesmo ID estável e retry repete a ação CANCELAR", async 
   assert.deepEqual(payload, { acao: "CANCELAR", eventId: "evt_abc" });
 });
 
+test("Calendar dispensa criacao pendente e libera cancelamento na mesma transacao", async () => {
+  const sqls = [];
+  const pool = {
+    async connect() {
+      return {
+        async query(sql) {
+          sqls.push(sql);
+          if (sql.includes("WITH proximo AS")) return { rows: [{
+            agendamento_id: AGENDAMENTO_ID, calendar_event_id: "evt_teste",
+            calendar_tentativas: 1
+          }] };
+          return { rows: [] };
+        },
+        release() {}
+      };
+    },
+    async query() { return { rowCount: 1, rows: [] }; }
+  };
+  let enviados = 0;
+  const resultado = await processarProximoCancelamentoCalendar(pool, async () => { enviados++; });
+  assert.equal(resultado.enviado, true);
+  assert.equal(enviados, 1);
+  const selecao = sqls.find(sql => sql.includes("WITH proximo AS"));
+  assert.match(selecao, /criacao\.status = 'enviando'/);
+  assert.match(selecao, /criacao\.bloqueado_ate > NOW\(\)/);
+  assert.match(selecao, /UPDATE public\.pix_calendar_outbox AS criacao/);
+  assert.match(selecao, /status = 'dispensado'/);
+  assert.doesNotMatch(selecao, /criacao\.status <> 'enviado'/);
+});
+
+test("Calendar processa cancelamento sem criacao na outbox", async () => {
+  const pool = {
+    async connect() {
+      return {
+        async query(sql) {
+          if (sql.includes("WITH proximo AS")) return { rows: [{
+            agendamento_id: AGENDAMENTO_ID,
+            calendar_event_id: "evt_sem_criacao", calendar_tentativas: 1
+          }] };
+          return { rows: [] };
+        },
+        release() {}
+      };
+    },
+    async query() { return { rowCount: 1, rows: [] }; }
+  };
+  const resultado = await processarProximoCancelamentoCalendar(pool, async () => {});
+  assert.equal(resultado.enviado, true);
+});
+
+test("Calendar usa snapshot historico se documento desapareceu do Firestore", async () => {
+  let payload;
+  const evento = {
+    agendamento_id: AGENDAMENTO_ID, calendar_event_id: "evt_historico",
+    origem_nome_cliente: "Cliente Antigo",
+    origem_servico: "Manicure",
+    origem_data_servico_iso: "2026-11-04",
+    origem_horario: "10:00"
+  };
+  await enviarCancelamentoCalendar(evento,
+    async (_url, options) => {
+      payload = JSON.parse(options.body);
+      return { ok: true, status: 200, async text() { return '{"ok":true,"status":"CANCELADO"}'; } };
+    },
+    async () => { throw Object.assign(new Error("Agendamento ausente no Firestore"), { code: "CALENDAR_AGENDAMENTO_AUSENTE" }); }
+  );
+  assert.deepEqual(payload, {
+    acao: "CANCELAR", eventId: "evt_historico",
+    nomeCliente: "Cliente Antigo", servico: "Manicure",
+    dataInicio: "2026-11-04T10:00:00"
+  });
+});
+
+test("Calendar nao confirma cancelamento sem Firestore nem snapshot", async () => {
+  let chamadas = 0;
+  await assert.rejects(
+    enviarCancelamentoCalendar(
+      { agendamento_id: AGENDAMENTO_ID, calendar_event_id: "evt_sem_dados" },
+      async () => { chamadas++; throw new Error("Nao deveria enviar"); },
+      async () => { throw Object.assign(new Error("Agendamento ausente no Firestore"), { code: "CALENDAR_AGENDAMENTO_AUSENTE" }); }
+    ),
+    /sem dados historicos/
+  );
+  assert.equal(chamadas, 0);
+});
+
+test("Calendar nao mascara erros de acesso ao Firestore com snapshot", async () => {
+  let chamadas = 0;
+  await assert.rejects(
+    enviarCancelamentoCalendar(
+      {
+        agendamento_id: AGENDAMENTO_ID, calendar_event_id: "evt_falha",
+        origem_nome_cliente: "Cliente", origem_servico: "Manicure",
+        origem_data_servico_iso: "2026-11-04", origem_horario: "10:00"
+      },
+      async () => { chamadas++; throw new Error("Nao deveria enviar"); },
+      async () => { throw new Error("Firestore indisponivel"); }
+    ),
+    /Firestore indisponivel/
+  );
+  assert.equal(chamadas, 0);
+});
+
 test("falha informada pelo Apps Script agenda nova tentativa sem request real", async () => {
   await assert.rejects(enviarCancelamentoCalendar(
     { calendar_event_id: "evt_abc" },
@@ -367,7 +477,7 @@ test("falha informada pelo Apps Script agenda nova tentativa sem request real", 
       assert.equal(JSON.parse(options.body).eventId, "evt_abc");
       return { ok: true, status: 200, async text() { return JSON.stringify({ success: false, error: "calendar unavailable" }); } };
     }
-  ), /Apps Script informou falha/);
+  ), /Apps Script nao confirmou sucesso/);
 
   let estadoFila = "enviando";
   let requestCount = 0;
@@ -411,6 +521,18 @@ test("agendamento antigo sem PIX ainda pode ser cancelado pelo fluxo existente",
   assert.equal(result.concluido, true);
   assert.equal(f.state.docs.get(`agendamentos:${AGENDAMENTO_ID}`).status, "cancelado_cliente");
   assert.equal(f.state.reservation.estado, "confirmada");
+});
+
+test("cancelamento de agendamento sem PIX libera a reserva persistida sem alterar cobranças", async () => {
+  const f = fixture({ semPix: true });
+  const result = await solicitarCancelamentoAgendamento({
+    pool: f.pool, firestore: f.firestore, uid: f.uid,
+    agendamentoId: AGENDAMENTO_ID, acao: f.action, dependencies: f.dependencies
+  });
+  assert.equal(result.concluido, true);
+  assert.equal(f.state.docs.get(`agendamentos:${AGENDAMENTO_ID}`).status, "cancelado_cliente");
+  assert.equal(f.state.reservation.estado, "cancelada");
+  assert.equal(f.state.charge, null);
 });
 
 test("polling de cobrança paga não tenta confirmar novamente uma reserva cancelada", async () => {
@@ -462,4 +584,27 @@ test("cliente não cancela agendamento alheio e usuário sem perfil ativo não c
     pool: admin.pool, firestore: admin.firestore, uid: UID_ADMIN,
     agendamentoId: AGENDAMENTO_ID, acao: "cancelar_admin", dependencies: admin.dependencies
   }), /Acesso administrativo negado/);
+});
+
+
+test("Apps Script exige confirmacao JSON de sucesso antes de registrar cancelamento", async () => {
+  await assert.rejects(enviarCancelamentoCalendar(
+    { calendar_event_id: "evt_abc" },
+    async () => ({ ok: true, status: 200, async text() { return "CANCELADO COM SUCESSO"; } })
+  ), /Apps Script nao confirmou sucesso/);
+
+  let enviado;
+  const resultado = await enviarCancelamentoCalendar(
+    { agendamento_id: "isento_teste", calendar_event_id: "evt_isento_teste" },
+    async (_url, opcoes) => {
+      enviado = JSON.parse(opcoes.body);
+      return { ok: true, status: 200, async text() { return '{"ok":true,"status":"CANCELADO"}'; } };
+    },
+    async () => ({ nomeCliente: "joad lima", servico: "Manicure e Pedicure", dataInicio: "2026-11-04T09:00:00" })
+  );
+  assert.equal(resultado.eventId, "evt_isento_teste");
+  assert.deepEqual(enviado, {
+    acao: "CANCELAR", eventId: "evt_isento_teste",
+    nomeCliente: "joad lima", servico: "Manicure e Pedicure", dataInicio: "2026-11-04T09:00:00"
+  });
 });

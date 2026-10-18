@@ -203,6 +203,18 @@ export async function processarCancelamentoAgendamento(pool, agendamentoId, depe
           throw new Error("A reserva PIX não pôde ser liberada com segurança");
         }
       }
+    } else {
+      // Agendamentos isentos e antigos sem PIX também possuem uma reserva
+      // confirmada quando passaram pela API. A liberação fica na mesma
+      // transação SQL do cancelamento e só ocorre junto da mudança no Firestore.
+      await conexao.query(`
+        UPDATE public.pix_reservas
+        SET estado = 'cancelada', atualizado_em = NOW()
+        WHERE agendamento_id = $1
+          AND cliente_uid = $2
+          AND cobranca_id IS NULL
+          AND estado = 'confirmada'
+      `, [agendamentoId, solicitacao.cliente_uid]);
     }
 
     try {

@@ -16,6 +16,8 @@ import { iniciarWorkerPixCalendar } from "./pixCalendarWorker.js";
 import { atenderConfirmacaoAgendamentoPix } from "./pixAgendamentoConfirmacao.js";
 import { iniciarWorkerPixWebhook } from "./pixWebhookWorker.js";
 import { iniciarWorkerPixPolling } from "./pixPollingWorker.js";
+import { atenderAgendamentoIsencao } from "./agendamentosIsencaoPix.js";
+import { consultarDisponibilidadePix } from "./pixDisponibilidadeApi.js";
 
 const { Pool } = pg;
 
@@ -72,9 +74,25 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if ([
+    "/agendamentos/isencao",
+    "/agendamentos/sem-pix",
+    "/agendamentos/reagendar",
+    "/admin/isencoes-sinal-pix",
+    "/admin/clientes/isencao-sinal-pix",
+  ].includes(new URL(req.url, "http://localhost").pathname)) {
+    await atenderAgendamentoIsencao(req, res, pool);
+    return;
+  }
+
   // PIX - Reserva temporaria autenticada
   if (req.method === "POST" && req.url === "/pix/reservar") {
     await criarReservaPix(req, res, pool);
+    return;
+  }
+
+  if (req.method === "GET" && new URL(req.url, "http://localhost").pathname === "/pix/disponibilidade") {
+    await consultarDisponibilidadePix(req, res, pool);
     return;
   }
 

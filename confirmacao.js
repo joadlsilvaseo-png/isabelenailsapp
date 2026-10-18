@@ -174,12 +174,26 @@ document.addEventListener("DOMContentLoaded", () => {
     successTitle.textContent = `Tudo certo, ${primeiroNome}!`;
   }
 
-  const reservaPixId = localStorage.getItem("isabelePixReservaId");
+  const agendamentoSemPix = localStorage.getItem("isabeleAgendamentoSemPix") === "true";
+  const reservaPixId = agendamentoSemPix ? null : localStorage.getItem("isabelePixReservaId");
   if (reservaPixId) {
     if (successTitle) successTitle.textContent = "Verificando pagamento";
     if (eyebrow) eyebrow.textContent = "Confirmação PIX";
     if (intro) intro.textContent = "Consultando o estado atualizado do pagamento e do agendamento.";
     carregarConfirmacaoPix(reservaPixId);
+  }
+
+  if (agendamentoSemPix) {
+    localStorage.removeItem("isabeleAgendamentoSemPix");
+    localStorage.removeItem("isabeleAgendamentoSemPixId");
+    localStorage.removeItem("isabelePixReservaId");
+  }
+
+  if (agendamentoSemPix) {
+    if (successTitle) successTitle.textContent = "Agendamento confirmado!";
+    if (eyebrow) eyebrow.textContent = "Agendamento confirmado";
+    if (intro) intro.textContent = "Seu horário foi confirmado sem pagamento antecipado, conforme a autorização da Isabele Mariana Nails.";
+    if (statusBadge) statusBadge.lastChild.textContent = " Agendamento confirmado sem sinal PIX.";
   }
 
   if (btnWhatsapp) {
