@@ -452,15 +452,6 @@ function obterIntervalosBloqueadosFixos(dataIso) {
     ];
   }
 
-  if (diaSemana === 4) {
-    return [
-      {
-        start: timeToMins("09:00"),
-        end: timeToMins("12:00"),
-      },
-    ];
-  }
-
   return [];
 }
 async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null) {
