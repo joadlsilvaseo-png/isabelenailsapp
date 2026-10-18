@@ -1,6 +1,6 @@
 import { auth, db } from "./firebase-config.js";
 import { consultarDisponibilidadePix, reagendarAgendamentoApi } from "./agendamentosApi.js";
-import { consultarIntervalosDisponibilidade, intervaloSobrepoeDisponibilidade } from "./agendamentoDisponibilidade.js";
+import { consultarIntervalosDisponibilidade, intervaloSobrepoeDisponibilidade, obterLimitesAtendimentoSemanal } from "./agendamentoDisponibilidade.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
 import {
   collection,
@@ -539,11 +539,8 @@ async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null) {
       ...intervalosBloqueadosFixos,
     ];
 
-    const minAbertura = timeToMins("09:00");
-
-    const minUltimoInicio = timeToMins("18:00");
-
-    const minFechamento = timeToMins("20:00");
+    const { minAbertura, minUltimoInicio, minFechamento, permitirInicioAoMeioDia } =
+      obterLimitesAtendimentoSemanal(diaSemanaSelecionado);
 
     const horariosManha = [];
     const horariosTarde = [];
@@ -559,7 +556,7 @@ async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null) {
 
       const horarioTexto = minsToTime(atual);
 
-      if (horarioTexto === "12:00" || horarioTexto === "12:30") {
+      if (!permitirInicioAoMeioDia && (horarioTexto === "12:00" || horarioTexto === "12:30")) {
         continue;
       }
 
@@ -664,7 +661,8 @@ async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null) {
 
     criarGrupoHorario("Manhã", "Das 9h às 12h", horariosManha);
 
-    criarGrupoHorario("Tarde", "Das 12h às 18h", horariosTarde);
+    criarGrupoHorario("Tarde", diaSemanaSelecionado === 4 || diaSemanaSelecionado === 5
+      ? "Inícios até 19h" : "Das 12h às 18h", horariosTarde);
 
     if (availabilityElement) {
       availabilityElement.textContent =
