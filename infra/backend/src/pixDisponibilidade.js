@@ -55,11 +55,15 @@ export function validarHorarioPix(dataIso, horario, duracao) {
     return horarioInvalido("Dia sem atendimento");
   }
 
-  if (inicio < 540 || inicio > 1080 || inicio % 30 !== 0 || fim > 1200) {
+  const horarioEstendido = diaSemana === 4 || diaSemana === 5;
+  const abertura = diaSemana === 4 ? 660 : 540;
+  const ultimoInicio = horarioEstendido ? 1140 : 1080;
+  const fechamento = horarioEstendido ? 1260 : 1200;
+  if (inicio < abertura || inicio > ultimoInicio || inicio % 30 !== 0 || fim > fechamento) {
     return horarioInvalido("Fora do horario permitido");
   }
 
-  if (horario === "12:00" || horario === "12:30") {
+  if (!horarioEstendido && (horario === "12:00" || horario === "12:30")) {
     return horarioInvalido("Inicio indisponivel");
   }
 
@@ -68,11 +72,6 @@ export function validarHorarioPix(dataIso, horario, duracao) {
     if (inicio < 810 || inicio > 930 || fim > 1050) {
       return horarioInvalido("Horario indisponivel na terca");
     }
-  }
-
-  // Quinta: bloqueio das 09h ate 12h.
-  if (diaSemana === 4 && inicio < 720) {
-    return horarioInvalido("Horario indisponivel na quinta");
   }
 
   // Quarta: mesmas janelas especiais do aplicativo.
