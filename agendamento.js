@@ -530,7 +530,7 @@ async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null) {
       ...intervalosBloqueadosFixos,
     ];
 
-    const { minAbertura, minUltimoInicio, minFechamento, permitirInicioAoMeioDia } =
+    const { minAbertura, minUltimoInicio, minFechamento } =
       obterLimitesAtendimentoSemanal(diaSemanaSelecionado);
 
     const horariosManha = [];
@@ -547,7 +547,7 @@ async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null) {
 
       const horarioTexto = minsToTime(atual);
 
-      if (!permitirInicioAoMeioDia && (horarioTexto === "12:00" || horarioTexto === "12:30")) {
+      if (horarioTexto === "12:00" || horarioTexto === "12:30") {
         continue;
       }
 
@@ -650,9 +650,9 @@ async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null) {
       container.appendChild(periodo);
     }
 
-    criarGrupoHorario("Manhã", "Das 9h às 12h", horariosManha);
+    criarGrupoHorario("Manhã", diaSemanaSelecionado === 4 ? "Das 11h às 12h" : "Das 9h às 12h", horariosManha);
 
-    criarGrupoHorario("Tarde", diaSemanaSelecionado === 4 || diaSemanaSelecionado === 5
+    criarGrupoHorario("Tarde", [4, 5, 6].includes(diaSemanaSelecionado)
       ? "Inícios até 19h" : "Das 12h às 18h", horariosTarde);
 
     if (availabilityElement) {
