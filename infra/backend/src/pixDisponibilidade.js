@@ -55,7 +55,7 @@ export function validarHorarioPix(dataIso, horario, duracao) {
     return horarioInvalido("Dia sem atendimento");
   }
 
-  const horarioEstendido = diaSemana === 4 || diaSemana === 5;
+  const horarioEstendido = diaSemana === 4 || diaSemana === 5 || diaSemana === 6;
   const abertura = diaSemana === 4 ? 660 : 540;
   const ultimoInicio = horarioEstendido ? 1140 : 1080;
   const fechamento = horarioEstendido ? 1260 : 1200;
@@ -63,7 +63,7 @@ export function validarHorarioPix(dataIso, horario, duracao) {
     return horarioInvalido("Fora do horario permitido");
   }
 
-  if (!horarioEstendido && (horario === "12:00" || horario === "12:30")) {
+  if (horario === "12:00" || horario === "12:30") {
     return horarioInvalido("Inicio indisponivel");
   }
 
