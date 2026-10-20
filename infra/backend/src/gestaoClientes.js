@@ -3,7 +3,7 @@ const LIMITE_PADRAO = 20;
 const LIMITE_MAXIMO = 50;
 const LOTE_BUSCA = 100;
 const LIMITE_VARREDURA = 500;
-const CANCELADOS = new Set(["cancelado", "cancelada", "cancelado_cliente", "cancelado_profissional", "cancelled", "canceled"]);
+const CANCELADOS = new Set(["cancelado", "cancelada", "cancelado_cliente", "cancelado_profissional", "cancelled", "canceled", "reserva pix expirada", "reserva pix cancelada"]);
 const CONCLUIDOS = new Set(["concluido", "concluida", "realizado", "realizada", "finalizado", "finalizada", "completed"]);
 
 function responder(res, status, dados) {
