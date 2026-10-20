@@ -201,7 +201,22 @@ function fixture({
     firestore,
     pool,
     state,
-    dependencies: { firestore, verificarUsuario: async () => ADMIN },
+    dependencies: {
+      firestore,
+      verificarUsuario: async () => ADMIN,
+      auth: {
+        async getUsers(identificadores) {
+          return {
+            users: identificadores
+              .filter(({ uid }) => uid === CLIENT)
+              .map(({ uid }) => ({
+                uid,
+                photoURL: "https://lh3.googleusercontent.com/foto-cliente",
+              })),
+          };
+        },
+      },
+    },
   };
 }
 
@@ -237,6 +252,10 @@ test("listagem exclui admins, permite pesquisa e paginação com limite", async 
   assert.equal(primeiro.body.items.length, 1);
   assert.equal(primeiro.body.items[0].id, "cliente-1");
   assert.equal(primeiro.body.items[0].hasCustomPhoto, true);
+  assert.equal(
+    primeiro.body.items[0].googlePhotoUrl,
+    "https://lh3.googleusercontent.com/foto-cliente",
+  );
   assert.equal(primeiro.body.hasMore, true);
   assert.equal("role" in primeiro.body.items[0], false);
   const segundaPagina = response();
@@ -249,6 +268,7 @@ test("listagem exclui admins, permite pesquisa e paginação com limite", async 
   assert.equal(segundaPagina.status, 200);
   assert.equal(segundaPagina.body.items[0].id, "cliente-2");
   assert.equal(segundaPagina.body.items[0].hasCustomPhoto, false);
+  assert.equal(segundaPagina.body.items[0].googlePhotoUrl, null);
 
   const busca = response();
   await atenderGestaoClientes(
@@ -275,6 +295,10 @@ test("perfil agrega histórico, próximos atendimentos e reserva PIX sem duplica
   );
   assert.equal(res.status, 200);
   assert.equal(res.body.client.id, CLIENT);
+  assert.equal(
+    res.body.client.googlePhotoUrl,
+    "https://lh3.googleusercontent.com/foto-cliente",
+  );
   assert.equal(res.body.completedCount, 1);
   assert.equal(res.body.lastVisit, "2025-02-10");
   assert.equal(
@@ -431,4 +455,58 @@ test("reservas PIX expiradas e canceladas com data futura ficam no histórico", 
     res.body.history.some((item) => item.status === "Reserva PIX cancelada"),
     true,
   );
+});
+
+test("foto Google só aceita origem HTTPS conhecida, sem expor URL arbitrária", async () => {
+  const f = fixture({
+    customers: {
+      [CLIENT]: {
+        nome: "Ana",
+        foto: "https://evil.example/roubo",
+      },
+      "cliente-2": {
+        nome: "Beatriz",
+        photoURL: "https://lh3.googleusercontent.com/foto-valida",
+      },
+    },
+  });
+  f.dependencies.auth = {
+    async getUsers() {
+      return { users: [] };
+    },
+  };
+  const resposta = response();
+  await atenderGestaoClientes(
+    req("GET", "/admin/clientes?limit=5"),
+    resposta,
+    f.pool,
+    f.dependencies,
+  );
+  assert.equal(resposta.status, 200);
+  const ana = resposta.body.items.find((item) => item.id === CLIENT);
+  const bia = resposta.body.items.find((item) => item.id === "cliente-2");
+  assert.equal(ana.googlePhotoUrl, null);
+  assert.equal(
+    bia.googlePhotoUrl,
+    "https://lh3.googleusercontent.com/foto-valida",
+  );
+});
+
+test("falha ao consultar foto Google não bloqueia a gestão de clientes", async () => {
+  const f = fixture();
+  f.dependencies.auth = {
+    async getUsers() {
+      throw new Error("Serviço de foto indisponível");
+    },
+  };
+  const resposta = response();
+  await atenderGestaoClientes(
+    req("GET", "/admin/clientes?limit=5"),
+    resposta,
+    f.pool,
+    f.dependencies,
+  );
+  assert.equal(resposta.status, 200);
+  assert.equal(resposta.body.items[0].hasCustomPhoto, true);
+  assert.equal(resposta.body.items[0].googlePhotoUrl, null);
 });
