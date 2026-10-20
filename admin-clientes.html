@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -20,21 +21,45 @@
   <link rel="stylesheet" href="admin-clientes.css?v=1.0.0">
   <link rel="stylesheet" href="admin-clientes-live.css?v=1.0.0">
   <link rel="stylesheet" href="admin-clientes-isabele.css?v=1.0.0">
+  <link rel="stylesheet" href="admin-bottom-nav.css?v=1">
 </head>
+
 <body data-page="admin-clientes" data-access-state="loading">
   <div class="app-shell">
     <header class="page-header">
       <nav class="top-bar" aria-label="Navegação administrativa">
-        <a href="principal.html" class="back-button" aria-label="Voltar para a gestão"><span aria-hidden="true">‹</span></a>
-        <a href="principal.html" class="brand" aria-label="Isabele Mariana Nails, página principal">
-          <img class="brand-logo" src="./assets/logo-isabele-mariana.png" alt="Isabele Mariana Nails">
-          <span class="brand-text"><strong>Isabele Mariana</strong><small>Nails · Área administrativa</small></span>
+
+        <a href="principal.html" class="back-button" aria-label="Voltar para a gestão">
+
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M15 18L9 12L15 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+
         </a>
-        <button id="logout-button" class="admin-logout" type="button">Sair</button>
+
+        <div class="admin-top-title">
+          <span>Gestão</span>
+          <h1>Clientes</h1>
+        </div>
+
+        <button id="logout-button" class="admin-logout" type="button" aria-label="Sair da conta" title="Sair da conta">
+
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M10 5H6C4.9 5 4 5.9 4 7V17C4 18.1 4.9 19 6 19H10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+            <path d="M14 8L18 12L14 16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+            <path d="M9 12H18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+          </svg>
+
+        </button>
+
       </nav>
       <section class="admin-hero">
-        <div class="hero-decoration hero-decoration--one"></div><div class="hero-decoration hero-decoration--two"></div>
-        <div class="hero-content"><span class="hero-eyebrow">Relacionamento</span><h1>Gestão de Clientes</h1><p>Consulte cadastros e acompanhe o histórico das suas clientes.</p></div>
+        <div class="hero-decoration hero-decoration--one"></div>
+        <div class="hero-decoration hero-decoration--two"></div>
+        <div class="hero-content"><span class="hero-eyebrow">Relacionamento</span>
+          <h1>Gestão de Clientes</h1>
+          <p>Consulte cadastros e acompanhe o histórico das suas clientes.</p>
+        </div>
       </section>
     </header>
 
@@ -54,28 +79,65 @@
           </form>
         </section>
         <section class="clients-section" aria-labelledby="clients-title">
-          <div class="section-heading"><div><span class="section-eyebrow">Base cadastrada</span><h2 id="clients-title">Suas clientes</h2></div><span id="clients-count" class="clients-count">Carregando…</span></div>
+          <div class="section-heading">
+            <div><span class="section-eyebrow">Base cadastrada</span>
+              <h2 id="clients-title">Suas clientes</h2>
+            </div><span id="clients-count" class="clients-count">Carregando…</span>
+          </div>
           <div id="clients-error" class="client-load-error" role="alert" hidden><span id="clients-error-message"></span><button id="clients-retry" type="button">Tentar novamente</button></div>
           <div id="clients-list" class="clients-list" aria-live="polite" aria-busy="false"></div>
-          <div id="empty-state" class="empty-state" hidden><span class="empty-state-icon" aria-hidden="true">♡</span><strong>Nenhuma cliente encontrada</strong><p>Tente outro termo de busca.</p></div>
+          <div id="empty-state" class="empty-state" hidden><span class="empty-state-icon" aria-hidden="true">♡</span><strong>Nenhuma cliente encontrada</strong>
+            <p>Tente outro termo de busca.</p>
+          </div>
           <button id="load-more" class="load-more-button" type="button" hidden>Carregar mais</button>
         </section>
-        <aside class="demo-info-card"><span class="demo-info-icon" aria-hidden="true">i</span><div><strong>Dados protegidos</strong><p>Perfis e histórico são consultados após validação administrativa no servidor. Observações internas ficam restritas à administração.</p></div></aside>
+        <aside class="demo-info-card"><span class="demo-info-icon" aria-hidden="true">i</span>
+          <div><strong>Dados protegidos</strong>
+            <p>Perfis e histórico são consultados após validação administrativa no servidor. Observações internas ficam restritas à administração.</p>
+          </div>
+        </aside>
       </div>
     </main>
 
     <div id="client-modal" class="modal-overlay" hidden>
       <section class="client-modal" role="dialog" aria-modal="true" aria-labelledby="modal-client-name" aria-describedby="modal-client-phone modal-client-email" tabindex="-1">
         <div class="modal-handle" aria-hidden="true"></div>
-        <div class="modal-header"><div id="modal-avatar" class="modal-avatar" aria-hidden="true">IM</div><div class="modal-client-heading"><span>Perfil da cliente</span><h2 id="modal-client-name">Cliente</h2><small id="modal-client-phone">Telefone não informado</small><small id="modal-client-email">E-mail não informado</small></div><button type="button" id="close-modal-button" class="close-modal-button" aria-label="Fechar perfil">×</button></div>
+        <div class="modal-header">
+          <div id="modal-avatar" class="modal-avatar" aria-hidden="true">IM</div>
+          <div class="modal-client-heading"><span>Perfil da cliente</span>
+            <h2 id="modal-client-name">Cliente</h2><small id="modal-client-phone">Telefone não informado</small><small id="modal-client-email">E-mail não informado</small>
+          </div><button type="button" id="close-modal-button" class="close-modal-button" aria-label="Fechar perfil">×</button>
+        </div>
         <div id="profile-error" class="client-load-error" role="alert" hidden><span id="profile-error-message"></span><button id="profile-retry" type="button">Tentar novamente</button></div>
         <div id="profile-content">
-          <div class="modal-metrics"><div><span>Atendimentos concluídos</span><strong id="modal-visits">—</strong></div><div><span>Última visita</span><strong id="modal-last-visit">—</strong></div></div>
-          <section class="history-section"><div class="history-heading"><span class="section-eyebrow">Agenda</span><h3>Próximos agendamentos</h3></div><div id="upcoming-list" class="client-history-list"></div><div id="upcoming-empty" class="history-empty" hidden>Nenhum agendamento futuro.</div></section>
-          <section class="history-section"><div class="history-heading"><span class="section-eyebrow">Histórico</span><h3>Agendamentos anteriores</h3></div><div id="client-history-list" class="client-history-list"></div><div id="history-empty" class="history-empty" hidden>Nenhum registro encontrado para esta cliente.</div><div id="history-limited" class="history-limited" hidden>O histórico atingiu o limite de consulta; os dados podem estar parciais.</div></section>
-          <form id="note-form" class="client-note-form"><label for="internal-note">Observações internas</label><p class="client-note-help">Visíveis somente para a administração.</p><textarea id="internal-note" maxlength="3000" rows="4" placeholder="Adicione uma observação sobre esta cliente"></textarea><div class="note-actions"><span id="note-status" role="status" aria-live="polite"></span><button id="save-note" type="submit">Salvar observação</button></div></form>
+          <div class="modal-metrics">
+            <div><span>Atendimentos concluídos</span><strong id="modal-visits">—</strong></div>
+            <div><span>Última visita</span><strong id="modal-last-visit">—</strong></div>
+          </div>
+          <section class="history-section">
+            <div class="history-heading"><span class="section-eyebrow">Agenda</span>
+              <h3>Próximos agendamentos</h3>
+            </div>
+            <div id="upcoming-list" class="client-history-list"></div>
+            <div id="upcoming-empty" class="history-empty" hidden>Nenhum agendamento futuro.</div>
+          </section>
+          <section class="history-section">
+            <div class="history-heading"><span class="section-eyebrow">Histórico</span>
+              <h3>Agendamentos anteriores</h3>
+            </div>
+            <div id="client-history-list" class="client-history-list"></div>
+            <div id="history-empty" class="history-empty" hidden>Nenhum registro encontrado para esta cliente.</div>
+            <div id="history-limited" class="history-limited" hidden>O histórico atingiu o limite de consulta; os dados podem estar parciais.</div>
+          </section>
+          <form id="note-form" class="client-note-form"><label for="internal-note">Observações internas</label>
+            <p class="client-note-help">Visíveis somente para a administração.</p><textarea id="internal-note" maxlength="3000" rows="4" placeholder="Adicione uma observação sobre esta cliente"></textarea>
+            <div class="note-actions"><span id="note-status" role="status" aria-live="polite"></span><button id="save-note" type="submit">Salvar observação</button></div>
+          </form>
           <section class="client-pix-exemption" aria-labelledby="pix-exemption-title">
-            <div><span class="section-eyebrow">Autorização individual</span><h3 id="pix-exemption-title">Isenção de sinal PIX</h3><p>Permitir que esta cliente realize agendamentos sem pagamento antecipado.</p></div>
+            <div><span class="section-eyebrow">Autorização individual</span>
+              <h3 id="pix-exemption-title">Isenção de sinal PIX</h3>
+              <p>Permitir que esta cliente realize agendamentos sem pagamento antecipado.</p>
+            </div>
             <label class="client-pix-toggle" for="client-pix-exemption"><input id="client-pix-exemption" type="checkbox" aria-describedby="pix-exemption-status"><span class="client-pix-toggle-track" aria-hidden="true"></span><span class="client-pix-toggle-label">Isenta de sinal PIX</span></label>
             <span id="pix-exemption-status" class="client-pix-status" role="status" aria-live="polite"></span>
           </section>
@@ -90,5 +152,7 @@
     </nav>
   </div>
   <script type="module" src="admin-clientes.js?v=1.0.0"></script>
+  <script src="admin-bottom-nav.js?v=1" defer></script>
 </body>
+
 </html>

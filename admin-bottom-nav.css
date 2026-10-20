@@ -1,0 +1,118 @@
+/* MENU INFERIOR ADMINISTRATIVO — ISABELE */
+
+.isabele-admin-bottom-nav {
+  display: none;
+  position: fixed;
+  z-index: 120;
+
+  left: 50%;
+  bottom: max(10px, env(safe-area-inset-bottom));
+
+  width: calc(100% - 24px);
+  max-width: 456px;
+  min-height: 68px;
+
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 3px;
+  padding: 7px;
+
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(89, 28, 49, 0.1);
+  border-radius: 22px;
+
+  box-shadow: 0 14px 36px rgba(45, 8, 21, 0.2);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+
+  transform: translateX(-50%);
+}
+
+/* Somente administradoras autorizadas */
+
+body[data-page="principal"][data-user-role="admin"] .isabele-admin-bottom-nav,
+body[data-page="admin-agendamentos"][data-access-state="allowed"]
+  .isabele-admin-bottom-nav,
+body[data-page="admin-clientes"][data-access-state="allowed"]
+  .isabele-admin-bottom-nav,
+body[data-page="admin-servicos"][data-access-state="allowed"]
+  .isabele-admin-bottom-nav,
+body[data-page="dashboard"][data-access-state="allowed"]
+  .isabele-admin-bottom-nav {
+  display: grid;
+}
+
+/* Itens */
+
+.isabele-admin-nav-item {
+  min-width: 0;
+  min-height: 54px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+
+  padding: 6px 2px;
+  border-radius: 16px;
+
+  color: #9a8790;
+  text-decoration: none;
+  font-family: "Poppins", sans-serif;
+  font-size: 9px;
+  font-weight: 600;
+
+  transition:
+    background 180ms ease,
+    color 180ms ease;
+}
+
+.isabele-admin-nav-item svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.isabele-admin-nav-item--active {
+  background: #591c31;
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.isabele-admin-nav-item:focus-visible {
+  outline: 2px solid #a8617b;
+  outline-offset: 2px;
+}
+
+.isabele-admin-nav-item:not(.isabele-admin-nav-item--active):hover {
+  background: #fff0f5;
+  color: #591c31;
+}
+
+/* Reserva espaço para o menu sem esconder o conteúdo */
+
+body[data-page="principal"][data-user-role="admin"] .app-container,
+body[data-page="admin-agendamentos"][data-access-state="allowed"]
+  .app-container,
+body[data-page="admin-clientes"][data-access-state="allowed"] .app-shell,
+body[data-page="admin-servicos"][data-access-state="allowed"] .app-container,
+body[data-page="dashboard"][data-access-state="allowed"] .app-container {
+  padding-bottom: max(112px, calc(94px + env(safe-area-inset-bottom)));
+}
+
+@media (max-width: 370px) {
+  .isabele-admin-bottom-nav {
+    width: calc(100% - 16px);
+    padding: 5px;
+    gap: 1px;
+  }
+
+  .isabele-admin-nav-item {
+    font-size: 8px;
+  }
+
+  .isabele-admin-nav-item svg {
+    width: 18px;
+    height: 18px;
+  }
+}

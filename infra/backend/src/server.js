@@ -19,6 +19,7 @@ import { iniciarWorkerPixPolling } from "./pixPollingWorker.js";
 import { atenderAgendamentoIsencao } from "./agendamentosIsencaoPix.js";
 import { consultarDisponibilidadePix } from "./pixDisponibilidadeApi.js";
 import { atenderGestaoClientes } from "./gestaoClientes.js";
+import { atenderFotosPerfil } from "./fotosPerfil.js";
 
 const { Pool } = pg;
 
@@ -75,19 +76,36 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if ([
-    "/agendamentos/isencao",
-    "/agendamentos/sem-pix",
-    "/agendamentos/reagendar",
-    "/admin/isencoes-sinal-pix",
-    "/admin/clientes/isencao-sinal-pix",
-  ].includes(new URL(req.url, "http://localhost").pathname)) {
+  if (
+    [
+      "/agendamentos/isencao",
+      "/agendamentos/sem-pix",
+      "/agendamentos/reagendar",
+      "/admin/isencoes-sinal-pix",
+      "/admin/clientes/isencao-sinal-pix",
+    ].includes(new URL(req.url, "http://localhost").pathname)
+  ) {
     await atenderAgendamentoIsencao(req, res, pool);
     return;
   }
 
-  if (/^\/admin\/clientes(?:\/[^/]+(?:\/observacoes)?)?$/.test(new URL(req.url, "http://localhost").pathname)) {
+  if (
+    /^\/admin\/clientes(?:\/[^/]+(?:\/observacoes)?)?$/.test(
+      new URL(req.url, "http://localhost").pathname,
+    )
+  ) {
     await atenderGestaoClientes(req, res, pool);
+    return;
+  }
+
+  // Fotos de perfil — administradora e clientes
+  const caminhoFoto = new URL(req.url, "http://localhost").pathname;
+
+  if (
+    caminhoFoto === "/perfil/foto" ||
+    /^\/admin\/clientes\/[^/]+\/foto$/.test(caminhoFoto)
+  ) {
+    await atenderFotosPerfil(req, res, pool);
     return;
   }
 
@@ -97,7 +115,10 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (req.method === "GET" && new URL(req.url, "http://localhost").pathname === "/pix/disponibilidade") {
+  if (
+    req.method === "GET" &&
+    new URL(req.url, "http://localhost").pathname === "/pix/disponibilidade"
+  ) {
     await consultarDisponibilidadePix(req, res, pool);
     return;
   }
@@ -168,7 +189,10 @@ server.listen(PORT, "0.0.0.0", () => {
   iniciarWorkerPush(pool);
   iniciarWorkerAgendamentoCancelamentos(pool);
 
-  if (process.env.PIX_WEBHOOK_ENABLED === "true" && process.env.PIX_WEBHOOK_WORKER_ENABLED === "true") {
+  if (
+    process.env.PIX_WEBHOOK_ENABLED === "true" &&
+    process.env.PIX_WEBHOOK_WORKER_ENABLED === "true"
+  ) {
     iniciarWorkerPixWebhook(pool);
   }
 
@@ -186,4 +210,3 @@ server.listen(PORT, "0.0.0.0", () => {
     process.exit(1);
   });
 });
-

@@ -65,11 +65,34 @@
             <h2 id="nome-cliente" class="perfil-name">
               Nome da Cliente
             </h2>
+
+            <button id="salvar-foto-perfil" class="perfil-foto-salvar" type="button" hidden>
+              Salvar nova foto
+            </button>
+
+            <button id="remover-foto-perfil" class="perfil-foto-salvar perfil-foto-remover" type="button" hidden>
+              Remover foto personalizada
+            </button>
+
           </div>
 
-          <div class="perfil-avatar">
-            <img id="foto-cliente" src="https://www.w3schools.com/howto/img_avatar2.png" alt="Foto do perfil da cliente" loading="lazy">
+
+          <div class="perfil-avatar-container">
+
+            <button id="editar-foto-perfil" class="perfil-avatar-botao" type="button" aria-label="Alterar minha foto de perfil">
+              <span class="perfil-avatar">
+                <img id="foto-cliente" src="https://www.w3schools.com/howto/img_avatar2.png" alt="Foto do perfil da cliente" loading="lazy">
+              </span>
+
+              <span class="perfil-avatar-editar">
+                ✎ Editar
+              </span>
+            </button>
+
+            <input id="foto-perfil-arquivo" type="file" accept="image/png,image/jpeg,image/webp" hidden>
+
           </div>
+
 
         </div>
 
@@ -291,7 +314,43 @@
     </section>
   </div>
 
+  <!-- EDITOR DE FOTO DE PERFIL -->
+  <dialog id="editor-foto-perfil" class="editor-foto-perfil" aria-labelledby="editor-foto-titulo">
+
+    <div class="editor-foto-conteudo">
+
+      <h2 id="editor-foto-titulo">Ajustar foto de perfil</h2>
+
+      <p>Arraste a imagem para ajustar o enquadramento.</p>
+
+      <div class="editor-foto-visualizacao">
+        <canvas id="editor-foto-canvas" width="320" height="320" aria-label="Prévia da foto recortada"></canvas>
+      </div>
+
+      <label for="editor-foto-zoom">Aproximar imagem</label>
+
+      <input id="editor-foto-zoom" type="range" min="1" max="3" step="0.01" value="1">
+
+      <div class="editor-foto-acoes">
+        <button id="editor-foto-cancelar" type="button">
+          Cancelar
+        </button>
+
+        <button id="editor-foto-aplicar" type="button">
+          Aplicar prévia
+        </button>
+      </div>
+
+      <small>
+        A foto ainda não será salva no servidor.
+      </small>
+
+    </div>
+
+  </dialog>
+
   <script type="module" src="meu-perfil.js?v=2.0.0"></script>
+  <script type="module" src="foto-perfil-preview.js?v=2"></script>
 
   <script src="app.js?v=1.0.4" defer></script>
 

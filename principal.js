@@ -4,6 +4,7 @@ import {
 } from "./notificationService.js";
 import { auth, db } from "./firebase-config.js";
 import { iniciarCentralNotificacoes } from "./centralNotificacoesUI.js";
+import { consultarFotoPerfil } from "./foto-perfil-api.js";
 
 import {
   onAuthStateChanged,
@@ -722,6 +723,59 @@ async function configurarNotificacoesPrincipal(user) {
    AUTENTICAÇÃO E PERMISSÃO
    ============================================================ */
 
+/* FOTO PERSONALIZADA — POSTGRESQL */
+
+let fotoPersonalizadaUrl = null;
+
+async function carregarFotoPersonalizada(user, elementoFoto) {
+  if (!elementoFoto) return;
+
+  const fotoAnterior = elementoFoto.src;
+
+  try {
+    const arquivo = await consultarFotoPerfil();
+
+    // Não existe personalização: mantém a foto do Google.
+    if (!arquivo) return;
+
+    // Evita substituir uma foto alterada durante a consulta.
+    if (
+      auth.currentUser?.uid !== user.uid ||
+      elementoFoto.src !== fotoAnterior
+    ) {
+      return;
+    }
+
+    const novaUrl = URL.createObjectURL(arquivo);
+    const urlAntiga = fotoPersonalizadaUrl;
+
+    fotoPersonalizadaUrl = novaUrl;
+    elementoFoto.src = novaUrl;
+
+    const botaoRemover = document.getElementById("remover-foto-perfil");
+
+    if (botaoRemover) {
+      botaoRemover.hidden = false;
+    }
+
+    if (urlAntiga) {
+      URL.revokeObjectURL(urlAntiga);
+    }
+  } catch (erro) {
+    console.warn(
+      "Foto personalizada indisponível. Mantendo foto atual:",
+      erro.message,
+    );
+  }
+}
+
+window.addEventListener("pagehide", () => {
+  if (fotoPersonalizadaUrl) {
+    URL.revokeObjectURL(fotoPersonalizadaUrl);
+    fotoPersonalizadaUrl = null;
+  }
+});
+
 async function handleAuthenticatedUser(user, elements) {
   try {
     const accessProfile = await loadUserAccessProfile(user);
@@ -750,7 +804,8 @@ async function handleAuthenticatedUser(user, elements) {
     } else {
       configureClientInterface(user, accessProfile, elements);
     }
-
+    // Carrega a foto personalizada sem bloquear a tela.
+    void carregarFotoPersonalizada(user, elements.photo);
     // Central de notificações para cliente e administradora.
     iniciarCentralNotificacoes(user);
 

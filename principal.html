@@ -35,6 +35,7 @@
   <link rel="stylesheet" href="base.css?v=1.0.4">
 
   <link rel="stylesheet" href="principal.css?v=1.1.3">
+  <link rel="stylesheet" href="admin-bottom-nav.css?v=1">
 </head>
 
 <body data-page="principal" data-user-role="loading">
@@ -102,10 +103,23 @@
           <p id="principal-profile-description" class="profile-description">
             Estamos preparando sua área.
           </p>
+
+          <button id="salvar-foto-perfil" class="profile-photo-save" type="button" hidden>
+            Salvar nova foto
+          </button>
+          <button id="remover-foto-perfil" class="profile-photo-save profile-photo-remove" type="button" hidden>
+            Remover foto personalizada
+          </button>
         </div>
 
-        <div class="profile-avatar">
-          <img id="foto-perfil" src="https://www.w3schools.com/howto/img_avatar2.png" alt="Foto do perfil" loading="lazy">
+        <div class="profile-avatar-container">
+          <button id="editar-foto-perfil" class="profile-avatar profile-avatar-edit" type="button" aria-label="Alterar minha foto de perfil" title="Alterar foto">
+            <img id="foto-perfil" src="https://www.w3schools.com/howto/img_avatar2.png" alt="Foto do perfil" loading="lazy">
+
+            <span class="profile-avatar-camera" aria-hidden="true">✎ Editar</span>
+          </button>
+
+          <input id="foto-perfil-arquivo" type="file" accept="image/png,image/jpeg,image/webp" hidden>
         </div>
 
       </div>
@@ -272,7 +286,9 @@
                 <small>Consulte histórico, observações e isenção individual de sinal PIX.</small>
               </span>
               <span class="admin-action-arrow" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none"><path d="M9 18L15 12L9 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M9 18L15 12L9 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
               </span>
             </a>
 
@@ -609,6 +625,41 @@
     </section>
   </div>
 
+  <!-- EDITOR DE FOTO DE PERFIL -->
+  <dialog id="editor-foto-perfil" class="editor-foto-perfil" aria-labelledby="editor-foto-titulo">
+
+    <div class="editor-foto-conteudo">
+
+      <h2 id="editor-foto-titulo">Ajustar foto de perfil</h2>
+
+      <p>Arraste a imagem para ajustar o enquadramento.</p>
+
+      <div class="editor-foto-visualizacao">
+        <canvas id="editor-foto-canvas" width="320" height="320" aria-label="Prévia da foto recortada"></canvas>
+      </div>
+
+      <label for="editor-foto-zoom">Aproximar imagem</label>
+
+      <input id="editor-foto-zoom" type="range" min="1" max="3" step="0.01" value="1">
+
+      <div class="editor-foto-acoes">
+        <button id="editor-foto-cancelar" type="button">
+          Cancelar
+        </button>
+
+        <button id="editor-foto-aplicar" type="button">
+          Aplicar prévia
+        </button>
+      </div>
+
+      <small>
+        A foto ainda não será salva no servidor.
+      </small>
+
+    </div>
+
+  </dialog>
+
   <script type="module" src="analytics.js?v=1.0.1"></script>
 
   <script type="module" src="vitrine.js?v=1.0.1" defer></script>
@@ -616,7 +667,9 @@
   <script type="module" src="principal.js?v=1.1.3"></script>
 
   <script src="app.js?v=2.0.0" defer></script>
+  <script type="module" src="foto-perfil-preview.js?v=2"></script>
 
+  <script src="admin-bottom-nav.js?v=1" defer></script>
 </body>
 
 </html>

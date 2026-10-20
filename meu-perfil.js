@@ -1,6 +1,7 @@
 import { executarAcaoAgendamento } from "./agendamentosApi.js";
 import { auth, db } from "./firebase-config.js";
 import { webhookUrl } from "./config.js";
+import { consultarFotoPerfil } from "./foto-perfil-api.js";
 import {
   onAuthStateChanged,
   signOut,
@@ -744,6 +745,53 @@ async function carregarAgendamentos(uid) {
   }
 }
 
+/* FOTO PERSONALIZADA — MEU PERFIL */
+
+let urlFotoPersonalizada = null;
+
+async function carregarFotoPersonalizadaPerfil(user, elementoFoto) {
+  if (!elementoFoto) return;
+
+  const fotoAnterior = elementoFoto.src;
+
+  try {
+    const imagem = await consultarFotoPerfil();
+
+    if (!imagem) return;
+
+    // Não substitui uma prévia editada enquanto a consulta ocorria.
+    if (
+      auth.currentUser?.uid !== user.uid ||
+      elementoFoto.src !== fotoAnterior
+    ) {
+      return;
+    }
+
+    const novaURL = URL.createObjectURL(imagem);
+    const urlAntiga = urlFotoPersonalizada;
+
+    urlFotoPersonalizada = novaURL;
+    elementoFoto.src = novaURL;
+    const botaoRemover = document.getElementById("remover-foto-perfil");
+
+    if (botaoRemover) {
+      botaoRemover.hidden = false;
+    }
+    if (urlAntiga) {
+      URL.revokeObjectURL(urlAntiga);
+    }
+  } catch (erro) {
+    console.warn("Foto personalizada indisponível:", erro.message);
+  }
+}
+
+window.addEventListener("pagehide", () => {
+  if (urlFotoPersonalizada) {
+    URL.revokeObjectURL(urlFotoPersonalizada);
+    urlFotoPersonalizada = null;
+  }
+});
+
 document.addEventListener("DOMContentLoaded", () => {
   const nomeCliente = document.getElementById("nome-cliente");
   const emailCliente = document.getElementById("email-cliente");
@@ -851,6 +899,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (fotoCliente) {
       fotoCliente.src = userPhoto;
+
+      // Prioriza a foto personalizada, quando existir.
+      void carregarFotoPersonalizadaPerfil(user, fotoCliente);
     }
 
     if (logoutButton) {
