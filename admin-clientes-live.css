@@ -1,0 +1,16 @@
+.admin-logout { border:0;background:transparent;color:var(--primary,#34233a);padding:10px;cursor:pointer;font:600 13px var(--font-body,"DM Sans",sans-serif); }
+.demo-mode-notice { display:inline-flex;width:max-content;margin-bottom:8px;padding:6px 9px;border:1px solid #e7d2a8;border-radius:999px;background:#fff8e8;color:#735b31;font-size:9px;font-weight:800;letter-spacing:.06em; }
+.client-load-error { margin:14px 0;padding:12px 14px;border-radius:12px;background:#fff4f4;color:#8b3333;font-size:13px; }
+.load-more-button { display:block;width:100%;margin:16px 0;padding:12px;border:1px solid var(--border,#e9e0da);border-radius:12px;background:#fff;color:var(--primary,#34233a);font-weight:700;cursor:pointer; }
+.load-more-button:disabled { opacity:.55; }
+.client-modal { max-height:92vh;overflow:auto; }
+.modal-client-heading small { display:block;margin-top:4px;overflow-wrap:anywhere; }
+.modal-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.history-limited { margin-top:10px;padding:9px 11px;background:#fff8ea;border-radius:9px;color:#765a2f;font-size:12px; }
+.client-note-form { border-top:1px solid var(--border,#e9e0da);margin-top:20px;padding-top:18px; }
+.client-note-form label { display:block;font-weight:700;font-size:14px;margin-bottom:8px; }
+.client-note-form textarea { display:block;width:100%;resize:vertical;min-height:95px;padding:11px;border:1px solid var(--border-dark,#d8cdc6);border-radius:11px;font:inherit;color:var(--text,#2f2930); }
+.note-actions { display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:9px; }
+.note-actions span { font-size:12px;color:var(--text-soft,#746c73); }
+.note-actions button { border:0;border-radius:10px;padding:10px 13px;background:var(--button-background,var(--primary,#34233a));color:var(--button-text,#fff);font-weight:700;cursor:pointer; }
+@media (max-width:600px) { .admin-logout { font-size:12px; }.client-modal { border-radius:22px 22px 0 0; }.note-actions { align-items:flex-start;flex-direction:column; }.note-actions button { width:100%; } }

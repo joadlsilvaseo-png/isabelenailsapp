@@ -18,6 +18,7 @@ import { iniciarWorkerPixWebhook } from "./pixWebhookWorker.js";
 import { iniciarWorkerPixPolling } from "./pixPollingWorker.js";
 import { atenderAgendamentoIsencao } from "./agendamentosIsencaoPix.js";
 import { consultarDisponibilidadePix } from "./pixDisponibilidadeApi.js";
+import { atenderGestaoClientes } from "./gestaoClientes.js";
 
 const { Pool } = pg;
 
@@ -82,6 +83,11 @@ const server = http.createServer(async (req, res) => {
     "/admin/clientes/isencao-sinal-pix",
   ].includes(new URL(req.url, "http://localhost").pathname)) {
     await atenderAgendamentoIsencao(req, res, pool);
+    return;
+  }
+
+  if (/^\/admin\/clientes(?:\/[^/]+(?:\/observacoes)?)?$/.test(new URL(req.url, "http://localhost").pathname)) {
+    await atenderGestaoClientes(req, res, pool);
     return;
   }
 

@@ -160,6 +160,28 @@ class TestAtualizacaoVpsPix(unittest.TestCase):
         self.assertNotIn("POSTGRES_PASSWORD", result.stdout)
         self.assertNotIn("MP_ACCESS_TOKEN", result.stdout)
 
+    def test_migracao_016_classifica_pendente_aplicada_e_parcial(self):
+        for scenario, expected in (("pending", "pending|"), ("applied", "applied|"),
+                                   ("partial", "partial|colunas/tipos/nullability/defaults,constraint_nota_limite")):
+            with self.subTest(scenario=scenario):
+                result = subprocess.run(
+                    ["bash", str(SCRIPT), "--test-migration-016-state", scenario],
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout.strip(), expected)
+
+    def test_migracao_016_e_preflightada_antes_de_parar_a_api_e_preservada_no_rollback(self):
+        source = SOURCE
+        self.assertIn("016_cliente_observacoes_admin.sql", source)
+        self.assertIn('partial) die "Estado parcial/inconsistente da migracao 016', source)
+        self.assertLess(source.index('MIGRATION_016_STATE_ROW='), source.index('compose_snapshot stop "$API_SERVICE"'))
+        self.assertIn('if [[ "$MIGRATION_016_STATE" == pending ]]; then', source)
+        self.assertIn("MIGRATION_016_APPLIED", source)
+        self.assertIn("cliente_observacoes_admin_nota_check", source)
+
     def test_migracao_012_rejeita_duas_variantes_da_constraint_calendar(self):
         result = subprocess.run(
             ["bash", str(SCRIPT), "--test-migration-012-state", "ambiguous"],

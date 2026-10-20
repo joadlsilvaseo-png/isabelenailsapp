@@ -67,6 +67,24 @@ classificar_estado_migracao_012() {
   fi
 }
 
+classificar_estado_migracao_016() {
+  local has_table="$1" has_columns="$2" has_primary_key="$3" has_note_check="$4"
+  local -a falhas=()
+  if [[ "$has_table" != t ]]; then
+    printf 'pending|\n'
+    return
+  fi
+  [[ "$has_columns" == t ]] || falhas+=("colunas/tipos/nullability/defaults")
+  [[ "$has_primary_key" == t ]] || falhas+=("chave_primaria_cliente_uid")
+  [[ "$has_note_check" == t ]] || falhas+=("constraint_nota_limite")
+  if ((${#falhas[@]} == 0)); then
+    printf 'applied|\n'
+  else
+    local IFS=,
+    printf 'partial|%s\n' "${falhas[*]}"
+  fi
+}
+
 validate_pix_environment() {
   case "${1,,}" in
     test|production) return 0 ;;
@@ -94,6 +112,18 @@ if [[ "$MODE" == "--test-migration-012-state" ]]; then
     *) die "Estado de teste desconhecido." ;;
   esac
   classificar_estado_migracao_012 "${flags[@]}"
+  exit 0
+fi
+
+if [[ "$MODE" == "--test-migration-016-state" ]]; then
+  [[ $# -eq 2 ]] || die "Uso: $SCRIPT_PATH --test-migration-016-state pending|applied|partial"
+  case "$2" in
+    pending) flags=(f f f f) ;;
+    applied) flags=(t t t t) ;;
+    partial) flags=(t f t f) ;;
+    *) die "Estado de teste desconhecido." ;;
+  esac
+  classificar_estado_migracao_016 "${flags[@]}"
   exit 0
 fi
 
@@ -497,6 +527,8 @@ MIGRATION_014="$RELEASE_DIR/infra/migrations/014_calendar_criacoes_dispensadas.s
 [[ -f "$MIGRATION_014" ]] || die "Migracao 014 nao encontrada no commit alvo."
 MIGRATION_015="$RELEASE_DIR/infra/migrations/015_calendar_cancelamentos_dispensados.sql"
 [[ -f "$MIGRATION_015" ]] || die "Migracao 015 nao encontrada no commit alvo."
+MIGRATION_016="$RELEASE_DIR/infra/migrations/016_cliente_observacoes_admin.sql"
+[[ -f "$MIGRATION_016" ]] || die "Migracao 016 nao encontrada no commit alvo."
 
 UPDATE_OVERRIDE="$BACKUP_DIR/update-compose.yaml"
 TARGET_IMAGE_TAG="isabele-nails-api:release-${TARGET_COMMIT}"
@@ -896,6 +928,50 @@ case "$MIGRATION_015_STATE" in
   *) die "Migracao 015 com estrutura inesperada: $MIGRATION_015_STATE" ;;
 esac
 
+# A tabela de observações administrativas é aditiva. Só é aplicada quando
+# ausente por completo; qualquer estado parcial interrompe antes de parar a API.
+MIGRATION_016_STATE_SQL="$BACKUP_DIR/migration-016-state.sql"
+cat >"$MIGRATION_016_STATE_SQL" <<'SQL'
+WITH state AS (
+  SELECT
+    to_regclass('public.cliente_observacoes_admin') IS NOT NULL AS has_table,
+    (
+      SELECT COUNT(*) = 4
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'cliente_observacoes_admin'
+        AND (
+          (column_name = 'cliente_uid' AND data_type = 'text' AND is_nullable = 'NO') OR
+          (column_name = 'nota' AND data_type = 'text' AND is_nullable = 'NO' AND column_default LIKE '%''%') OR
+          (column_name = 'updated_by_uid' AND data_type = 'text' AND is_nullable = 'NO') OR
+          (column_name = 'updated_at' AND data_type = 'timestamp with time zone' AND is_nullable = 'NO' AND column_default LIKE '%now()%')
+        )
+    ) AS has_columns,
+    EXISTS (
+      SELECT 1 FROM pg_constraint
+      WHERE conrelid = to_regclass('public.cliente_observacoes_admin')
+        AND conname = 'cliente_observacoes_admin_pkey' AND contype = 'p'
+        AND pg_get_constraintdef(oid) = 'PRIMARY KEY (cliente_uid)'
+    ) AS has_primary_key,
+    EXISTS (
+      SELECT 1 FROM pg_constraint
+      WHERE conrelid = to_regclass('public.cliente_observacoes_admin')
+        AND conname = 'cliente_observacoes_admin_nota_check' AND contype = 'c'
+        AND pg_get_constraintdef(oid) LIKE '%char_length(nota) <= 3000%'
+    ) AS has_note_check
+)
+SELECT has_table, has_columns, has_primary_key, has_note_check FROM state;
+SQL
+chmod 600 "$MIGRATION_016_STATE_SQL"
+MIGRATION_016_STATE_ROW="$(compose_snapshot exec -T "$DB_SERVICE" sh -lc 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At -F "|"' <"$MIGRATION_016_STATE_SQL" | tr -d '\r\n')"
+IFS='|' read -r HAS_016_TABLE HAS_016_COLUMNS HAS_016_PRIMARY_KEY HAS_016_NOTE_CHECK <<<"$MIGRATION_016_STATE_ROW"
+MIGRATION_016_RESULT="$(classificar_estado_migracao_016 "$HAS_016_TABLE" "$HAS_016_COLUMNS" "$HAS_016_PRIMARY_KEY" "$HAS_016_NOTE_CHECK")"
+IFS='|' read -r MIGRATION_016_STATE MIGRATION_016_DIAGNOSTICS <<<"$MIGRATION_016_RESULT"
+case "$MIGRATION_016_STATE" in
+  pending|applied) echo "Estado da migracao 016: $MIGRATION_016_STATE" ;;
+  partial) die "Estado parcial/inconsistente da migracao 016; verificacoes: $MIGRATION_016_DIAGNOSTICS. Nenhuma migracao foi executada e a API nao sera parada." ;;
+  *) die "Nao foi possivel classificar a migracao 016." ;;
+esac
+
 printf '%s\n' "$DB_CONTAINER" >"$BACKUP_DIR/db-container-id"
 compose_snapshot exec -T "$DB_SERVICE" sh -lc 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' >"$BACKUP_DIR/postgres-before.dump"
 [[ -s "$BACKUP_DIR/postgres-before.dump" ]] || die "Backup PostgreSQL vazio; atualizacao cancelada."
@@ -913,6 +989,7 @@ MIGRATION_APPLIED=false
 MIGRATION_011_APPLIED=false
 MIGRATION_012_APPLIED=false
 MIGRATION_014_APPLIED=false
+MIGRATION_016_APPLIED=false
 NEW_API_STARTED=false
 restore_old_api_on_error() {
   local rc=$?
@@ -935,8 +1012,8 @@ EOF
     elif [[ "$API_STOPPED" == true ]]; then
       docker start "$API_CONTAINER" >/dev/null || true
     fi
-    if [[ "$MIGRATION_APPLIED" == true || "$MIGRATION_STATE" == applied || "$MIGRATION_011_APPLIED" == true || "$MIGRATION_011_STATE" == applied || "$MIGRATION_012_APPLIED" == true || "$MIGRATION_012_STATE" == applied ]]; then
-      echo "Migracoes 010/011/012 aplicadas e preservadas; nenhum dado foi removido."
+    if [[ "$MIGRATION_APPLIED" == true || "$MIGRATION_STATE" == applied || "$MIGRATION_011_APPLIED" == true || "$MIGRATION_011_STATE" == applied || "$MIGRATION_012_APPLIED" == true || "$MIGRATION_012_STATE" == applied || "$MIGRATION_016_APPLIED" == true || "$MIGRATION_016_STATE" == applied ]]; then
+      echo "Migracoes aplicadas (incluindo 016, se executada) permanecem preservadas; nenhum dado foi removido."
     fi
     echo "Backup e configuracao efetiva anterior: $BACKUP_DIR"
   fi
@@ -974,6 +1051,12 @@ if [[ "$MIGRATION_015_STATE" == pending ]]; then
   compose_snapshot exec -T "$DB_SERVICE" sh -lc 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <"$MIGRATION_015"
 else
   echo "Pulando migracao 015 ja aplicada."
+fi
+if [[ "$MIGRATION_016_STATE" == pending ]]; then
+  compose_snapshot exec -T "$DB_SERVICE" sh -lc 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <"$MIGRATION_016"
+  MIGRATION_016_APPLIED=true
+else
+  echo "Pulando migracao 016 ja aplicada; observacoes existentes serao mantidas."
 fi
 NEW_API_STARTED=true
 compose_snapshot up -d --no-deps "$API_SERVICE"

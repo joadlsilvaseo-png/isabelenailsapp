@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Gestão administrativa de clientes da Isabele Mariana Nails.">
+  <meta name="theme-color" content="#591c31">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="IM Nails">
+  <title>Clientes | Isabele Mariana Nails</title>
+  <link rel="manifest" href="./manifest.json">
+  <link rel="icon" type="image/png" href="./assets/favicon.png">
+  <link rel="apple-touch-icon" href="./assets/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="base.css?v=1.0.4">
+  <link rel="stylesheet" href="admin-clientes.css?v=1.0.0">
+  <link rel="stylesheet" href="admin-clientes-live.css?v=1.0.0">
+  <link rel="stylesheet" href="admin-clientes-isabele.css?v=1.0.0">
+</head>
+<body data-page="admin-clientes" data-access-state="loading">
+  <div class="app-shell">
+    <header class="page-header">
+      <nav class="top-bar" aria-label="Navegação administrativa">
+        <a href="principal.html" class="back-button" aria-label="Voltar para a gestão"><span aria-hidden="true">‹</span></a>
+        <a href="principal.html" class="brand" aria-label="Isabele Mariana Nails, página principal">
+          <img class="brand-logo" src="./assets/logo-isabele-mariana.png" alt="Isabele Mariana Nails">
+          <span class="brand-text"><strong>Isabele Mariana</strong><small>Nails · Área administrativa</small></span>
+        </a>
+        <button id="logout-button" class="admin-logout" type="button">Sair</button>
+      </nav>
+      <section class="admin-hero">
+        <div class="hero-decoration hero-decoration--one"></div><div class="hero-decoration hero-decoration--two"></div>
+        <div class="hero-content"><span class="hero-eyebrow">Relacionamento</span><h1>Gestão de Clientes</h1><p>Consulte cadastros e acompanhe o histórico das suas clientes.</p></div>
+      </section>
+    </header>
+
+    <main class="main-content">
+      <section id="admin-access-loading" class="admin-client-access" aria-live="polite">Verificando acesso administrativo…</section>
+      <section id="admin-access-error" class="admin-client-access admin-client-access--error" role="alert" hidden>
+        <strong id="admin-access-error-title">Acesso não autorizado</strong>
+        <p id="admin-access-error-message">Esta conta não possui permissão administrativa.</p>
+        <a href="principal.html">Voltar para a gestão</a>
+      </section>
+      <div id="admin-clients-content" hidden>
+        <section class="search-section">
+          <form id="search-form" class="search-form" role="search">
+            <span class="search-icon" aria-hidden="true">⌕</span>
+            <input id="search-input" type="search" placeholder="Buscar por nome, telefone ou e-mail" autocomplete="off" aria-label="Buscar clientes">
+            <button id="clear-search-button" type="button" class="clear-search-button" aria-label="Limpar pesquisa" hidden>×</button>
+          </form>
+        </section>
+        <section class="clients-section" aria-labelledby="clients-title">
+          <div class="section-heading"><div><span class="section-eyebrow">Base cadastrada</span><h2 id="clients-title">Suas clientes</h2></div><span id="clients-count" class="clients-count">Carregando…</span></div>
+          <div id="clients-error" class="client-load-error" role="alert" hidden><span id="clients-error-message"></span><button id="clients-retry" type="button">Tentar novamente</button></div>
+          <div id="clients-list" class="clients-list" aria-live="polite" aria-busy="false"></div>
+          <div id="empty-state" class="empty-state" hidden><span class="empty-state-icon" aria-hidden="true">♡</span><strong>Nenhuma cliente encontrada</strong><p>Tente outro termo de busca.</p></div>
+          <button id="load-more" class="load-more-button" type="button" hidden>Carregar mais</button>
+        </section>
+        <aside class="demo-info-card"><span class="demo-info-icon" aria-hidden="true">i</span><div><strong>Dados protegidos</strong><p>Perfis e histórico são consultados após validação administrativa no servidor. Observações internas ficam restritas à administração.</p></div></aside>
+      </div>
+    </main>
+
+    <div id="client-modal" class="modal-overlay" hidden>
+      <section class="client-modal" role="dialog" aria-modal="true" aria-labelledby="modal-client-name" aria-describedby="modal-client-phone modal-client-email" tabindex="-1">
+        <div class="modal-handle" aria-hidden="true"></div>
+        <div class="modal-header"><div id="modal-avatar" class="modal-avatar" aria-hidden="true">IM</div><div class="modal-client-heading"><span>Perfil da cliente</span><h2 id="modal-client-name">Cliente</h2><small id="modal-client-phone">Telefone não informado</small><small id="modal-client-email">E-mail não informado</small></div><button type="button" id="close-modal-button" class="close-modal-button" aria-label="Fechar perfil">×</button></div>
+        <div id="profile-error" class="client-load-error" role="alert" hidden><span id="profile-error-message"></span><button id="profile-retry" type="button">Tentar novamente</button></div>
+        <div id="profile-content">
+          <div class="modal-metrics"><div><span>Atendimentos concluídos</span><strong id="modal-visits">—</strong></div><div><span>Última visita</span><strong id="modal-last-visit">—</strong></div></div>
+          <section class="history-section"><div class="history-heading"><span class="section-eyebrow">Agenda</span><h3>Próximos agendamentos</h3></div><div id="upcoming-list" class="client-history-list"></div><div id="upcoming-empty" class="history-empty" hidden>Nenhum agendamento futuro.</div></section>
+          <section class="history-section"><div class="history-heading"><span class="section-eyebrow">Histórico</span><h3>Agendamentos anteriores</h3></div><div id="client-history-list" class="client-history-list"></div><div id="history-empty" class="history-empty" hidden>Nenhum registro encontrado para esta cliente.</div><div id="history-limited" class="history-limited" hidden>O histórico atingiu o limite de consulta; os dados podem estar parciais.</div></section>
+          <form id="note-form" class="client-note-form"><label for="internal-note">Observações internas</label><p class="client-note-help">Visíveis somente para a administração.</p><textarea id="internal-note" maxlength="3000" rows="4" placeholder="Adicione uma observação sobre esta cliente"></textarea><div class="note-actions"><span id="note-status" role="status" aria-live="polite"></span><button id="save-note" type="submit">Salvar observação</button></div></form>
+          <section class="client-pix-exemption" aria-labelledby="pix-exemption-title">
+            <div><span class="section-eyebrow">Autorização individual</span><h3 id="pix-exemption-title">Isenção de sinal PIX</h3><p>Permitir que esta cliente realize agendamentos sem pagamento antecipado.</p></div>
+            <label class="client-pix-toggle" for="client-pix-exemption"><input id="client-pix-exemption" type="checkbox" aria-describedby="pix-exemption-status"><span class="client-pix-toggle-track" aria-hidden="true"></span><span class="client-pix-toggle-label">Isenta de sinal PIX</span></label>
+            <span id="pix-exemption-status" class="client-pix-status" role="status" aria-live="polite"></span>
+          </section>
+        </div>
+      </section>
+    </div>
+
+    <nav class="admin-navigation" aria-label="Navegação administrativa">
+      <a href="principal.html" class="admin-navigation-item"><span aria-hidden="true">⌂</span><span>Gestão</span></a>
+      <a href="admin-agendamentos.html" class="admin-navigation-item"><span aria-hidden="true">▦</span><span>Agenda</span></a>
+      <a href="admin-clientes.html" class="admin-navigation-item admin-navigation-item--active" aria-current="page"><span aria-hidden="true">♙</span><span>Clientes</span></a>
+    </nav>
+  </div>
+  <script type="module" src="admin-clientes.js?v=1.0.0"></script>
+</body>
+</html>
