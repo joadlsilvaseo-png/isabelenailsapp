@@ -46,6 +46,47 @@ function texto(valor, max = 180) {
     .slice(0, max);
 }
 
+function urlFotoExterna(valor) {
+  if (typeof valor !== "string" || valor.length > 2048) return null;
+  try {
+    const url = new URL(valor);
+    const host = url.hostname.toLowerCase();
+    const permitido =
+      host === "googleusercontent.com" ||
+      host.endsWith(".googleusercontent.com") ||
+      host === "ggpht.com" ||
+      host.endsWith(".ggpht.com") ||
+      host === "firebasestorage.googleapis.com";
+    if (url.protocol !== "https:" || url.username || url.password || !permitido) {
+      return null;
+    }
+    return url.href;
+  } catch {
+    return null;
+  }
+}
+
+// Uma única consulta Firebase Auth por página (máximo de 50 UIDs).
+// Erros não impedem a administração de consultar os cadastros.
+async function completarFotosGoogle(perfis, authProvider) {
+  if (perfis.length === 0) return;
+  try {
+    const auth = authProvider || (await import("firebase-admin/auth")).getAuth();
+    const resultado = await auth.getUsers(perfis.map(({ id }) => ({ uid: id })));
+    const fotos = new Map(
+      (resultado.users || []).map((usuario) => [
+        usuario.uid,
+        urlFotoExterna(usuario.photoURL),
+      ]),
+    );
+    for (const cliente of perfis) {
+      cliente.googlePhotoUrl = fotos.get(cliente.id) || cliente.googlePhotoUrl;
+    }
+  } catch (erro) {
+    console.warn("[Gestão de clientes] Foto do Google indisponível:", erro.message);
+  }
+}
+
 function dataValor(valor) {
   if (valor?.toDate) return valor.toDate().toISOString();
   if (valor instanceof Date) return valor.toISOString();
@@ -64,6 +105,9 @@ function perfil(uid, dados = {}) {
       50,
     ),
     email: texto(dados.email || dados.emailCliente, 180),
+    googlePhotoUrl: urlFotoExterna(
+      dados.foto || dados.photoURL || dados.fotoURL || dados.fotoPerfil,
+    ),
     createdAt: dataValor(
       dados.dataCadastro || dados.criadoEm || dados.createdAt,
     ),
@@ -167,7 +211,7 @@ async function validarPerfilCliente(db, uid, snapshot) {
   }
 }
 
-async function buscarPagina({ db, pool, query, cursor, limit }) {
+async function buscarPagina({ db, pool, query, cursor, limit, auth }) {
   const clientes = db.collection("clientes");
   const adminsSnapshot = await db
     .collection("usuarios")
@@ -251,6 +295,8 @@ async function buscarPagina({ db, pool, query, cursor, limit }) {
     }
   }
 
+  await completarFotosGoogle(items, auth);
+
   return {
     items,
     nextCursor: hasMore ? (foundExtra ? items.at(-1)?.id : lastId) : null,
@@ -259,9 +305,11 @@ async function buscarPagina({ db, pool, query, cursor, limit }) {
   };
 }
 
-async function obterPerfil({ db, pool, uid }) {
+async function obterPerfil({ db, pool, uid, auth }) {
   const cliente = await db.collection("clientes").doc(uid).get();
   await validarPerfilCliente(db, uid, cliente);
+  const dadosPerfil = perfil(uid, cliente.data());
+  await completarFotosGoogle([dadosPerfil], auth);
   const agendamentos = db.collection("agendamentos");
   const camposCliente = [
     "clienteId",
@@ -358,7 +406,7 @@ async function obterPerfil({ db, pool, uid }) {
     [uid],
   );
   return {
-    client: perfil(uid, cliente.data()),
+    client: dadosPerfil,
     completedCount: completed.length,
     historyComplete:
       snapshots.every((snapshot) => snapshot.docs.length < 200) &&
@@ -425,6 +473,7 @@ export async function atenderGestaoClientes(req, res, pool, dependencies = {}) {
         query,
         cursor: url.searchParams.get("cursor") || "",
         limit,
+        auth: dependencies.auth,
       });
       responder(res, 200, resultado);
       return;
@@ -439,7 +488,7 @@ export async function atenderGestaoClientes(req, res, pool, dependencies = {}) {
         return;
       }
       if (!match[2] && req.method === "GET") {
-        responder(res, 200, await obterPerfil({ db, pool, uid }));
+        responder(res, 200, await obterPerfil({ db, pool, uid, auth: dependencies.auth }));
         return;
       }
       if (match[2] && req.method === "PUT") {
