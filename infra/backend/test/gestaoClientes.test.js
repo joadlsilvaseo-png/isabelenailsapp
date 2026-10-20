@@ -388,7 +388,7 @@ test("UID inválido e observação acima do limite são rejeitados", async () =>
   assert.equal(note.status, 400);
 });
 
-test("reservas PIX expiradas e canceladas com data futura ficam no histórico", async () => {
+test("historico ignora reservas PIX expiradas e canceladas ausentes do Firestore", async () => {
   const f = fixture({
     reservations: [
       {
@@ -449,14 +449,62 @@ test("reservas PIX expiradas e canceladas com data futura ficam no histórico", 
   );
   assert.equal(
     res.body.history.some((item) => item.status === "Reserva PIX expirada"),
-    true,
+    false,
   );
   assert.equal(
     res.body.history.some((item) => item.status === "Reserva PIX cancelada"),
-    true,
+    false,
   );
 });
 
+test("historico respeita exclusoes do Firestore sem apagar registros financeiros", async () => {
+  const f = fixture({
+    appointments: [
+      {
+        id: "cancelado-presente",
+        data: {
+          clienteId: CLIENT,
+          data: "2026-10-14",
+          horario: "09:00",
+          servico: "Manicure",
+          status: "cancelado_cliente",
+        },
+      },
+    ],
+    reservations: [
+      {
+        agendamento_id: "cancelado-presente",
+        servico_id: "s1",
+        data_servico: "2026-10-14",
+        inicio_minuto: 540,
+        estado: "cancelada",
+      },
+      {
+        agendamento_id: "cancelado-excluido",
+        servico_id: "s1",
+        data_servico: "2026-10-14",
+        inicio_minuto: 780,
+        estado: "cancelada",
+      },
+    ],
+  });
+
+  const res = response();
+
+  await atenderGestaoClientes(
+    req("GET", `/admin/clientes/${CLIENT}`),
+    res,
+    f.pool,
+    f.dependencies,
+  );
+
+  assert.equal(res.status, 200);
+  assert.deepEqual(
+    res.body.history.map((item) => item.id),
+    ["cancelado-presente"],
+  );
+  assert.equal(res.body.upcoming.length, 0);
+});
 test("foto Google só aceita origem HTTPS conhecida, sem expor URL arbitrária", async () => {
   const f = fixture({
     customers: {

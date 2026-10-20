@@ -397,7 +397,7 @@ async function obterPerfil({ db, pool, uid, auth }) {
     )
     .sort((a, b) => dataHora(a).localeCompare(dataHora(b)));
   const upcomingIds = new Set(upcoming.map((item) => item.id));
-  const history = combinados.filter((item) => !upcomingIds.has(item.id));
+  const history = todos.filter((item) => !upcomingIds.has(item.id));
   const completed = todos.filter((item) =>
     CONCLUIDOS.has(normalizar(item.status)),
   );
