@@ -11,6 +11,7 @@ const errorBox = $("clients-error");
 const search = $("search-input");
 const moreButton = $("load-more");
 const modal = $("client-modal");
+const modalPanel = modal.querySelector(".client-modal");
 const exemption = $("client-pix-exemption");
 let cursor = null;
 let hasMore = false;
@@ -139,8 +140,8 @@ async function openProfile(uid, opener) {
   modalReturnFocus = opener;
   const version = ++profileVersion;
   modal.hidden = false;
-  $(".client-modal").scrollTop = 0;
-  $(".client-modal").setAttribute("aria-busy", "true");
+  modalPanel.scrollTop = 0;
+  modalPanel.setAttribute("aria-busy", "true");
   document.body.style.overflow = "hidden";
   $("modal-client-name").textContent = "Carregando perfil…";
   $("profile-content").hidden = true;
@@ -176,13 +177,13 @@ async function openProfile(uid, opener) {
     $("save-note").disabled = false;
     setExemptionStatus(isExempt ? "Autorização ativa." : "Esta cliente precisa pagar o sinal PIX.");
     $("profile-content").hidden = false;
-    $(".client-modal").setAttribute("aria-busy", "false");
+    modalPanel.setAttribute("aria-busy", "false");
   } catch (error) {
     if (version !== profileVersion) return;
     $("modal-client-name").textContent = "Não foi possível carregar";
     $("profile-error-message").textContent = error.message || "Não foi possível carregar os dados desta cliente.";
     $("profile-error").hidden = false;
-    $(".client-modal").setAttribute("aria-busy", "false");
+    modalPanel.setAttribute("aria-busy", "false");
     $("profile-content").hidden = true;
     setExemptionStatus("Não foi possível confirmar a autorização.", "error");
   }
