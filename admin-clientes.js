@@ -33,6 +33,18 @@ let modalReturnFocus = null;
 
 const fotosCartoesUrls = new Map();
 
+function imagemGoogle(url, avatar, valido) {
+  if (typeof url !== "string" || !/^https:\/\//.test(url)) return;
+  const imagem = new Image();
+  imagem.alt = "";
+  imagem.referrerPolicy = "no-referrer";
+  imagem.onload = () => {
+    if (valido()) avatar.replaceChildren(imagem);
+  };
+  imagem.onerror = () => {};
+  imagem.src = url;
+}
+
 function limparFotosCartoes() {
   for (const url of fotosCartoesUrls.values()) {
     URL.revokeObjectURL(url);
@@ -255,6 +267,8 @@ function clientCard(client) {
   button.append(avatar, content, side);
   if (client.hasCustomPhoto === true) {
     void carregarFotoCartao(client.id, avatar, button);
+  } else {
+    imagemGoogle(client.googlePhotoUrl, avatar, () => button.isConnected);
   }
   button.addEventListener("click", () => openProfile(client.id, button));
   return button;
@@ -369,6 +383,14 @@ async function openProfile(uid, opener) {
     if (version !== profileVersion) return;
     const client = profile.client;
     $("modal-avatar").textContent = initials(client.name);
+    if (client.googlePhotoUrl) {
+      imagemGoogle(
+        client.googlePhotoUrl,
+        $("modal-avatar"),
+        () => version === profileVersion && activeUid === uid && !modal.hidden &&
+          !$("modal-avatar").querySelector('img[src^="blob:"]'),
+      );
+    }
     void carregarFotoModal(uid, version);
     $("modal-client-name").textContent = client.name;
     $("modal-client-phone").textContent =
