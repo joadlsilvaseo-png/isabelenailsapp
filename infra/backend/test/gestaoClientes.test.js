@@ -169,3 +169,24 @@ test("UID inválido e observação acima do limite são rejeitados", async () =>
   await atenderGestaoClientes(req("PUT", `/admin/clientes/${CLIENT}/observacoes`, { note: "x".repeat(3001) }), note, f.pool, f.dependencies);
   assert.equal(note.status, 400);
 });
+
+
+test("reservas PIX expiradas e canceladas com data futura ficam no histórico", async () => {
+  const f = fixture({
+    reservations: [
+      { agendamento_id: null, servico_id: "s1", data_servico: "2030-03-20", inicio_minuto: 780, estado: "reservada" },
+      { agendamento_id: null, servico_id: "s1", data_servico: "2030-03-21", inicio_minuto: 780, estado: "confirmada" },
+      { agendamento_id: null, servico_id: "s1", data_servico: "2030-03-22", inicio_minuto: 780, estado: "expirada" },
+      { agendamento_id: null, servico_id: "s1", data_servico: "2030-03-23", inicio_minuto: 780, estado: "cancelada" },
+    ],
+  });
+  const res = response();
+  await atenderGestaoClientes(req("GET", `/admin/clientes/${CLIENT}`), res, f.pool, f.dependencies);
+  assert.equal(res.status, 200);
+  assert.equal(res.body.upcoming.some((item) => item.status === "Aguardando pagamento PIX"), true);
+  assert.equal(res.body.upcoming.some((item) => item.status === "Reserva PIX confirmada"), true);
+  assert.equal(res.body.upcoming.some((item) => item.status === "Reserva PIX expirada"), false);
+  assert.equal(res.body.upcoming.some((item) => item.status === "Reserva PIX cancelada"), false);
+  assert.equal(res.body.history.some((item) => item.status === "Reserva PIX expirada"), true);
+  assert.equal(res.body.history.some((item) => item.status === "Reserva PIX cancelada"), true);
+});
