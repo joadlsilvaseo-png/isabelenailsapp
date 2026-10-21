@@ -70,17 +70,17 @@ test("sexta segue das 9h às 19h, com almoço fechado", () => {
   }
 });
 
-test("sábado abre às 9h e encerra os atendimentos até 16h", () => {
+test("sábado permite início de agendamento até 16h", () => {
   const limites = obterLimitesAtendimentoSemanal(6);
   assert.deepEqual(limites, {
     minAbertura: 540,
     minUltimoInicio: 960,
-    minFechamento: 960,
+    minFechamento: 1440,
   });
-  for (const [horario, duracao] of [["09:00", 120], ["13:00", 120], ["15:00", 60], ["15:30", 30]]) {
+  for (const [horario, duracao] of [["09:00", 120], ["13:00", 120], ["15:00", 60], ["15:30", 60], ["16:00", 120]]) {
     assert.equal(validarHorarioPix("2026-11-07", horario, duracao).valido, true, horario + " (" + duracao + " min)");
   }
-  for (const [horario, duracao] of [["15:30", 60], ["16:00", 30], ["16:30", 30], ["19:00", 60]]) {
+  for (const [horario, duracao] of [["16:30", 30], ["17:00", 30], ["23:00", 120]]) {
     assert.equal(validarHorarioPix("2026-11-07", horario, duracao).valido, false, horario + " (" + duracao + " min)");
   }
 });

@@ -59,7 +59,7 @@ export function validarHorarioPix(dataIso, horario, duracao) {
   const sabado = diaSemana === 6;
   const abertura = diaSemana === 4 ? 660 : 540;
   const ultimoInicio = sabado ? 960 : horarioEstendido ? 1140 : 1080;
-  const fechamento = sabado ? 960 : horarioEstendido ? 1260 : 1200;
+  const fechamento = sabado ? 1440 : horarioEstendido ? 1260 : 1200;
   if (inicio < abertura || inicio > ultimoInicio || inicio % 30 !== 0 || fim > fechamento) {
     return horarioInvalido("Fora do horario permitido");
   }
