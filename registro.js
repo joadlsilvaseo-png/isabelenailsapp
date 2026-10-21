@@ -339,6 +339,7 @@ function clearErrors() {
    ============================================================ */
 
 async function performSignup(name, email, phone, password) {
+  let contaCriadaNoAuth = false;
   const submitBtn = document.querySelector('button[type="submit"]');
   const originalText = submitBtn.textContent;
 
@@ -353,6 +354,7 @@ async function performSignup(name, email, phone, password) {
       password,
     );
 
+    contaCriadaNoAuth = true;
     await updateProfile(userCredential.user, {
       displayName: name,
     });
@@ -391,7 +393,9 @@ async function performSignup(name, email, phone, password) {
     console.error("Signup error:", error);
 
     const errorCode = error.code || "";
-    if (errorCode === "auth/email-already-in-use") {
+    if (contaCriadaNoAuth) {
+      showError("emailInput", "Sua conta foi criada, mas o cadastro da cliente não foi concluído. Entre novamente para recuperar seu perfil. Se o problema continuar, contate o estúdio.");
+    } else if (errorCode === "auth/email-already-in-use") {
       showError("emailInput", "Este e-mail já está cadastrado.");
     } else if (errorCode === "auth/invalid-email") {
       showError("emailInput", "E-mail inválido.");
@@ -498,6 +502,7 @@ function setupGoogleSignup() {
         console.log("[GOOGLE SIGNUP] Documento atualizado/criado com sucesso");
       } catch (setDocError) {
         console.error("[GOOGLE SIGNUP] Erro ao gravar documento", setDocError);
+        throw new Error("Sua conta Google foi autenticada, mas não foi possível concluir o perfil. Entre novamente.");
       }
 
       sessionStorage.removeItem(PENDING_GOOGLE_PHONE_KEY);
@@ -509,7 +514,7 @@ function setupGoogleSignup() {
       console.error("[GOOGLE SIGNUP] Erro:", error);
       console.error("[GOOGLE SIGNUP] Erro code:", error.code);
       console.error("[GOOGLE SIGNUP] Erro message:", error.message);
-      showError("googleSignupBtn", "Erro ao fazer login com Google");
+      showError("googleSignupBtn", error.message || "Não foi possível concluir o cadastro com Google.");
       logEvent("signup_error", {
         method: "google",
         error: error.code || error.message,
