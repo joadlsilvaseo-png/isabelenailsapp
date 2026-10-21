@@ -64,8 +64,10 @@ export function validarHorarioPix(dataIso, horario, duracao) {
     return horarioInvalido("Fora do horario permitido");
   }
 
-  if (horario === "12:00" || horario === "12:30") {
-    return horarioInvalido("Inicio indisponivel");
+  // Pausa de 30 minutos: qualquer servico que toque 13h30-14h fica indisponivel.
+  // Terminar exatamente as 13h30 ou iniciar as 14h e permitido.
+  if (inicio < 14 * 60 && fim > 13 * 60 + 30) {
+    return horarioInvalido("Intervalo de almoco indisponivel");
   }
 
   // Terca: bloqueio das 09h ate 13h30.
