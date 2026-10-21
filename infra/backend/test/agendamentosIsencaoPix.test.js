@@ -165,7 +165,7 @@ function criarFixture({ isenta = true, reservas = [], documentos = {}, falharCom
   return { pool, firestore, state, dependencies };
 }
 
-function payload(chave = CHAVE, horario = "13:00") {
+function payload(chave = CHAVE, horario = "14:00") {
   return { servicoId: "s1", data: DATA, horario, chaveIdempotencia: chave, observacoes: "" };
 }
 
@@ -231,7 +231,7 @@ test("revogar a isenção obriga pagamentos nos novos agendamentos", async () =>
 
 test("horário ocupado no Firestore continua bloqueado", async () => {
   const f = criarFixture({ documentos: {
-    "agendamentos/outro": { clienteId: "cliente-2", data: DATA, horario: "13:00", duracao: 60, status: "confirmado" },
+    "agendamentos/outro": { clienteId: "cliente-2", data: DATA, horario: "14:00", duracao: 60, status: "confirmado" },
   } });
   await assert.rejects(
     criarAgendamentoIsento({ pool: f.pool, db: f.firestore, uid: UID, dados: payload(), dependencies: f.dependencies }),
@@ -240,7 +240,7 @@ test("horário ocupado no Firestore continua bloqueado", async () => {
 });
 
 test("reserva PIX pendente ocupa o horário para o fluxo isento", async () => {
-  const f = criarFixture({ reservas: [{ data: DATA, inicio: 780, fim: 840, estado: "reservada" }] });
+  const f = criarFixture({ reservas: [{ data: DATA, inicio: 840, fim: 900, estado: "reservada" }] });
   await assert.rejects(
     criarAgendamentoIsento({ pool: f.pool, db: f.firestore, uid: UID, dados: payload(), dependencies: f.dependencies }),
     (erro) => erro.codigo === "HORARIO_RESERVADO_PIX",
@@ -260,7 +260,7 @@ test("duas confirmações concorrentes não duplicam o mesmo horário", async ()
 
 test("cancelamento prévio libera o horário e não afeta o financeiro PIX", async () => {
   const f = criarFixture({ documentos: {
-    "agendamentos/cancelado": { clienteId: "cliente-2", data: DATA, horario: "13:00", duracao: 60, status: "cancelado_cliente", pixStatusFinanceiro: "pago" },
+    "agendamentos/cancelado": { clienteId: "cliente-2", data: DATA, horario: "14:00", duracao: 60, status: "cancelado_cliente", pixStatusFinanceiro: "pago" },
   } });
   const resultado = await criarAgendamentoIsento({ pool: f.pool, db: f.firestore, uid: UID, dados: payload(), dependencies: f.dependencies });
   assert.equal(f.state.documentos.get(`agendamentos/${resultado.agendamentoId}`).status, "confirmado");
