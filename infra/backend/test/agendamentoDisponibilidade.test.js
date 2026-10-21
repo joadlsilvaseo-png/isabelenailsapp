@@ -55,20 +55,33 @@ test("quinta abre às 11h e permite último início às 19h", () => {
   assert.equal(validarHorarioPix("2026-11-05", "19:00", 150).valido, false);
 });
 
-test("sexta e sábado seguem das 9h às 19h, com almoço fechado", () => {
-  for (const [data, dia] of [["2026-11-06", 5], ["2026-11-07", 6]]) {
-    const limites = obterLimitesAtendimentoSemanal(dia);
-    assert.deepEqual(limites, {
-      minAbertura: 540,
-      minUltimoInicio: 1140,
-      minFechamento: 1260,
-    });
-    for (const horario of ["09:00", "11:30", "13:00", "19:00"]) {
-      assert.equal(validarHorarioPix(data, horario, 120).valido, true, `${data} ${horario}`);
-    }
-    for (const horario of ["12:00", "12:30", "19:30"]) {
-      assert.equal(validarHorarioPix(data, horario, 60).valido, false, `${data} ${horario}`);
-    }
+test("sexta segue das 9h às 19h, com almoço fechado", () => {
+  const limites = obterLimitesAtendimentoSemanal(5);
+  assert.deepEqual(limites, {
+    minAbertura: 540,
+    minUltimoInicio: 1140,
+    minFechamento: 1260,
+  });
+  for (const horario of ["09:00", "11:30", "13:00", "19:00"]) {
+    assert.equal(validarHorarioPix("2026-11-06", horario, 120).valido, true, horario);
+  }
+  for (const horario of ["12:00", "12:30", "19:30"]) {
+    assert.equal(validarHorarioPix("2026-11-06", horario, 60).valido, false, horario);
+  }
+});
+
+test("sábado abre às 9h e encerra os atendimentos até 16h", () => {
+  const limites = obterLimitesAtendimentoSemanal(6);
+  assert.deepEqual(limites, {
+    minAbertura: 540,
+    minUltimoInicio: 960,
+    minFechamento: 960,
+  });
+  for (const [horario, duracao] of [["09:00", 120], ["13:00", 120], ["15:00", 60], ["15:30", 30]]) {
+    assert.equal(validarHorarioPix("2026-11-07", horario, duracao).valido, true, horario + " (" + duracao + " min)");
+  }
+  for (const [horario, duracao] of [["15:30", 60], ["16:00", 30], ["16:30", 30], ["19:00", 60]]) {
+    assert.equal(validarHorarioPix("2026-11-07", horario, duracao).valido, false, horario + " (" + duracao + " min)");
   }
 });
 
