@@ -3,7 +3,7 @@
  * Terça e quarta mantêm suas regras especiais em agendamento.js.
  * Quinta e sexta permitem início até 19h e término até 21h.
  * No sábado, o último horário de início é 16h; o serviço pode terminar depois.
- * Os inícios 12h e 12h30 permanecem indisponíveis para almoço.
+ * A pausa de almoço de 13h30 a 14h é bloqueada por intervalo em agendamento.js e no validador PIX.
  */
 export function obterLimitesAtendimentoSemanal(diaSemana) {
   const horarioEstendido = diaSemana === 4 || diaSemana === 5;
