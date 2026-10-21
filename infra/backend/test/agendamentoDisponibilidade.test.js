@@ -46,11 +46,11 @@ test("quinta abre às 11h e permite último início às 19h", () => {
     minUltimoInicio: 1140,
     minFechamento: 1260,
   });
-  for (const horario of ["11:00", "13:00", "19:00"]) {
-    assert.equal(validarHorarioPix("2026-11-05", horario, 120).valido, true, horario);
+  for (const [horario, duracao] of [["11:00", 120], ["12:00", 60], ["12:30", 60], ["13:00", 30], ["14:00", 120], ["19:00", 60]]) {
+    assert.equal(validarHorarioPix("2026-11-05", horario, duracao).valido, true, horario + " (" + duracao + " min)");
   }
-  for (const horario of ["09:00", "10:30", "12:00", "12:30", "19:30"]) {
-    assert.equal(validarHorarioPix("2026-11-05", horario, 60).valido, false, horario);
+  for (const [horario, duracao] of [["09:00", 60], ["10:30", 60], ["12:00", 120], ["13:00", 60], ["13:30", 30], ["19:30", 60]]) {
+    assert.equal(validarHorarioPix("2026-11-05", horario, duracao).valido, false, horario + " (" + duracao + " min)");
   }
   assert.equal(validarHorarioPix("2026-11-05", "19:00", 150).valido, false);
 });
@@ -62,11 +62,11 @@ test("sexta segue das 9h às 19h, com almoço fechado", () => {
     minUltimoInicio: 1140,
     minFechamento: 1260,
   });
-  for (const horario of ["09:00", "11:30", "13:00", "19:00"]) {
-    assert.equal(validarHorarioPix("2026-11-06", horario, 120).valido, true, horario);
+  for (const [horario, duracao] of [["09:00", 120], ["11:30", 60], ["12:00", 60], ["12:30", 60], ["13:00", 30], ["14:00", 120], ["19:00", 60]]) {
+    assert.equal(validarHorarioPix("2026-11-06", horario, duracao).valido, true, horario + " (" + duracao + " min)");
   }
-  for (const horario of ["12:00", "12:30", "19:30"]) {
-    assert.equal(validarHorarioPix("2026-11-06", horario, 60).valido, false, horario);
+  for (const [horario, duracao] of [["12:00", 120], ["13:00", 60], ["13:30", 30], ["19:30", 60]]) {
+    assert.equal(validarHorarioPix("2026-11-06", horario, duracao).valido, false, horario + " (" + duracao + " min)");
   }
 });
 
@@ -77,20 +77,36 @@ test("sábado permite início de agendamento até 16h", () => {
     minUltimoInicio: 960,
     minFechamento: 1440,
   });
-  for (const [horario, duracao] of [["09:00", 120], ["13:00", 120], ["15:00", 60], ["15:30", 60], ["16:00", 120]]) {
+  for (const [horario, duracao] of [["09:00", 120], ["12:00", 60], ["12:30", 60], ["13:00", 30], ["14:00", 120], ["15:00", 60], ["15:30", 60], ["16:00", 120]]) {
     assert.equal(validarHorarioPix("2026-11-07", horario, duracao).valido, true, horario + " (" + duracao + " min)");
   }
-  for (const [horario, duracao] of [["16:30", 30], ["17:00", 30], ["23:00", 120]]) {
+  for (const [horario, duracao] of [["12:00", 120], ["13:00", 60], ["13:30", 30], ["16:30", 30], ["17:00", 30], ["23:00", 120]]) {
     assert.equal(validarHorarioPix("2026-11-07", horario, duracao).valido, false, horario + " (" + duracao + " min)");
   }
 });
 
 test("segunda, terça, quarta e dezembro mantêm regras anteriores", () => {
   assert.equal(validarHorarioPix("2026-11-02", "13:30", 60).valido, false);
-  assert.equal(validarHorarioPix("2026-11-03", "13:30", 60).valido, true);
+  assert.equal(validarHorarioPix("2026-11-03", "13:30", 60).valido, false);
   assert.equal(validarHorarioPix("2026-11-03", "09:00", 60).valido, false);
-  assert.equal(validarHorarioPix("2026-11-04", "13:30", 120).valido, true);
+  assert.equal(validarHorarioPix("2026-11-04", "13:30", 120).valido, false);
   assert.equal(validarHorarioPix("2026-12-03", "11:00", 60).valido, false);
   assert.equal(obterLimitesAtendimentoSemanal(2).minUltimoInicio, 1080);
   assert.equal(obterLimitesAtendimentoSemanal(3).minFechamento, 1200);
+});
+
+test("almoço de meia hora bloqueia sobreposição em todos os dias abertos", () => {
+  for (const data of ["2026-11-03", "2026-11-04", "2026-11-05", "2026-11-06", "2026-11-07"]) {
+    for (const duracao of [30, 60, 120]) {
+      assert.equal(validarHorarioPix(data, "13:30", duracao).valido, false, data + " 13:30 " + duracao);
+    }
+    assert.equal(validarHorarioPix(data, "14:00", 30).valido, true, data + " 14:00");
+  }
+  for (const data of ["2026-11-05", "2026-11-06", "2026-11-07"]) {
+    assert.equal(validarHorarioPix(data, "12:00", 60).valido, true, data + " 12:00/60");
+    assert.equal(validarHorarioPix(data, "12:30", 60).valido, true, data + " 12:30/60");
+    assert.equal(validarHorarioPix(data, "13:00", 30).valido, true, data + " 13:00/30");
+    assert.equal(validarHorarioPix(data, "12:00", 120).valido, false, data + " 12:00/120");
+    assert.equal(validarHorarioPix(data, "13:00", 60).valido, false, data + " 13:00/60");
+  }
 });
