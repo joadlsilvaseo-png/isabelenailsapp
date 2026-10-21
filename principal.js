@@ -5,6 +5,7 @@ import {
 import { auth, db } from "./firebase-config.js";
 import { iniciarCentralNotificacoes } from "./centralNotificacoesUI.js";
 import { consultarFotoPerfil } from "./foto-perfil-api.js";
+import { montarPerfilClienteAuth, podeRecuperarPerfilCliente } from "./clientePerfilIntegridade.js";
 
 import {
   onAuthStateChanged,
@@ -14,6 +15,7 @@ import {
 import {
   doc,
   getDoc,
+  runTransaction,
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
 
 const fallbackClientName = "Cliente";
@@ -341,7 +343,25 @@ async function loadUserAccessProfile(user) {
 
   const usuarioData = usuarioSnapshot.exists() ? usuarioSnapshot.data() : null;
 
-  const clienteData = clienteSnapshot.exists() ? clienteSnapshot.data() : null;
+  let clienteData = clienteSnapshot.exists() ? clienteSnapshot.data() : null;
+
+  // Conta existente no Authentication sem perfil em clientes/{uid}.
+  // A transacao cria somente quando ausente e nunca altera perfis anteriores.
+  if (podeRecuperarPerfilCliente(usuarioData, clienteData)) {
+    const perfilRecuperado = montarPerfilClienteAuth(user, {
+      nomeAlternativo: usuarioData?.nome,
+      telefoneAlternativo: usuarioData?.telefone,
+    });
+    await runTransaction(db, async (transaction) => {
+      const atual = await transaction.get(clienteRef);
+      if (!atual.exists()) transaction.set(clienteRef, perfilRecuperado);
+    });
+    const clienteRestaurado = await getDoc(clienteRef);
+    if (!clienteRestaurado.exists()) {
+      throw new Error("Cadastro da cliente não foi persistido no Firestore.");
+    }
+    clienteData = clienteRestaurado.data();
+  }
 
   /*
    * A coleção usuarios é a fonte principal
