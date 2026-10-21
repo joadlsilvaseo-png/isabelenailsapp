@@ -1,15 +1,17 @@
 /**
  * Limites dos horários de início e término exibidos na agenda.
  * Terça e quarta mantêm suas regras especiais em agendamento.js.
- * Quinta, sexta e sábado permitem início até 19h e término até 21h.
+ * Quinta e sexta permitem início até 19h e término até 21h.
+ * No sábado, os atendimentos devem terminar até 16h.
  * Os inícios 12h e 12h30 permanecem indisponíveis para almoço.
  */
 export function obterLimitesAtendimentoSemanal(diaSemana) {
-  const horarioEstendido = diaSemana === 4 || diaSemana === 5 || diaSemana === 6;
+  const horarioEstendido = diaSemana === 4 || diaSemana === 5;
+  const sabado = diaSemana === 6;
   return {
     minAbertura: diaSemana === 4 ? 660 : 540,
-    minUltimoInicio: horarioEstendido ? 1140 : 1080,
-    minFechamento: horarioEstendido ? 1260 : 1200,
+    minUltimoInicio: sabado ? 960 : horarioEstendido ? 1140 : 1080,
+    minFechamento: sabado ? 960 : horarioEstendido ? 1260 : 1200,
   };
 }
 
