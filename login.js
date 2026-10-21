@@ -142,6 +142,7 @@ function setupGoogleLogin() {
           console.log("[GOOGLE LOGIN] Documento criado com sucesso");
         } catch (setDocError) {
           console.error("[GOOGLE LOGIN] Erro ao criar documento", setDocError);
+          throw new Error("Não foi possível concluir o cadastro da cliente. Tente novamente.");
         }
       }
 
