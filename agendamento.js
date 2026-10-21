@@ -443,16 +443,21 @@ function obterIntervalosBloqueadosFixos(dataIso) {
    * 6 = Sábado
    */
 
+  const intervalos = [
+    {
+      start: timeToMins("13:30"),
+      end: timeToMins("14:00"),
+    },
+  ];
+
   if (diaSemana === 2) {
-    return [
-      {
-        start: timeToMins("09:00"),
-        end: timeToMins("13:30"),
-      },
-    ];
+    intervalos.push({
+      start: timeToMins("09:00"),
+      end: timeToMins("13:30"),
+    });
   }
 
-  return [];
+  return intervalos;
 }
 async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null) {
   const requisicao = (renderizarHorarios.requisicao || 0) + 1;
@@ -546,10 +551,6 @@ async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null) {
       }
 
       const horarioTexto = minsToTime(atual);
-
-      if (horarioTexto === "12:00" || horarioTexto === "12:30") {
-        continue;
-      }
 
       const bloqueadoPorRegraTerca =
         diaSemanaSelecionado === 2 &&
