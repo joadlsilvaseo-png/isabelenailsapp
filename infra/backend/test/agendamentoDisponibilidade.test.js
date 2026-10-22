@@ -85,6 +85,15 @@ test("sábado permite início de agendamento até 16h", () => {
   }
 });
 
+test("cliente consegue reservar manutenção 20 dias depois dentro da janela mensal", () => {
+  const agora = new Date("2026-10-25T12:00:00-03:00");
+  assert.equal(validarHorarioPix("2026-11-14", "09:00", 120, agora).valido, true);
+  assert.equal(validarHorarioPix("2026-11-25", "09:00", 60, agora).valido, true,
+    "o limite de um mês é inclusivo no mesmo dia do mês seguinte");
+  assert.equal(validarHorarioPix("2026-11-26", "09:00", 60, agora).valido, false);
+});
+
+
 test("segunda, terça, quarta e dezembro mantêm regras anteriores", () => {
   assert.equal(validarHorarioPix("2026-11-02", "13:30", 60).valido, false);
   assert.equal(validarHorarioPix("2026-11-03", "13:30", 60).valido, false);
@@ -110,3 +119,4 @@ test("almoço de meia hora bloqueia sobreposição em todos os dias abertos", ()
     assert.equal(validarHorarioPix(data, "13:00", 60).valido, false, data + " 13:00/60");
   }
 });
+

@@ -1,10 +1,12 @@
+import { estaNaJanelaMensal } from "../../../agendaJanela.js";
+
 const DATAS_DEZEMBRO_LIBERADAS = new Set([]);
 
 function horarioInvalido(motivo) {
   return { valido: false, motivo };
 }
 
-export function validarHorarioPix(dataIso, horario, duracao) {
+export function validarHorarioPix(dataIso, horario, duracao, agora = new Date()) {
   if (
     typeof dataIso !== "string" ||
     typeof horario !== "string" ||
@@ -28,6 +30,10 @@ export function validarHorarioPix(dataIso, horario, duracao) {
     data.getUTCDate() !== dia
   ) {
     return horarioInvalido("Data inexistente");
+  }
+
+  if (!estaNaJanelaMensal(dataIso, agora)) {
+    return horarioInvalido("Data fora da janela de agendamento de um mês");
   }
 
   // Abertura oficial dos agendamentos: novembro de 2026.
@@ -107,3 +113,4 @@ export function possuiSobreposicao(inicio, fim, intervalos) {
     (ocupado) => inicio < ocupado.fimMinuto && fim > ocupado.inicioMinuto,
   );
 }
+
