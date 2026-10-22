@@ -302,6 +302,18 @@ test("reagendamento seguro valida conflito e preserva evento da agenda", async (
   assert.equal(atualizado.data, DATA);
 });
 
+test("reagendamento recusa início de quarta fora de 09:00 e 14:00", async () => {
+  const f = criarFixture({ isenta: false, documentos: {
+    "agendamentos/original": { clienteId: UID, data: "2026-11-03", horario: "14:00", duracao: 60, status: "confirmado" },
+  } });
+  await assert.rejects(reagendarComBloqueio({
+    pool: f.pool, db: f.firestore, uid: UID,
+    dados: { agendamentoId: "original", servicoId: "s1", data: "2026-11-04", horario: "14:30" },
+    dependencies: f.dependencies,
+  }), (erro) => erro.status === 400 && erro.codigo === "HORARIO_INVALIDO");
+  assert.equal(f.state.documentos.get("agendamentos/original").data, "2026-11-03");
+});
+
 test("reagendamento não ocupa horário PIX pendente nem altera o documento", async () => {
   const f = criarFixture({ isenta: false, reservas: [{ data: DATA, inicio: 840, fim: 900, estado: "reservada" }], documentos: {
     "agendamentos/original": { clienteId: UID, data: "2026-11-03", horario: "13:00", duracao: 60, status: "confirmado", calendarEventId: "evt_original" },
@@ -324,3 +336,4 @@ test("agendamento isento gera notificações push para cliente e administradora"
   assert.equal(eventos[0].tipo, "confirmacao_isencao_cliente");
   assert.match(eventos[0].mensagem, /pagar sinal PIX/);
 });
+

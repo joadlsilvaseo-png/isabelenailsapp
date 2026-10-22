@@ -26,3 +26,21 @@ test("a interface e a reserva PIX compartilham a janela mensal, preservando os b
   assert.match(reserva, /estaNaJanelaMensal\(dataIso/);
   assert.match(reserva, /ano === 2026 && mes === 12/);
 });
+
+test("a agenda de quarta renderiza somente os inícios fixos e o backend compartilha a mesma regra", async () => {
+  const js = await ler("./agendamento.js");
+  const regras = await ler("./agendamentoDisponibilidade.js");
+  const pix = await ler("./infra/backend/src/pixDisponibilidade.js");
+  const reservas = await ler("./infra/backend/src/pixReservas.js");
+  assert.match(js, /obterIniciosEspeciaisSemanais\(diaSemanaSelecionado\)/);
+  assert.match(js, /Início às 09:00/);
+  assert.match(js, /Início às 14:00/);
+  assert.match(js, /Não há horários disponíveis nesta data/);
+  assert.match(regras, /diaSemana === 3 \? \[540, 840\] : null/);
+  assert.match(regras, /inicioMinuto === 540.*fimMinuto <= 750/s);
+  assert.match(regras, /inicioMinuto === 840.*fimMinuto <= 1050/s);
+  assert.match(pix, /validarHorarioEspecialSemanal\(diaSemana, inicio, duracao\)/);
+  assert.match(reservas, /validarHorarioPix\(data, horario, duracao\)/);
+  assert.match(reservas, /if \(!periodo\.valido\)\s*\{\s*throw new ErroReserva\(400, periodo\.motivo\)/);
+});
+

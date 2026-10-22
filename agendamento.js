@@ -1,7 +1,7 @@
 import { auth, db } from "./firebase-config.js";
 import { calcularJanelaMensal, estaNaJanelaMensal, formatarDataBrasil } from "./agendaJanela.js";
 import { consultarDisponibilidadePix, reagendarAgendamentoApi } from "./agendamentosApi.js";
-import { consultarIntervalosDisponibilidade, intervaloSobrepoeDisponibilidade, obterLimitesAtendimentoSemanal } from "./agendamentoDisponibilidade.js";
+import { consultarIntervalosDisponibilidade, intervaloSobrepoeDisponibilidade, obterIniciosEspeciaisSemanais, obterLimitesAtendimentoSemanal, validarHorarioEspecialSemanal } from "./agendamentoDisponibilidade.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
 import {
   collection,
@@ -545,44 +545,26 @@ async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null) {
 
     let quantidadeDisponivel = 0;
 
-    for (let atual = minAbertura; atual <= minUltimoInicio; atual += 30) {
+    const iniciosEspeciais = obterIniciosEspeciaisSemanais(diaSemanaSelecionado);
+    const horariosCandidatos = iniciosEspeciais || Array.from(
+      { length: Math.floor((minUltimoInicio - minAbertura) / 30) + 1 },
+      (_, indice) => minAbertura + indice * 30,
+    );
+
+    for (const atual of horariosCandidatos) {
       const fimServico = atual + duracaoServico;
 
-      if (fimServico > minFechamento) {
+      if (fimServico > minFechamento && diaSemanaSelecionado !== 3) {
         continue;
       }
 
       const horarioTexto = minsToTime(atual);
 
-      const bloqueadoPorRegraTerca =
-        diaSemanaSelecionado === 2 &&
-        (atual > timeToMins("15:30") || fimServico > timeToMins("17:30"));
-
-      const horarioPermitidoQuartaManha =
-        atual >= timeToMins("09:00") &&
-        atual <= timeToMins("10:30") &&
-        fimServico <= timeToMins("12:30");
-
-      const horarioPermitidoQuartaEncaixe =
-        atual >= timeToMins("11:00") &&
-        atual <= timeToMins("11:30") &&
-        duracaoServico <= 60 &&
-        fimServico <= timeToMins("12:30");
-
-      const horarioPermitidoQuartaTarde =
-        atual >= timeToMins("13:30") &&
-        atual <= timeToMins("15:30") &&
-        fimServico <= timeToMins("17:30");
-
-      const bloqueadoPorRegraQuarta =
-        diaSemanaSelecionado === 3 &&
-        !horarioPermitidoQuartaManha &&
-        !horarioPermitidoQuartaEncaixe &&
-        !horarioPermitidoQuartaTarde;
+      const horarioEspecialInvalido =
+        !validarHorarioEspecialSemanal(diaSemanaSelecionado, atual, duracaoServico);
 
       const indisponivel =
-        bloqueadoPorRegraTerca ||
-        bloqueadoPorRegraQuarta ||
+        horarioEspecialInvalido ||
         intervaloSobrepoeDisponibilidade(atual, fimServico, intervalosIndisponiveis);
 
       const botao = document.createElement("button");
@@ -653,9 +635,9 @@ async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null) {
       container.appendChild(periodo);
     }
 
-    criarGrupoHorario("Manhã", diaSemanaSelecionado === 4 ? "Das 11h às 12h" : "Das 9h às 12h", horariosManha);
+    criarGrupoHorario("Manhã", diaSemanaSelecionado === 4 ? "Das 11h às 12h" : diaSemanaSelecionado === 3 ? "Início às 09:00" : "Das 9h às 12h", horariosManha);
 
-    criarGrupoHorario("Tarde", [4, 5, 6].includes(diaSemanaSelecionado)
+    criarGrupoHorario("Tarde", diaSemanaSelecionado === 3 ? "Início às 14:00" : [4, 5, 6].includes(diaSemanaSelecionado)
       ? "Inícios até 19h" : "Das 12h às 18h", horariosTarde);
 
     if (availabilityElement) {
@@ -665,7 +647,12 @@ async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null) {
           : `${quantidadeDisponivel} horários`;
     }
 
-    if (quantidadeDisponivel === 0) {
+    if (quantidadeDisponivel === 0 && diaSemanaSelecionado === 3) {
+      const aviso = document.createElement("div");
+      aviso.className = "agendamento-time-state";
+      aviso.textContent = "Não há horários disponíveis nesta data.";
+      container.appendChild(aviso);
+    } else if (quantidadeDisponivel === 0) {
       container.innerHTML = `
         <div class="agendamento-time-state">
           Não há horários disponíveis nesta data.
@@ -1110,4 +1097,5 @@ async function inicializarAgendamento() {
 }
 
 document.addEventListener("DOMContentLoaded", inicializarAgendamento);
+
 

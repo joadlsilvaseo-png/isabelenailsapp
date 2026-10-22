@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 import {
   consultarIntervalosDisponibilidade,
   intervaloSobrepoeDisponibilidade,
+  obterIniciosEspeciaisSemanais,
   obterLimitesAtendimentoSemanal,
+  validarHorarioEspecialSemanal,
 } from "../../../agendamentoDisponibilidade.js";
 import { validarHorarioPix } from "../src/pixDisponibilidade.js";
 
@@ -93,6 +95,44 @@ test("cliente consegue reservar manutenção 20 dias depois dentro da janela men
   assert.equal(validarHorarioPix("2026-11-26", "09:00", 60, agora).valido, false);
 });
 
+test("quarta apresenta somente 09:00 e 14:00 e aplica limites de término", () => {
+  const agora = new Date("2026-10-22T12:00:00-03:00");
+  assert.deepEqual(obterIniciosEspeciaisSemanais(3), [540, 840]);
+  assert.equal(obterIniciosEspeciaisSemanais(2), null);
+  assert.equal(validarHorarioPix("2026-11-04", "09:00", 210, agora).valido, true,
+    "09:00 pode terminar exatamente às 12:30");
+  assert.equal(validarHorarioPix("2026-11-04", "14:00", 210, agora).valido, true,
+    "14:00 pode terminar exatamente às 17:30");
+  assert.equal(validarHorarioPix("2026-11-04", "09:00", 211, agora).valido, false);
+  assert.equal(validarHorarioPix("2026-11-04", "14:00", 211, agora).valido, false);
+
+  for (const horario of ["09:30", "10:00", "10:30", "11:00", "11:30", "13:30", "14:30", "15:00", "15:30"]) {
+    assert.equal(validarHorarioPix("2026-11-04", horario, 30, agora).valido, false, horario);
+  }
+});
+
+test("conflitos de Firestore e PIX continuam bloqueando os dois inícios de quarta", async () => {
+  const intervalos = await consultarIntervalosDisponibilidade({
+    consultarAgendamentosFirestore: async () => [{ inicioMinuto: 540, fimMinuto: 600 }],
+    consultarReservasPix: async () => [{ inicioMinuto: 840, fimMinuto: 900 }],
+  });
+  for (const inicio of obterIniciosEspeciaisSemanais(3)) {
+    assert.equal(intervaloSobrepoeDisponibilidade(inicio, inicio + 60, intervalos), true);
+  }
+});
+
+test("regra especial central preserva terça 14:00-15:30 e o limite de 17:30", () => {
+  for (const horario of ["14:00", "14:30", "15:00", "15:30"]) {
+    const [hora, minuto] = horario.split(":").map(Number);
+    assert.equal(validarHorarioEspecialSemanal(2, hora * 60 + minuto, 60), true, horario);
+  }
+  assert.equal(validarHorarioPix("2026-11-03", "15:30", 150, new Date("2026-10-22T12:00:00-03:00")).valido, false);
+  for (const horario of ["09:00", "09:30", "10:00", "11:00", "13:30", "16:00"]) {
+    const [hora, minuto] = horario.split(":").map(Number);
+    assert.equal(validarHorarioEspecialSemanal(2, hora * 60 + minuto, 30), false, horario);
+  }
+});
+
 
 test("segunda, terça, quarta e dezembro mantêm regras anteriores", () => {
   assert.equal(validarHorarioPix("2026-11-02", "13:30", 60).valido, false);
@@ -119,4 +159,5 @@ test("almoço de meia hora bloqueia sobreposição em todos os dias abertos", ()
     assert.equal(validarHorarioPix(data, "13:00", 60).valido, false, data + " 13:00/60");
   }
 });
+
 
