@@ -1,4 +1,4 @@
-import { estaNaJanelaMensal } from "../../../agendaJanela.js";
+import { estaNaJanelaMensal } from "./agendaJanela.js";
 
 const ID_AGENDAMENTO = /^[A-Za-z0-9_-]{1,160}$/;
 
