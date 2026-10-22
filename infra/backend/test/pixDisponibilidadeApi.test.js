@@ -73,20 +73,6 @@ test("consulta de disponibilidade é autenticada e valida a data", async () => {
   assert.equal(pool.chamadas.length, 0);
 });
 
-test("consulta não revela disponibilidade fora do horizonte mensal", async () => {
-  const pool = criarPool([]);
-  const resposta = criarResposta();
-  await consultarDisponibilidadePix(
-    { method: "GET", url: "/pix/disponibilidade?data=2026-11-26", headers: {} },
-    resposta,
-    pool,
-    { verificarUsuario: async () => "cliente-1", agora: new Date("2026-10-25T12:00:00-03:00") },
-  );
-  assert.equal(resposta.status, 400);
-  assert.match(resposta.body.erro, /janela mensal/);
-  assert.equal(pool.chamadas.length, 0);
-});
-
 test("somente exclui reserva do próprio agendamento autorizado ao reagendar", async () => {
   const db = {
     collection(nome) {
@@ -207,4 +193,3 @@ test("falha de consulta retorna erro sem alterar o banco", async () => {
   assert.equal(pool.chamadas.length, 1);
   assert.equal(pool.chamadas[0].trim().toLowerCase().startsWith("select"), true);
 });
-

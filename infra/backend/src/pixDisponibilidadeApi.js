@@ -1,4 +1,4 @@
-import { estaNaJanelaMensal } from "./agendaJanela.js";
+import { verificarUsuario } from "./pushSubscriptions.js";
 
 const ID_AGENDAMENTO = /^[A-Za-z0-9_-]{1,160}$/;
 
@@ -57,9 +57,7 @@ async function validarAgendamentoParaExclusao(db, agendamentoId, uid) {
 export async function consultarDisponibilidadePix(req, res, pool, dependencies = {}) {
   let uid;
   try {
-    const verificarUsuario = dependencies.verificarUsuario ||
-      (await import("./pushSubscriptions.js")).verificarUsuario;
-    uid = await verificarUsuario(req);
+    uid = await (dependencies.verificarUsuario || verificarUsuario)(req);
   } catch {
     responder(res, 401, { erro: "Não autenticado" });
     return;
@@ -70,10 +68,6 @@ export async function consultarDisponibilidadePix(req, res, pool, dependencies =
   const agendamentoId = url.searchParams.get("agendamentoId");
   if (!dataIsoValida(data)) {
     responder(res, 400, { erro: "Data inválida" });
-    return;
-  }
-  if (!estaNaJanelaMensal(data, dependencies.agora || new Date())) {
-    responder(res, 400, { erro: "Data fora da janela mensal de agendamento" });
     return;
   }
   if (agendamentoId !== null && !ID_AGENDAMENTO.test(agendamentoId)) {
@@ -123,4 +117,3 @@ export async function consultarDisponibilidadePix(req, res, pool, dependencies =
     responder(res, 503, { erro: "Não foi possível confirmar a disponibilidade" });
   }
 }
-

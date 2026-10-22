@@ -6,7 +6,6 @@ import { auth, db } from "./firebase-config.js";
 import { iniciarCentralNotificacoes } from "./centralNotificacoesUI.js";
 import { consultarFotoPerfil } from "./foto-perfil-api.js";
 import { montarPerfilClienteAuth, podeRecuperarPerfilCliente } from "./clientePerfilIntegridade.js";
-import { montarCatalogoCliente, normalizarSlugCategoria } from "./categoriasCatalogo.js";
 
 import {
   onAuthStateChanged,
@@ -14,10 +13,8 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
 
 import {
-  collection,
   doc,
   getDoc,
-  getDocs,
   runTransaction,
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
 
@@ -231,7 +228,7 @@ function setupPrincipalSearch() {
       const destination = visibleItems[0].serviceLink?.getAttribute("href");
 
       if (destination) {
-        visibleItems[0].serviceLink.click();
+        window.location.href = destination;
       }
 
       return;
@@ -246,99 +243,6 @@ function setupPrincipalSearch() {
       block: "start",
     });
   });
-}
-
-async function carregarCategoriasDinamicasCliente() {
-  const lista = document.getElementById("principal-services-list");
-  if (!lista) return false;
-  try {
-    const [categoriasSnap, servicosSnap] = await Promise.all([
-      getDocs(collection(db, "categorias")),
-      getDocs(collection(db, "servicos")),
-    ]);
-    if (categoriasSnap.empty) return false;
-    const servicos = servicosSnap.docs.map((item) => ({ id: item.id, ...item.data() }));
-    const categorias = montarCatalogoCliente(
-      categoriasSnap.docs.map((item) => ({ id: item.id, ...item.data() })),
-      servicos,
-    ).map((categoria) => ({ ...categoria, slug: normalizarSlugCategoria(categoria.slug || categoria.nome) }));
-    if (!categorias.length) {
-      lista.innerHTML = '<li><p class="principal-catalog-empty">Nenhuma categoria com serviço disponível no momento.</p></li>';
-      return true;
-    }
-
-    const icones = Array.from(lista.querySelectorAll(".service-icon"));
-    lista.replaceChildren();
-    const dialog = document.getElementById("principal-category-dialog");
-    const dialogTitle = document.getElementById("principal-category-dialog-title");
-    const servicesList = document.getElementById("principal-category-services");
-    const closeButton = document.getElementById("principal-category-dialog-close");
-    closeButton?.addEventListener("click", () => dialog?.close());
-    dialog?.addEventListener("click", (event) => {
-      if (event.target === dialog) dialog.close();
-    });
-
-    categorias.forEach((categoria, index) => {
-      const item = document.createElement("li");
-      const link = document.createElement("a");
-      link.href = "#services-title";
-      link.className = "service-row dynamic-category-trigger";
-      link.dataset.dynamicCategory = categoria.id;
-      const icon = document.createElement("span");
-      icon.className = "service-icon";
-      icon.setAttribute("aria-hidden", "true");
-      const template = icones[index % Math.max(icones.length, 1)];
-      if (template) icon.append(...Array.from(template.cloneNode(true).childNodes));
-      const content = document.createElement("span");
-      content.className = "service-content";
-      const name = document.createElement("strong");
-      name.className = "service-label";
-      name.textContent = categoria.nome || "Categoria";
-      const description = document.createElement("span");
-      description.className = "service-description";
-      description.textContent = [categoria.descricao, categoria.servicos.map((service) => service.nome || service.nomeServico || "").join(" ")].filter(Boolean).join(" · ");
-      content.append(name, description);
-      const arrow = document.createElement("span");
-      arrow.className = "service-chevron";
-      arrow.setAttribute("aria-hidden", "true");
-      arrow.textContent = "›";
-      link.append(icon, content, arrow);
-      item.append(link);
-      lista.append(item);
-      link.addEventListener("click", (event) => {
-        event.preventDefault();
-        if (!dialog || !servicesList) return;
-        dialogTitle.textContent = categoria.nome || "Serviços";
-        servicesList.replaceChildren();
-        categoria.servicos.forEach((service) => {
-          const row = document.createElement("li");
-          const serviceLink = document.createElement("a");
-          serviceLink.className = "service-row";
-          serviceLink.href = `agendamento.html?id=${encodeURIComponent(service.id)}`;
-          const copy = document.createElement("span");
-          copy.className = "service-content";
-          const serviceName = document.createElement("strong");
-          serviceName.className = "service-label";
-          serviceName.textContent = service.nome || service.nomeServico || "Serviço";
-          const detail = document.createElement("span");
-          detail.className = "service-description";
-          const duration = Number(service.duracao || service.duracaoMinutos || service.tempo);
-          const rawPrice = service.preco ?? service.valor ?? "";
-          const price = typeof rawPrice === "number" ? rawPrice : Number(String(rawPrice).replace(/R\$/gi, "").replace(/\s/g, "").replace(/\./g, "").replace(",", "."));
-          detail.textContent = [service.descricao, Number.isFinite(duration) && duration > 0 ? `${duration} min` : "", Number.isFinite(price) && price > 0 ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(price) : "Valor a consultar"].filter(Boolean).join(" · ");
-          copy.append(serviceName, detail);
-          serviceLink.append(copy);
-          row.append(serviceLink);
-          servicesList.append(row);
-        });
-        dialog.showModal();
-      });
-    });
-    return true;
-  } catch (error) {
-    console.error("Não foi possível carregar as categorias dinâmicas:", error);
-    return false;
-  }
 }
 
 /* ============================================================
@@ -530,7 +434,7 @@ async function loadUserAccessProfile(user) {
    INTERFACE DA CLIENTE
    ============================================================ */
 
-async function configureClientInterface(user, accessProfile, elements) {
+function configureClientInterface(user, accessProfile, elements) {
   const userData = accessProfile.usuarioData || {};
 
   const clientData = accessProfile.clienteData || {};
@@ -584,7 +488,6 @@ async function configureClientInterface(user, accessProfile, elements) {
   }
 
   showRoleSections("cliente");
-  await carregarCategoriasDinamicasCliente();
   setupPrincipalSearch();
   finishLoading(elements);
 }
@@ -919,7 +822,7 @@ async function handleAuthenticatedUser(user, elements) {
     if (accessProfile.role === "admin") {
       configureAdminInterface(user, accessProfile, elements);
     } else {
-      await configureClientInterface(user, accessProfile, elements);
+      configureClientInterface(user, accessProfile, elements);
     }
     // Carrega a foto personalizada sem bloquear a tela.
     void carregarFotoPersonalizada(user, elements.photo);
@@ -967,4 +870,3 @@ if (document.readyState === "loading") {
 } else {
   initPrincipalPage();
 }
-

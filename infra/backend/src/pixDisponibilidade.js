@@ -1,13 +1,10 @@
-import { estaNaJanelaMensal } from "./agendaJanela.js";
-import { validarHorarioEspecialSemanal } from "./agendamentoDisponibilidade.js";
-
 const DATAS_DEZEMBRO_LIBERADAS = new Set([]);
 
 function horarioInvalido(motivo) {
   return { valido: false, motivo };
 }
 
-export function validarHorarioPix(dataIso, horario, duracao, agora = new Date()) {
+export function validarHorarioPix(dataIso, horario, duracao) {
   if (
     typeof dataIso !== "string" ||
     typeof horario !== "string" ||
@@ -31,10 +28,6 @@ export function validarHorarioPix(dataIso, horario, duracao, agora = new Date())
     data.getUTCDate() !== dia
   ) {
     return horarioInvalido("Data inexistente");
-  }
-
-  if (!estaNaJanelaMensal(dataIso, agora)) {
-    return horarioInvalido("Data fora da janela de agendamento de um mês");
   }
 
   // Abertura oficial dos agendamentos: novembro de 2026.
@@ -77,8 +70,25 @@ export function validarHorarioPix(dataIso, horario, duracao, agora = new Date())
     return horarioInvalido("Intervalo de almoco indisponivel");
   }
 
-  if (!validarHorarioEspecialSemanal(diaSemana, inicio, duracao)) {
-    return horarioInvalido(diaSemana === 2 ? "Horario indisponivel na terca" : "Horario indisponivel na quarta");
+  // Terca: bloqueio das 09h ate 13h30.
+  if (diaSemana === 2) {
+    if (inicio < 810 || inicio > 930 || fim > 1050) {
+      return horarioInvalido("Horario indisponivel na terca");
+    }
+  }
+
+  // Quarta: mesmas janelas especiais do aplicativo.
+  if (diaSemana === 3) {
+    const manha = inicio >= 540 && inicio <= 630 && fim <= 750;
+
+    const encaixe =
+      inicio >= 660 && inicio <= 690 && duracao <= 60 && fim <= 750;
+
+    const tarde = inicio >= 810 && inicio <= 930 && fim <= 1050;
+
+    if (!manha && !encaixe && !tarde) {
+      return horarioInvalido("Horario indisponivel na quarta");
+    }
   }
 
   return {
@@ -97,5 +107,3 @@ export function possuiSobreposicao(inicio, fim, intervalos) {
     (ocupado) => inicio < ocupado.fimMinuto && fim > ocupado.inicioMinuto,
   );
 }
-
-
