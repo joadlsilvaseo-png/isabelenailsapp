@@ -1,6 +1,7 @@
 import { auth, db } from "./firebase-config.js";
+import { calcularJanelaMensal, estaNaJanelaMensal, formatarDataBrasil } from "./agendaJanela.js";
 import { consultarDisponibilidadePix, reagendarAgendamentoApi } from "./agendamentosApi.js";
-import { consultarIntervalosDisponibilidade, intervaloSobrepoeDisponibilidade, obterLimitesAtendimentoSemanal } from "./agendamentoDisponibilidade.js";
+import { consultarIntervalosDisponibilidade, intervaloSobrepoeDisponibilidade, obterIniciosEspeciaisSemanais, obterLimitesAtendimentoSemanal, validarHorarioEspecialSemanal } from "./agendamentoDisponibilidade.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
 import {
   collection,
@@ -70,6 +71,8 @@ function validarAgendamento(data, hora) {
   const horaOk = /^([01]\d|2[0-3]):[0-5]\d$/.test(hora);
 
   if (!dataOk || !horaOk) return false;
+
+  if (!estaNaJanelaMensal(data)) return false;
 
   // Bloqueia agendamentos anteriores a novembro de 2026.
   if (data < "2026-11-01") {
@@ -234,10 +237,26 @@ function atualizarResumoAgendamento() {
 
 const DATAS_DEZEMBRO_LIBERADAS = new Set([]);
 
-function gerarCalendarioDias(container) {
+let mesCalendarioAtual = null;
+
+function primeiroDiaDoMes(dataIso) {
+  const [ano, mes] = dataIso.split("-").map(Number);
+  return new Date(ano, mes - 1, 1, 12, 0, 0);
+}
+
+function gerarCalendarioDias(container, dataMes = null) {
   if (!container) return;
 
-  container.innerHTML = "";
+  const hojeIso = formatarDataBrasil();
+  const { fim: limiteIso } = calcularJanelaMensal();
+  const minimoIso = hojeIso < "2026-11-01" ? "2026-11-01" : hojeIso;
+  const mesHoje = primeiroDiaDoMes(hojeIso);
+  const mesLimite = primeiroDiaDoMes(limiteIso);
+  mesCalendarioAtual = dataMes || mesCalendarioAtual || mesHoje;
+  mesCalendarioAtual = primeiroDiaDoMes(formatarDataIsoLocal(mesCalendarioAtual));
+  if (mesCalendarioAtual < mesHoje) mesCalendarioAtual = mesHoje;
+  if (mesCalendarioAtual > mesLimite) mesCalendarioAtual = mesLimite;
+  container.replaceChildren();
 
   const weekNames = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
@@ -258,83 +277,66 @@ function gerarCalendarioDias(container) {
 
   const diasAtendimento = new Set([2, 3, 4, 5, 6]);
 
-  const dias = [];
-
-  const hoje = new Date();
-  hoje.setHours(12, 0, 0, 0);
-
-  const hojeIso = formatarDataIsoLocal(hoje);
-
-  const dataLiberacaoAgenda = new Date(2026, 10, 1, 12, 0, 0);
-
-  const cursor =
-    hoje < dataLiberacaoAgenda ? new Date(dataLiberacaoAgenda) : new Date(hoje);
-
-  while (dias.length < 8) {
-    const dezembroBloqueado =
-      cursor.getFullYear() === 2026 &&
-      cursor.getMonth() === 11 &&
-      !DATAS_DEZEMBRO_LIBERADAS.has(formatarDataIsoLocal(cursor));
-
-    if (diasAtendimento.has(cursor.getDay()) && !dezembroBloqueado) {
-      const dataAtual = new Date(cursor);
-
-      const dataIso = formatarDataIsoLocal(dataAtual);
-
-      const botao = document.createElement("button");
-
-      botao.type = "button";
-      botao.className = "agendamento-date";
-
-      botao.dataset.dateIso = dataIso;
-      botao.dataset.dateLabel = formatarDataLonga(dataAtual);
-
-      botao.dataset.monthLabel = formatarMesAno(dataAtual);
-
-      botao.setAttribute("aria-pressed", "false");
-
-      botao.setAttribute(
-        "aria-label",
-        `Selecionar ${formatarDataLonga(dataAtual)}`,
-      );
-
-      if (dataIso === hojeIso) {
-        botao.classList.add("agendamento-date--today");
-      }
-
-      botao.innerHTML = `
-        <span class="agendamento-date-label">
-          ${weekNames[dataAtual.getDay()]}
-        </span>
-
-        <span class="agendamento-date-day">
-          ${String(dataAtual.getDate()).padStart(2, "0")}
-        </span>
-
-        <span class="agendamento-date-month">
-          ${monthNames[dataAtual.getMonth()]}
-        </span>
-      `;
-
-      container.appendChild(botao);
-      dias.push(botao);
-    }
-
-    cursor.setDate(cursor.getDate() + 1);
+  const titulo = document.getElementById("calendar-month-label");
+  if (titulo) titulo.textContent = formatarMesAno(mesCalendarioAtual);
+  const anterior = document.getElementById("calendar-previous-month");
+  const proximo = document.getElementById("calendar-next-month");
+  if (anterior) anterior.disabled = mesCalendarioAtual <= mesHoje;
+  if (proximo) {
+    const proximoMes = new Date(mesCalendarioAtual.getFullYear(), mesCalendarioAtual.getMonth() + 1, 1, 12);
+    proximo.disabled = proximoMes > mesLimite;
   }
 
-  const primeiraData = dias[0];
+  container.classList.add("agendamento-calendar--month");
+  weekNames.forEach((name) => {
+    const weekday = document.createElement("span");
+    weekday.className = "agendamento-calendar-weekday";
+    weekday.textContent = name;
+    weekday.setAttribute("aria-hidden", "true");
+    container.appendChild(weekday);
+  });
 
-  if (primeiraData) {
-    primeiraData.classList.add("agendamento-date--active");
+  const firstOffset = mesCalendarioAtual.getDay();
+  for (let i = 0; i < firstOffset; i += 1) {
+    const spacer = document.createElement("span");
+    spacer.className = "agendamento-calendar-spacer";
+    spacer.setAttribute("aria-hidden", "true");
+    container.appendChild(spacer);
+  }
 
-    primeiraData.setAttribute("aria-pressed", "true");
+  const diasNoMes = new Date(mesCalendarioAtual.getFullYear(), mesCalendarioAtual.getMonth() + 1, 0).getDate();
+  const datasElegiveis = [];
+  for (let dia = 1; dia <= diasNoMes; dia += 1) {
+    const dataAtual = new Date(mesCalendarioAtual.getFullYear(), mesCalendarioAtual.getMonth(), dia, 12);
+    const dataIso = formatarDataIsoLocal(dataAtual);
+    const dezembroBloqueado = dataIso.startsWith("2026-12-") && !DATAS_DEZEMBRO_LIBERADAS.has(dataIso);
+    const disponivel = dataIso >= minimoIso && estaNaJanelaMensal(dataIso) && diasAtendimento.has(dataAtual.getDay()) && !dezembroBloqueado;
+    const botao = document.createElement("button");
+    botao.type = "button";
+    botao.className = "agendamento-date";
+    botao.dataset.dateIso = dataIso;
+    botao.dataset.dateLabel = formatarDataLonga(dataAtual);
+    botao.dataset.monthLabel = formatarMesAno(dataAtual);
+    botao.disabled = !disponivel;
+    botao.setAttribute("aria-pressed", "false");
+    botao.setAttribute("aria-label", `${formatarDataLonga(dataAtual)}${disponivel ? ", disponível" : ", indisponível"}`);
+    botao.innerHTML = `<span class="agendamento-date-label">${weekNames[dataAtual.getDay()]}</span><span class="agendamento-date-day">${String(dia).padStart(2, "0")}</span><span class="agendamento-date-month">${monthNames[dataAtual.getMonth()]}</span>`;
+    if (dataIso === hojeIso) botao.classList.add("agendamento-date--today");
+    container.appendChild(botao);
+    if (disponivel) datasElegiveis.push(botao);
+  }
 
-    localStorage.setItem("dataAgendamento", formatarData(primeiraData));
-
-    localStorage.setItem("dataAgendamentoISO", obterDataIso(primeiraData));
-
-    atualizarCabecalhoData(primeiraData);
+  const salvo = localStorage.getItem("dataAgendamentoISO");
+  const selecionado = datasElegiveis.find((botao) => botao.dataset.dateIso === salvo) || datasElegiveis[0];
+  if (selecionado) {
+    selecionado.classList.add("agendamento-date--active");
+    selecionado.setAttribute("aria-pressed", "true");
+    localStorage.setItem("dataAgendamento", formatarData(selecionado));
+    localStorage.setItem("dataAgendamentoISO", obterDataIso(selecionado));
+    atualizarCabecalhoData(selecionado);
+  } else {
+    localStorage.removeItem("dataAgendamento");
+    localStorage.removeItem("dataAgendamentoISO");
   }
 }
 
@@ -543,44 +545,26 @@ async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null) {
 
     let quantidadeDisponivel = 0;
 
-    for (let atual = minAbertura; atual <= minUltimoInicio; atual += 30) {
+    const iniciosEspeciais = obterIniciosEspeciaisSemanais(diaSemanaSelecionado);
+    const horariosCandidatos = iniciosEspeciais || Array.from(
+      { length: Math.floor((minUltimoInicio - minAbertura) / 30) + 1 },
+      (_, indice) => minAbertura + indice * 30,
+    );
+
+    for (const atual of horariosCandidatos) {
       const fimServico = atual + duracaoServico;
 
-      if (fimServico > minFechamento) {
+      if (fimServico > minFechamento && diaSemanaSelecionado !== 3) {
         continue;
       }
 
       const horarioTexto = minsToTime(atual);
 
-      const bloqueadoPorRegraTerca =
-        diaSemanaSelecionado === 2 &&
-        (atual > timeToMins("15:30") || fimServico > timeToMins("17:30"));
-
-      const horarioPermitidoQuartaManha =
-        atual >= timeToMins("09:00") &&
-        atual <= timeToMins("10:30") &&
-        fimServico <= timeToMins("12:30");
-
-      const horarioPermitidoQuartaEncaixe =
-        atual >= timeToMins("11:00") &&
-        atual <= timeToMins("11:30") &&
-        duracaoServico <= 60 &&
-        fimServico <= timeToMins("12:30");
-
-      const horarioPermitidoQuartaTarde =
-        atual >= timeToMins("13:30") &&
-        atual <= timeToMins("15:30") &&
-        fimServico <= timeToMins("17:30");
-
-      const bloqueadoPorRegraQuarta =
-        diaSemanaSelecionado === 3 &&
-        !horarioPermitidoQuartaManha &&
-        !horarioPermitidoQuartaEncaixe &&
-        !horarioPermitidoQuartaTarde;
+      const horarioEspecialInvalido =
+        !validarHorarioEspecialSemanal(diaSemanaSelecionado, atual, duracaoServico);
 
       const indisponivel =
-        bloqueadoPorRegraTerca ||
-        bloqueadoPorRegraQuarta ||
+        horarioEspecialInvalido ||
         intervaloSobrepoeDisponibilidade(atual, fimServico, intervalosIndisponiveis);
 
       const botao = document.createElement("button");
@@ -651,9 +635,9 @@ async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null) {
       container.appendChild(periodo);
     }
 
-    criarGrupoHorario("Manhã", diaSemanaSelecionado === 4 ? "Das 11h às 12h" : "Das 9h às 12h", horariosManha);
+    criarGrupoHorario("Manhã", diaSemanaSelecionado === 4 ? "Das 11h às 12h" : diaSemanaSelecionado === 3 ? "Início às 09:00" : "Das 9h às 12h", horariosManha);
 
-    criarGrupoHorario("Tarde", [4, 5, 6].includes(diaSemanaSelecionado)
+    criarGrupoHorario("Tarde", diaSemanaSelecionado === 3 ? "Início às 14:00" : [4, 5, 6].includes(diaSemanaSelecionado)
       ? "Inícios até 19h" : "Das 12h às 18h", horariosTarde);
 
     if (availabilityElement) {
@@ -663,7 +647,12 @@ async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null) {
           : `${quantidadeDisponivel} horários`;
     }
 
-    if (quantidadeDisponivel === 0) {
+    if (quantidadeDisponivel === 0 && diaSemanaSelecionado === 3) {
+      const aviso = document.createElement("div");
+      aviso.className = "agendamento-time-state";
+      aviso.textContent = "Não há horários disponíveis nesta data.";
+      container.appendChild(aviso);
+    } else if (quantidadeDisponivel === 0) {
       container.innerHTML = `
         <div class="agendamento-time-state">
           Não há horários disponíveis nesta data.
@@ -721,7 +710,6 @@ async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null) {
 async function inicializarAgendamento() {
   const calendarContainer = document.querySelector(".agendamento-calendar");
   gerarCalendarioDias(calendarContainer);
-  const datas = Array.from(document.querySelectorAll(".agendamento-date"));
   const botaoAgendar = document.querySelector(".agendamento-button");
 
   const textareaComentarios = document.querySelector("#agendamento-notes");
@@ -733,7 +721,7 @@ async function inicializarAgendamento() {
   const reagendarId = urlParams.get("reagendar");
   const origemAdmin = urlParams.get("origem") === "admin";
 
-  if (!botaoAgendar || datas.length === 0 || !textareaComentarios) return;
+  if (!botaoAgendar || !calendarContainer || !textareaComentarios) return;
 
   localStorage.removeItem("horarioAgendamento");
   localStorage.removeItem("horaAgendamento");
@@ -827,28 +815,60 @@ async function inicializarAgendamento() {
 
   atualizarResumoAgendamento();
 
-  datas.forEach((botao) => {
-    botao.addEventListener("click", () => {
-      selecionarUnico(botao, datas, "agendamento-date--active");
+  const obterDatasElegiveis = () => Array.from(
+    calendarContainer.querySelectorAll(".agendamento-date:not(:disabled)"),
+  );
 
-      localStorage.setItem("dataAgendamento", formatarData(botao));
+  async function aplicarDataSelecionada(botao) {
+    const datasAtuais = obterDatasElegiveis();
+    selecionarUnico(botao, datasAtuais, "agendamento-date--active");
 
-      const dataIso = obterDataIso(botao);
+    localStorage.setItem("dataAgendamento", formatarData(botao));
 
-      if (dataIso) {
-        localStorage.setItem("dataAgendamentoISO", dataIso);
-      }
+    const dataIso = obterDataIso(botao);
 
-      localStorage.removeItem("horarioAgendamento");
+    if (dataIso) localStorage.setItem("dataAgendamentoISO", dataIso);
 
-      localStorage.removeItem("horaAgendamento");
+    localStorage.removeItem("horarioAgendamento");
+    localStorage.removeItem("horaAgendamento");
+    atualizarCabecalhoData(botao);
+    atualizarResumoAgendamento();
+    await renderizarHorarios(dataIso, serviceDuration, reagendarId);
+  }
 
-      atualizarCabecalhoData(botao);
-      atualizarResumoAgendamento();
-
-      renderizarHorarios(dataIso, serviceDuration, reagendarId);
-    });
+  calendarContainer.addEventListener("click", (event) => {
+    const botao = event.target.closest(".agendamento-date");
+    if (!botao || botao.disabled) return;
+    void aplicarDataSelecionada(botao);
   });
+
+  const selecionarMes = (quantidade) => {
+    const novoMes = new Date(
+      mesCalendarioAtual.getFullYear(),
+      mesCalendarioAtual.getMonth() + quantidade,
+      1,
+      12,
+    );
+    gerarCalendarioDias(calendarContainer, novoMes);
+    const dataAtiva = calendarContainer.querySelector(".agendamento-date--active");
+    localStorage.removeItem("horarioAgendamento");
+    localStorage.removeItem("horaAgendamento");
+    if (dataAtiva) {
+      const iso = obterDataIso(dataAtiva);
+      if (iso) void renderizarHorarios(iso, serviceDuration, reagendarId);
+    } else {
+      localStorage.removeItem("dataAgendamentoISO");
+      localStorage.removeItem("dataAgendamento");
+      const container = document.querySelector(".agendamento-times");
+      if (container) container.innerHTML = '<div class="agendamento-time-state">Não há datas de atendimento disponíveis neste mês.</div>';
+      const status = document.getElementById("availability-status");
+      if (status) status.textContent = "Sem datas";
+      atualizarResumoAgendamento();
+    }
+  };
+
+  document.getElementById("calendar-previous-month")?.addEventListener("click", () => selecionarMes(-1));
+  document.getElementById("calendar-next-month")?.addEventListener("click", () => selecionarMes(1));
 
   const horariosContainer = document.querySelector(".agendamento-times");
 
@@ -1045,8 +1065,8 @@ async function inicializarAgendamento() {
     });
   });
 
-  const diaAtivo =
-    obterSelecionado(datas, "agendamento-date--active") || datas[0];
+  const datas = obterDatasElegiveis();
+  const diaAtivo = obterSelecionado(datas, "agendamento-date--active") || datas[0];
 
   if (diaAtivo) {
     const dataIso = obterDataIso(diaAtivo);
@@ -1066,9 +1086,8 @@ async function inicializarAgendamento() {
     const agora = Date.now();
     if (agora - ultimaAtualizacaoVisibilidade < 1000) return;
     ultimaAtualizacaoVisibilidade = agora;
-    const dataAtiva = obterDataIso(
-      obterSelecionado(datas, "agendamento-date--active") || datas[0],
-    );
+    const diasAtuais = obterDatasElegiveis();
+    const dataAtiva = obterDataIso(obterSelecionado(diasAtuais, "agendamento-date--active") || diasAtuais[0]);
     if (dataAtiva) void renderizarHorarios(dataAtiva, serviceDuration, reagendarId);
   };
   window.addEventListener("pageshow", atualizarAoRetornar);
@@ -1078,3 +1097,5 @@ async function inicializarAgendamento() {
 }
 
 document.addEventListener("DOMContentLoaded", inicializarAgendamento);
+
+
