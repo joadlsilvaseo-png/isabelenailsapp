@@ -1,5 +1,5 @@
-import { estaNaJanelaMensal } from "../../../agendaJanela.js";
-import { validarHorarioEspecialSemanal } from "../../../agendamentoDisponibilidade.js";
+import { estaNaJanelaMensal } from "./agendaJanela.js";
+import { validarHorarioEspecialSemanal } from "./agendamentoDisponibilidade.js";
 
 const DATAS_DEZEMBRO_LIBERADAS = new Set([]);
 
