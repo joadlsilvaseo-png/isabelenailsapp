@@ -48,7 +48,7 @@ export function validarDataNaJanela(dataIso, agora = new Date()) {
 export function validarHorarioEspecialSemanal(diaSemana, inicioMinuto, duracao) {
   if (!Number.isInteger(inicioMinuto) || !Number.isInteger(duracao) || duracao <= 0) return false;
   const fim = inicioMinuto + duracao;
-  if (diaSemana === 2) return [840, 870, 900, 930].includes(inicioMinuto) && fim <= 1050;
+  if (diaSemana === 2) return [840, 870, 900].includes(inicioMinuto) && fim <= 1050;
   if (diaSemana === 3) return (inicioMinuto === 540 && fim <= 750) || (inicioMinuto === 840 && fim <= 1050);
   return true;
 }
