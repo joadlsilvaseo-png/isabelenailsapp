@@ -2228,3 +2228,9 @@ body[data-user-role="cliente"] .app-content {
 .profile-photo-remove[hidden] {
   display: none;
 }
+
+
+/* Dynamic search suggestions reuse the approved service-row presentation. */
+.principal-search-results { margin: 8px 0 0; padding: 0; list-style: none; }
+.principal-search-results[hidden] { display: none; }
+.principal-search-empty { padding: 14px 16px; color: var(--text-muted, #765f66); font-size: 13px; }

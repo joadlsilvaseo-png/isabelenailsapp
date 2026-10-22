@@ -4,7 +4,7 @@
 // ======================================================
 
 const CACHE_PREFIX = "im-nails";
-const CACHE_VERSION = "v6";
+const CACHE_VERSION = "v7";
 const STATIC_CACHE = `${CACHE_PREFIX}-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `${CACHE_PREFIX}-runtime-${CACHE_VERSION}`;
 
@@ -15,6 +15,10 @@ const APP_SHELL = [
   "./registro.html",
   "./termos.html",
   "./galeria.html",
+  "./principal.html",
+  "./admin-servicos.html",
+  "./agendamento.html",
+  "./categoria.html",
 
   "./manifest.json",
 
@@ -24,11 +28,22 @@ const APP_SHELL = [
   "./registro.css",
   "./termos.css",
   "./galeria.css",
+  "./principal.css",
+  "./admin-servicos.css",
+  "./agendamento.css",
 
   "./index.js",
   "./login.js",
   "./registro.js",
   "./galeria.js",
+  "./principal.js",
+  "./admin-servicos.js",
+  "./agendamento.js",
+  "./categoria.js",
+  "./manicure.css",
+  "./categoriasCatalogo.mjs",
+  "./catalogoBusca.mjs",
+  "./infra/backend/src/agendamentoRegras.mjs",
   "./app.js",
 
   "./assets/favicon.png",
@@ -294,3 +309,4 @@ self.addEventListener("notificationclick", (event) => {
       }),
   );
 });
+

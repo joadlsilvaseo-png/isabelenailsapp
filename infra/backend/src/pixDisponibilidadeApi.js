@@ -1,3 +1,4 @@
+import { validarDataNaJanela } from "./agendamentoRegras.mjs";
 import { verificarUsuario } from "./pushSubscriptions.js";
 
 const ID_AGENDAMENTO = /^[A-Za-z0-9_-]{1,160}$/;
@@ -70,6 +71,11 @@ export async function consultarDisponibilidadePix(req, res, pool, dependencies =
     responder(res, 400, { erro: "Data inválida" });
     return;
   }
+  const janelaValida = validarDataNaJanela(data, dependencies.now || new Date());
+  if (!janelaValida.valido) {
+    responder(res, 400, { erro: janelaValida.motivo });
+    return;
+  }
   if (agendamentoId !== null && !ID_AGENDAMENTO.test(agendamentoId)) {
     responder(res, 400, { erro: "Agendamento inválido" });
     return;
@@ -117,3 +123,4 @@ export async function consultarDisponibilidadePix(req, res, pool, dependencies =
     responder(res, 503, { erro: "Não foi possível confirmar a disponibilidade" });
   }
 }
+

@@ -13,236 +13,146 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
 
 import {
+  collection,
   doc,
   getDoc,
+  getDocs,
   runTransaction,
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
+
+import { montarCatalogoCliente, normalizarSlugCategoria } from "./categoriasCatalogo.mjs";
+import { montarResultadosBusca } from "./catalogoBusca.mjs";
 
 const fallbackClientName = "Cliente";
 const fallbackAdminName = "Isabele";
 const fallbackAvatar = "https://www.w3schools.com/howto/img_avatar2.png";
 let principalSearchInitialized = false;
+let catalogoServicosCliente = [];
+let catalogoCategoriasCliente = [];
 
-/*
- * Palavras relacionadas a cada categoria.
- * Permite pesquisar pela categoria ou pelos
- * procedimentos encontrados dentro dela.
- */
-const categorySearchTerms = {
-  "unhas-em-gel.html": [
-    "Unhas em Gel",
-    "Fibra de Vidro",
-    "Alongamento",
-    "Alongamento em Gel",
-    "Banho de Gel",
-    "Blindagem",
-    "Manutenção",
-    "Remoção",
-  ],
-
-  "manicure.html": [
-    "Manicure",
-    "Manicure Simples",
-    "Manicure Completa",
-    "Mãos",
-    "Esmaltação",
-    "Esmaltação em Gel",
-    "Cutilagem",
-    "Francesinha",
-    "Decoração",
-    "Spa das Mãos",
-  ],
-
-  "pedicure.html": [
-    "Pedicure",
-    "Pedicure Simples",
-    "Pedicure em Gel",
-    "Pedicure e Manicure",
-    "Pés",
-    "Spa dos Pés",
-    "Hidratação",
-    "Cutilagem dos Pés",
-    "Esmaltação dos Pés",
-    "Francesinha dos Pés",
-  ],
+const paginasLegadasCategoria = {
+  "unhas-em-gel": "unhas-em-gel.html",
+  manicure: "manicure.html",
+  pedicure: "pedicure.html",
 };
 
-function normalizeSearchText(value) {
-  return String(value || "")
-    .toLowerCase()
-    .trim()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/\s+/g, " ");
+function escaparTextoBusca(texto) {
+  return String(texto || "").trim();
 }
 
-/* ============================================================
-   PESQUISA DA ÁREA DA CLIENTE
-   ============================================================ */
+async function carregarCatalogoCliente() {
+  const lista = document.getElementById("principal-services-list");
+  if (!lista) return;
+  try {
+    const [categoriasSnapshot, servicosSnapshot] = await Promise.all([
+      getDocs(collection(db, "categorias")),
+      getDocs(collection(db, "servicos")),
+    ]);
+    const categorias = categoriasSnapshot.docs.map((snapshot) => ({ id: snapshot.id, ...snapshot.data() }));
+    const servicos = servicosSnapshot.docs.map((snapshot) => ({ id: snapshot.id, ...snapshot.data() }));
+    const slugsLegados = ["unhas-em-gel", "manicure", "pedicure"];
+    for (const slug of slugsLegados) {
+      const corresponde = categorias.some((categoria) => normalizarSlugCategoria(categoria.slug || categoria.nome) === slug || (categoria.legacySlugs || []).map(normalizarSlugCategoria).includes(slug));
+      if (!corresponde) categorias.push({ id: `legacy_${slug}`, slug, nome: slug === "unhas-em-gel" ? "Unhas em Gel" : slug.charAt(0).toUpperCase() + slug.slice(1), ativo: true, legacySlugs: [slug] });
+    }
+    const catalogo = montarCatalogoCliente(categorias, servicos);
+    catalogoCategoriasCliente = catalogo;
+    catalogoServicosCliente = catalogo.flatMap((categoria) => categoria.servicos.map((servico) => ({
+      ...servico,
+      categoriaNome: categoria.nome,
+      categoriaDescricao: categoria.descricao || "",
+      palavrasChave: Array.isArray(servico.palavrasChave) ? servico.palavrasChave : [],
+    })));
+
+    const itensFixos = Array.from(lista.querySelectorAll(":scope > li"));
+    const slugsMostrados = new Set();
+    itensFixos.forEach((item) => {
+      const link = item.querySelector(".service-row");
+      const slug = normalizarSlugCategoria((link?.getAttribute("href") || "").replace(/\.html.*$/, ""));
+      const categoria = catalogo.find((itemCategoria) => normalizarSlugCategoria(itemCategoria.slug || itemCategoria.nome) === slug);
+      item.hidden = !categoria;
+      if (categoria) slugsMostrados.add(slug);
+    });
+
+    lista.querySelectorAll("li[data-dynamic-category]").forEach((item) => item.remove());
+    catalogo.forEach((categoria) => {
+      const slug = normalizarSlugCategoria(categoria.slug || categoria.nome);
+      if (slugsMostrados.has(slug) || paginasLegadasCategoria[slug]) return;
+      const li = document.createElement("li");
+      li.dataset.dynamicCategory = categoria.id;
+      const link = document.createElement("a");
+      link.className = "service-row";
+      link.href = `categoria.html?categoriaId=${encodeURIComponent(categoria.id)}`;
+      const icon = document.createElement("span"); icon.className = "service-icon"; icon.setAttribute("aria-hidden", "true");
+      icon.innerHTML = '<svg viewBox="0 0 24 24" fill="none"><path d="M12 3L13.2 6.2L16.5 7.5L13.2 8.8L12 12L10.8 8.8L7.5 7.5L10.8 6.2L12 3Z" stroke="currentColor" stroke-width="1.8"/></svg>';
+      const content = document.createElement("span"); content.className = "service-content";
+      const name = document.createElement("strong"); name.className = "service-label"; name.textContent = categoria.nome;
+      const detail = document.createElement("span"); detail.className = "service-description"; detail.textContent = categoria.descricao || `${categoria.servicos.length} ${categoria.servicos.length === 1 ? "serviço disponível" : "serviços disponíveis"}`;
+      content.append(name, detail);
+      const chevron = document.createElement("span"); chevron.className = "service-chevron"; chevron.setAttribute("aria-hidden", "true"); chevron.textContent = "›";
+      link.append(icon, content, chevron); li.append(link); lista.append(li);
+    });
+  } catch (error) {
+    console.error("Não foi possível carregar as categorias e serviços:", error);
+  }
+}
 
 function setupPrincipalSearch() {
-  if (principalSearchInitialized) {
-    return;
-  }
-
+  if (principalSearchInitialized) return;
   const searchForm = document.getElementById("principal-search-form");
-
   const searchInput = document.getElementById("principal-search-input");
-
+  const list = document.getElementById("principal-services-list");
+  const resultList = document.getElementById("principal-search-results");
   const servicesSection = document.querySelector(".principal-services");
-
-  const serviceItems = Array.from(
-    document.querySelectorAll("#principal-services-list > li"),
-  );
-
-  if (!searchForm || !searchInput || serviceItems.length === 0) {
-    return;
-  }
-
+  if (!searchForm || !searchInput || !list || !resultList) return;
   principalSearchInitialized = true;
 
-  const searchableItems = serviceItems.map((item) => {
-    const serviceLink = item.querySelector(".service-row");
-
-    const serviceContent = item.querySelector(".service-content");
-
-    const serviceLabel =
-      item.querySelector(".service-label")?.textContent?.trim() || "";
-
-    const serviceDescription =
-      item.querySelector(".service-description")?.textContent?.trim() || "";
-
-    const serviceHref = serviceLink?.getAttribute("href") || "";
-
-    const terms = categorySearchTerms[serviceHref] || [];
-
-    let matchElement = item.querySelector(".service-match");
-
-    if (!matchElement && serviceContent) {
-      matchElement = document.createElement("span");
-
-      matchElement.className = "service-match";
-      matchElement.hidden = true;
-
-      serviceContent.appendChild(matchElement);
+  function renderResults(queryText) {
+    const query = escaparTextoBusca(queryText);
+    if (!query) {
+      resultList.hidden = true;
+      resultList.replaceChildren();
+      list.hidden = false;
+      return [];
     }
-
-    const normalizedTerms = terms.map((term) => ({
-      label: term,
-      value: normalizeSearchText(term),
-    }));
-
-    const searchText = normalizeSearchText(`
-      ${serviceLabel}
-      ${serviceDescription}
-      ${terms.join(" ")}
-    `);
-
-    return {
-      item,
-      serviceLink,
-      serviceLabel,
-      matchElement,
-      normalizedTerms,
-      searchText,
-    };
-  });
-
-  function filterServices(query) {
-    const normalizedQuery = normalizeSearchText(query);
-
-    const visibleItems = [];
-
-    searchableItems.forEach((searchableItem) => {
-      const matchesSearch =
-        !normalizedQuery || searchableItem.searchText.includes(normalizedQuery);
-
-      searchableItem.item.hidden = !matchesSearch;
-
-      let matchedTerm = null;
-
-      if (normalizedQuery && matchesSearch) {
-        matchedTerm =
-          searchableItem.normalizedTerms.find((term) =>
-            term.value.includes(normalizedQuery),
-          ) || null;
-      }
-
-      if (searchableItem.matchElement) {
-        const categoryName = normalizeSearchText(searchableItem.serviceLabel);
-
-        const shouldShowTerm =
-          Boolean(matchedTerm) && matchedTerm.value !== categoryName;
-
-        searchableItem.matchElement.hidden = !shouldShowTerm;
-
-        searchableItem.matchElement.textContent = shouldShowTerm
-          ? `Encontrado: ${matchedTerm.label}`
-          : "";
-      }
-
-      if (matchesSearch) {
-        visibleItems.push(searchableItem);
-      }
+    const results = montarResultadosBusca(catalogoServicosCliente, query);
+    resultList.replaceChildren();
+    list.hidden = true;
+    resultList.hidden = false;
+    if (!results.length) {
+      const empty = document.createElement("li");
+      empty.className = "principal-search-empty";
+      empty.textContent = "Nenhum serviço encontrado. Tente outro termo.";
+      resultList.append(empty);
+      return results;
+    }
+    results.forEach((service) => {
+      const item = document.createElement("li");
+      const link = document.createElement("a");
+      link.className = "service-row";
+      link.href = `agendamento.html?id=${encodeURIComponent(service.id)}`;
+      const icon = document.createElement("span"); icon.className = "service-icon"; icon.setAttribute("aria-hidden", "true"); icon.textContent = "⌕";
+      const content = document.createElement("span"); content.className = "service-content";
+      const name = document.createElement("strong"); name.className = "service-label"; name.textContent = service.nome || "Serviço";
+      const desc = document.createElement("span"); desc.className = "service-description"; desc.textContent = service.categoriaNome || "Categoria";
+      content.append(name, desc); link.append(icon, content); item.append(link); resultList.append(item);
     });
-
-    return visibleItems;
+    return results;
   }
 
-  function clearSearch() {
-    searchInput.value = "";
-    filterServices("");
-    searchInput.focus();
-  }
-
-  searchInput.addEventListener("input", () => {
-    filterServices(searchInput.value);
-  });
-
-  searchInput.addEventListener("search", () => {
-    filterServices(searchInput.value);
-  });
-
+  searchInput.addEventListener("input", () => renderResults(searchInput.value));
+  searchInput.addEventListener("search", () => renderResults(searchInput.value));
   searchInput.addEventListener("keydown", (event) => {
-    if (event.key !== "Escape") {
-      return;
-    }
-
-    event.preventDefault();
-    clearSearch();
+    if (event.key !== "Escape") return;
+    searchInput.value = ""; renderResults(""); searchInput.focus();
   });
-
   searchForm.addEventListener("submit", (event) => {
     event.preventDefault();
-
-    const currentQuery = searchInput.value.trim();
-
-    const visibleItems = filterServices(currentQuery);
-
-    if (!currentQuery) {
-      searchInput.focus();
-      return;
-    }
-
-    if (visibleItems.length === 1) {
-      const destination = visibleItems[0].serviceLink?.getAttribute("href");
-
-      if (destination) {
-        window.location.href = destination;
-      }
-
-      return;
-    }
-
-    if (window.location.hash !== "#services-title") {
-      window.location.hash = "services-title";
-    }
-
-    servicesSection?.scrollIntoView({
-      behavior: "smooth",
-      block: "start",
-    });
+    const results = renderResults(searchInput.value);
+    if (results.length === 1) window.location.href = `agendamento.html?id=${encodeURIComponent(results[0].id)}`;
+    else servicesSection?.scrollIntoView({ behavior: "smooth", block: "start" });
   });
+  void carregarCatalogoCliente();
 }
 
 /* ============================================================
@@ -870,3 +780,4 @@ if (document.readyState === "loading") {
 } else {
   initPrincipalPage();
 }
+

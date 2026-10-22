@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <meta name="description" content="Conheça os procedimentos disponíveis nesta categoria">
+
+  <meta name="theme-color" content="#591c31">
+
+  <title>Serviços | Isabele Mariana Nails</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="base.css?v=1.0.4">
+  <link rel="stylesheet" href="manicure.css?v=2.0.0">
+</head>
+
+<body data-page="categoria">
+
+  <div class="app-container">
+
+    <header class="manicure-header" aria-label="Navegação da página">
+      <a href="principal.html#services-title" class="manicure-nav-link" aria-label="Voltar">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M15 18L9 12L15 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+      </a>
+
+      <h1 id="dynamic-category-title" class="manicure-title">Serviços</h1>
+
+      <a href="principal.html" class="manicure-nav-link" aria-label="Página principal">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M4 10L12 3L20 10V20C20 20.5523 19.5523 21 19 21H5C4.44772 21 4 20.5523 4 20V10Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+
+          <path d="M9 21V13H15V21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+      </a>
+    </header>
+
+    <main class="manicure-main">
+
+      <section class="manicure-intro">
+
+        <span class="manicure-intro-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <path d="M9 9H15C16.1 9 17 9.9 17 11V19C17 20.1 16.1 21 15 21H9C7.9 21 7 20.1 7 19V11C7 9.9 7.9 9 9 9Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+
+            <path d="M10 9V5H14V9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+
+            <path d="M9 5H15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+
+            <path d="M10 13H14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+          </svg>
+        </span>
+
+        <div class="manicure-intro-content">
+          <span class="manicure-eyebrow">
+            Categoria
+          </span>
+
+          <h2 id="dynamic-category-heading">Serviços disponíveis</h2>
+          <p id="dynamic-category-description">Escolha um procedimento desta categoria.</p>
+        </div>
+
+      </section>
+
+      <section class="manicure-services" aria-labelledby="procedimento-title">
+        <div class="manicure-section-heading">
+
+          <div>
+            <span class="manicure-eyebrow">
+              Procedimentos
+            </span>
+
+            <h2 id="procedimento-title">
+              Serviços disponíveis
+            </h2>
+          </div>
+
+          <span id="category-service-count" class="manicure-service-count" aria-live="polite"></span>
+
+        </div>
+
+        <ul id="lista-servicos" class="manicure-list loading" aria-live="polite" aria-busy="true"></ul>
+
+      </section>
+
+      <footer class="manicure-footer">
+
+        <p id="selected-service-summary" class="manicure-selection-summary" aria-live="polite">
+          Selecione um procedimento para continuar
+        </p>
+
+        <button type="button" class="manicure-button" disabled>
+          <span>Continuar para agendamento</span>
+
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M9 18L15 12L9 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </button>
+
+      </footer>
+
+    </main>
+
+    <!-- ======================================================
+         NAVEGAÇÃO DA CLIENTE
+    ======================================================= -->
+
+    <nav class="client-navigation" aria-label="Navegação da cliente">
+
+      <a href="principal.html" class="client-navigation-item">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M4 11L12 4L20 11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+
+          <path d="M6 10V20H18V10" stroke="currentColor" stroke-width="1.8" />
+        </svg>
+
+        <span>Início</span>
+      </a>
+
+      <a href="principal.html#services-title" class="client-navigation-item client-navigation-item--active" aria-current="page">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M12 3L13.5 7L17.5 8.5L13.5 10L12 14L10.5 10L6.5 8.5L10.5 7L12 3Z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
+
+          <path d="M18 14L18.8 16.2L21 17L18.8 17.8L18 20L17.2 17.8L15 17L17.2 16.2L18 14Z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+
+        <span>Serviços</span>
+      </a>
+
+      <a href="meu-perfil.html#meus-agendamentos" class="client-navigation-item">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <rect x="4" y="5" width="16" height="15" rx="3" stroke="currentColor" stroke-width="1.8" />
+
+          <path d="M8 3V7M16 3V7M4 10H20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+        </svg>
+
+        <span>Agenda</span>
+      </a>
+
+      <a href="meu-perfil.html" class="client-navigation-item">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.8" />
+
+          <path d="M5 21C5 17 8 14.5 12 14.5C16 14.5 19 17 19 21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+        </svg>
+
+        <span>Perfil</span>
+      </a>
+
+    </nav>
+
+  </div>
+
+  <script type="module" src="categoria.js?v=1.0.0"></script>
+
+  <script src="app.js?v=2.0.0" defer></script>
+
+</body>
+
+</html>
