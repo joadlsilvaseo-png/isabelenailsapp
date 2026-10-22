@@ -537,6 +537,7 @@ async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null) {
       : Array.from({ length: Math.floor((minUltimoInicio - minAbertura) / 30) + 1 }, (_, indice) => minAbertura + indice * 30);
 
     for (const atual of iniciosPossiveis) {
+      if (diaSemanaSelecionado === 2 && atual === timeToMins("15:30")) continue;
       const fimServico = atual + duracaoServico;
 
       if (fimServico > minFechamento && diaSemanaSelecionado !== 2 && diaSemanaSelecionado !== 3) {
