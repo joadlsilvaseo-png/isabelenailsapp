@@ -31,7 +31,6 @@ const APP_SHELL = [
   "./principal.css",
   "./admin-servicos.css",
   "./agendamento.css",
-  "./categoria.css",
 
   "./index.js",
   "./login.js",
@@ -41,6 +40,7 @@ const APP_SHELL = [
   "./admin-servicos.js",
   "./agendamento.js",
   "./categoria.js",
+  "./manicure.css",
   "./categoriasCatalogo.mjs",
   "./catalogoBusca.mjs",
   "./infra/backend/src/agendamentoRegras.mjs",
