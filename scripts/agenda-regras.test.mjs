@@ -29,13 +29,12 @@ test("dezembro de 2026 permanece fechado, mesmo dentro da janela móvel", () => 
   assert.equal(validarDataNaJanela("2026-12-10", now).valido, false);
 });
 
-test("terça oferece exclusivamente inícios de 14:00 a 15:30 e encerra até 17:30", () => {
+test("terça oferece apenas 14:00, 14:30 e 15:00, com término até 17:30", () => {
   const date = dataDoDia(2);
-  for (const time of ["14:00", "14:30", "15:00", "15:30"]) assert.equal(validarHorarioEspecial(date, time, 60), true, time);
-  for (const time of ["13:30", "16:00", "15:30"]) {
-    if (time === "15:30") assert.equal(validarHorarioEspecial(date, time, 121), false);
-    else assert.equal(validarHorarioEspecial(date, time, 60), false, time);
-  }
+  for (const time of ["14:00", "14:30", "15:00"]) assert.equal(validarHorarioEspecial(date, time, 60), true, time);
+  for (const time of ["13:30", "15:30", "16:00"]) assert.equal(validarHorarioEspecial(date, time, 60), false, time);
+  for (const duracao of [30, 60, 90, 120]) assert.equal(validarHorarioEspecial(date, "15:30", duracao), false, `${duracao} min`);
+  assert.equal(validarHorarioEspecial(date, "15:00", 150), true);
   assert.equal(validarHorarioEspecial(date, "15:00", 151), false);
 });
 
@@ -56,8 +55,9 @@ import { validarHorarioPix } from "../infra/backend/src/pixDisponibilidade.js";
 
 test("validador backend PIX aplica terça, quarta, fechamento e bloqueio de dezembro", () => {
   const now = new Date("2026-10-22T12:00:00Z");
-  assert.equal(validarHorarioPix("2026-11-03", "14:00", 60, now).valido, true);
+  for (const horario of ["14:00", "14:30", "15:00"]) assert.equal(validarHorarioPix("2026-11-03", horario, 60, now).valido, true, horario);
   assert.equal(validarHorarioPix("2026-11-03", "13:30", 60, now).valido, false);
+  assert.equal(validarHorarioPix("2026-11-03", "15:30", 60, now).valido, false);
   assert.equal(validarHorarioPix("2026-11-03", "15:30", 121, now).valido, false);
   assert.equal(validarHorarioPix("2026-11-04", "09:00", 210, now).valido, true);
   assert.equal(validarHorarioPix("2026-11-04", "09:00", 211, now).valido, false);
