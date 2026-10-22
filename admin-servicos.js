@@ -1,4 +1,5 @@
 import { auth, db } from "./firebase-config.js";
+import { categoriaPossuiServicos, nomeCategoriaDuplicado } from "./categoriasCatalogo.mjs";
 import { calcularSinalServico, criarCamposSinalServico, formatarSinalServico, obterEntradaSinalServico } from "./infra/backend/src/pixSinalServico.js";
 
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
@@ -10,8 +11,12 @@ import {
   doc,
   getDoc,
   getDocs,
+  query,
+  runTransaction,
   serverTimestamp,
+  setDoc,
   updateDoc,
+  where,
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
 
 /* ============================================================
@@ -20,6 +25,7 @@ import {
 
 let todosServicos = [];
 let servicosFiltrados = [];
+let categoriasDisponiveis = [];
 
 let filtroResumoAtivo = "todos";
 let buscaAtual = "";
@@ -62,6 +68,17 @@ function carregarElementos() {
   elements.addServiceButton = document.getElementById(
     "admin-add-service-button",
   );
+  elements.manageCategoriesButton = document.getElementById("admin-manage-categories-button");
+  elements.categoriesModal = document.getElementById("admin-categories-modal");
+  elements.categoryForm = document.getElementById("admin-category-form");
+  elements.categoryId = document.getElementById("admin-category-id");
+  elements.categoryName = document.getElementById("admin-category-name");
+  elements.categoryDescription = document.getElementById("admin-category-description");
+  elements.categoryActive = document.getElementById("admin-category-active");
+  elements.categorySubmit = document.getElementById("admin-category-submit");
+  elements.categoryCancelEdit = document.getElementById("admin-category-cancel-edit");
+  elements.categoriesList = document.getElementById("admin-categories-list");
+  elements.categoryFeedback = document.getElementById("admin-category-feedback");
 
   elements.summary = document.getElementById("admin-services-summary");
 
@@ -135,6 +152,7 @@ function carregarElementos() {
   elements.serviceDescription = document.getElementById(
     "admin-service-description",
   );
+  elements.serviceKeywords = document.getElementById("admin-service-keywords");
 
   elements.serviceActive = document.getElementById("admin-service-active");
 
@@ -218,6 +236,12 @@ function normalizarCategoria(valor) {
   }
 
   return criarSlug(categoria);
+}
+
+function encontrarCategoriaLegada(slug) {
+  return categoriasDisponiveis.find((categoria) =>
+    categoria.slug === slug || categoria.legacySlugs.includes(slug),
+  ) || null;
 }
 
 /* ============================================================
@@ -330,6 +354,9 @@ function normalizarServico(documentSnapshot) {
       "sem-categoria",
     ),
   );
+  const categoriaEncontrada = dados.categoriaId
+    ? categoriasDisponiveis.find((item) => item.id === dados.categoriaId)
+    : encontrarCategoriaLegada(categoria);
 
   const preco = converterPrecoParaNumero(
     obterPrimeiroValor(dados, ["preco", "valor", "valorReferencia"], 0),
@@ -359,9 +386,12 @@ function normalizarServico(documentSnapshot) {
 
     nome,
     categoria,
+    categoriaId: categoriaEncontrada?.id || dados.categoriaId || "",
+    categoriaNome: categoriaEncontrada?.nome || formatarNomePorSlug(categoria),
     preco,
     duracao,
     descricao,
+    palavrasChave: Array.isArray(dados.palavrasChave) ? dados.palavrasChave : [],
     ativo,
     pixSinalTipo: dados.pixSinalTipo || null,
     pixSinalValorCentavos: dados.pixSinalValorCentavos ?? null,
@@ -427,44 +457,229 @@ function mostrarAcessoNegado(titulo, mensagem) {
    CATEGORIAS
    ============================================================ */
 
-function adicionarOpcaoCategoria(select, valor) {
-  if (!select || !valor) {
-    return;
-  }
-
-  const opcaoExiste = Array.from(select.options).some(
-    (option) => option.value === valor,
-  );
-
-  if (opcaoExiste) {
-    return;
-  }
-
-  const option = document.createElement("option");
-
-  option.value = valor;
-  option.textContent = formatarNomePorSlug(valor);
-
-  select.appendChild(option);
+function atualizarOpcoesCategorias() {
+  const ordenar = [...categoriasDisponiveis].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+  const preencher = (select, rotuloInicial) => {
+    if (!select) return;
+    const valorAtual = select.value;
+    select.replaceChildren(new Option(rotuloInicial, rotuloInicial === "Todas" ? "todas" : ""));
+    ordenar.forEach((categoria) => {
+      const option = new Option(`${categoria.nome}${categoria.ativo ? "" : " (inativa)"}`, categoria.id);
+      select.add(option);
+    });
+    if (Array.from(select.options).some((option) => option.value === valorAtual)) select.value = valorAtual;
+  };
+  preencher(elements.categoryFilter, "Todas");
+  preencher(elements.serviceCategory, "Selecione");
 }
 
-function atualizarOpcoesCategorias() {
-  const categorias = [
-    ...new Set(todosServicos.map((servico) => servico.categoria)),
-  ]
-    .filter(Boolean)
-    .sort((categoriaA, categoriaB) =>
-      formatarNomePorSlug(categoriaA).localeCompare(
-        formatarNomePorSlug(categoriaB),
-        "pt-BR",
-      ),
-    );
+function normalizarDocumentoCategoria(snapshot) {
+  const dados = snapshot.data() || {};
+  const nome = String(dados.nome || formatarNomePorSlug(dados.slug || "")).trim();
+  const status = String(dados.status || (dados.ativo === false ? "inativo" : "ativo")).toLowerCase();
+  return {
+    id: snapshot.id,
+    nome,
+    slug: normalizarCategoria(dados.slug || nome),
+    descricao: String(dados.descricao || "").trim(),
+    ativo: dados.ativo !== false && !["inativo", "inactive", "desativado", "disabled"].includes(status),
+    legacySlugs: Array.isArray(dados.legacySlugs) ? dados.legacySlugs.map(normalizarCategoria) : [],
+    criadoEm: dados.criadoEm || null,
+    atualizadoEm: dados.atualizadoEm || null,
+    persistida: true,
+  };
+}
 
-  categorias.forEach((categoria) => {
-    adicionarOpcaoCategoria(elements.categoryFilter, categoria);
+async function carregarCategorias(servicosSnapshot) {
+  const snapshot = await getDocs(collection(db, "categorias"));
+  categoriasDisponiveis = snapshot.docs.map(normalizarDocumentoCategoria);
 
-    adicionarOpcaoCategoria(elements.serviceCategory, categoria);
+  // Serviços antigos continuam vinculados por slug sem gravar migrações automáticas.
+  const slugsLegados = new Set(["manicure", "pedicure", "unhas-em-gel"]);
+  servicosSnapshot.docs.forEach((servicoSnap) => {
+    const dados = servicoSnap.data() || {};
+    const slug = normalizarCategoria(dados.categoria || dados.categoriaSlug || dados.tipo || "");
+    if (slug && slug !== "sem-categoria" && !dados.categoriaId) slugsLegados.add(slug);
   });
+  for (const slug of slugsLegados) {
+    if (encontrarCategoriaLegada(slug)) continue;
+    categoriasDisponiveis.push({
+      id: `legacy_${slug}`, nome: formatarNomePorSlug(slug), slug,
+      descricao: "", ativo: true, legacySlugs: [slug], persistida: false,
+    });
+  }
+  atualizarOpcoesCategorias();
+  renderizarCategoriasAdmin();
+}
+
+function contarServicosCategoria(categoria) {
+  return todosServicos.filter((servico) => categoriaPossuiServicos(categoria, [servico])).length;
+}
+
+function renderizarCategoriasAdmin() {
+  if (!elements.categoriesList) return;
+  elements.categoriesList.replaceChildren();
+  const categorias = [...categoriasDisponiveis].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+  if (!categorias.length) {
+    elements.categoriesList.innerHTML = '<p class="admin-category-empty">Nenhuma categoria cadastrada.</p>';
+    return;
+  }
+  categorias.forEach((categoria) => {
+    const quantidade = contarServicosCategoria(categoria);
+    const item = document.createElement("article");
+    item.className = "admin-category-item";
+    item.innerHTML = `<div class="admin-category-item-copy"><strong>${escaparHTML(categoria.nome)}</strong><span>${quantidade} ${quantidade === 1 ? "serviço vinculado" : "serviços vinculados"} · ${categoria.ativo ? "Ativa" : "Inativa"}</span>${categoria.descricao ? `<small>${escaparHTML(categoria.descricao)}</small>` : ""}</div><div class="admin-category-item-actions"><button type="button" data-category-action="edit" data-category-id="${escaparHTML(categoria.id)}">Editar</button><button type="button" data-category-action="toggle" data-category-id="${escaparHTML(categoria.id)}">${categoria.ativo ? "Desativar" : "Ativar"}</button><button type="button" data-category-action="delete" data-category-id="${escaparHTML(categoria.id)}" ${quantidade ? "disabled title=\"Remova os serviços vinculados antes de excluir\"" : ""}>Excluir</button></div>`;
+    elements.categoriesList.appendChild(item);
+  });
+}
+
+function limparFormularioCategoria() {
+  elements.categoryForm?.reset();
+  elements.categoryId.value = "";
+  elements.categoryActive.checked = true;
+  elements.categorySubmit.textContent = "Adicionar categoria";
+  elements.categoryCancelEdit.hidden = true;
+}
+
+function abrirEdicaoCategoria(id) {
+  const categoria = categoriasDisponiveis.find((item) => item.id === id);
+  if (!categoria) return;
+  elements.categoryId.value = categoria.id;
+  elements.categoryName.value = categoria.nome;
+  elements.categoryDescription.value = categoria.descricao;
+  elements.categoryActive.checked = categoria.ativo;
+  elements.categorySubmit.textContent = "Salvar alterações";
+  elements.categoryCancelEdit.hidden = false;
+  elements.categoryName.focus();
+}
+
+async function salvarCategoria(event) {
+  event.preventDefault();
+  const nome = elements.categoryName.value.trim().replace(/\s+/g, " ");
+  const slug = criarSlug(nome);
+  const descricao = elements.categoryDescription.value.trim();
+  const idAtual = elements.categoryId.value;
+  if (!nome || !slug) {
+    elements.categoryFeedback.textContent = "Informe um nome válido para a categoria.";
+    elements.categoryName.focus();
+    return;
+  }
+  if (nomeCategoriaDuplicado(categoriasDisponiveis, slug, idAtual)) {
+    elements.categoryFeedback.textContent = "Já existe uma categoria com esse nome.";
+    elements.categoryName.focus();
+    return;
+  }
+  elements.categorySubmit.disabled = true;
+  elements.categoryFeedback.textContent = "Salvando categoria…";
+  try {
+    const slugQuery = query(collection(db, "categorias"), where("slug", "==", slug));
+    const categoriaAtual = categoriasDisponiveis.find((item) => item.id === idAtual);
+    const refAtual = idAtual && categoriaAtual?.persistida ? doc(db, "categorias", idAtual) : doc(collection(db, "categorias"));
+    const encontrados = await getDocs(slugQuery);
+    if (encontrados.docs.some((item) => item.id !== idAtual)) {
+      throw new Error("Já existe uma categoria com esse nome.");
+    }
+    await runTransaction(db, async (transaction) => {
+      const agora = serverTimestamp();
+      if (idAtual && categoriaAtual?.persistida) {
+        const snapshot = await transaction.get(refAtual);
+        if (!snapshot.exists()) throw new Error("A categoria não foi encontrada. Atualize a página e tente novamente.");
+        const atual = snapshot.data();
+        const aliases = [...new Set([...(Array.isArray(atual.legacySlugs) ? atual.legacySlugs : []), normalizarCategoria(atual.slug || atual.nome)])];
+        transaction.update(refAtual, {
+          nome, slug, descricao, legacySlugs: aliases,
+          ativo: elements.categoryActive.checked,
+          status: elements.categoryActive.checked ? "ativo" : "inativo",
+          atualizadoEm: agora, atualizadoPor: auth.currentUser?.uid || null,
+        });
+      } else {
+        transaction.set(refAtual, {
+          nome, slug, descricao, legacySlugs: [...new Set([...(categoriaAtual?.legacySlugs || []), ...(categoriaAtual?.slug ? [categoriaAtual.slug] : [])])],
+          ativo: elements.categoryActive.checked,
+          status: elements.categoryActive.checked ? "ativo" : "inativo",
+          criadoEm: agora, atualizadoEm: agora,
+          criadoPor: auth.currentUser?.uid || null, atualizadoPor: auth.currentUser?.uid || null,
+        });
+      }
+    });
+    elements.categoryFeedback.textContent = "Categoria salva com sucesso.";
+    limparFormularioCategoria();
+    await carregarServicos();
+  } catch (error) {
+    console.error("Erro ao salvar categoria:", error);
+    elements.categoryFeedback.textContent = error.message?.includes("Já existe")
+      ? error.message
+      : "Não foi possível salvar a categoria. Verifique sua conexão e tente novamente.";
+  } finally {
+    elements.categorySubmit.disabled = false;
+  }
+}
+
+async function alternarCategoria(id) {
+  const categoria = categoriasDisponiveis.find((item) => item.id === id);
+  if (!categoria) return;
+  try {
+    const ativo = !categoria.ativo;
+    if (categoria.persistida) {
+      await updateDoc(doc(db, "categorias", id), {
+        ativo, status: ativo ? "ativo" : "inativo", atualizadoEm: serverTimestamp(),
+        atualizadoPor: auth.currentUser?.uid || null,
+      });
+    } else {
+      const novoRef = doc(collection(db, "categorias"));
+      await setDoc(novoRef, {
+        nome: categoria.nome, slug: categoria.slug, descricao: categoria.descricao || "",
+        legacySlugs: categoria.legacySlugs, ativo, status: ativo ? "ativo" : "inativo",
+        criadoEm: serverTimestamp(), atualizadoEm: serverTimestamp(),
+        criadoPor: auth.currentUser?.uid || null, atualizadoPor: auth.currentUser?.uid || null,
+      });
+    }
+    await carregarServicos();
+    elements.categoryFeedback.textContent = `Categoria ${ativo ? "ativada" : "desativada"}.`;
+  } catch (error) {
+    console.error("Erro ao alterar categoria:", error);
+    elements.categoryFeedback.textContent = "Não foi possível alterar o estado da categoria.";
+  }
+}
+
+async function excluirCategoria(id) {
+  const categoria = categoriasDisponiveis.find((item) => item.id === id);
+  if (!categoria) return;
+  try {
+    const snapshot = await getDocs(collection(db, "servicos"));
+    const emUso = categoriaPossuiServicos(categoria, snapshot.docs.map((item) => item.data() || {}));
+    if (emUso) {
+      elements.categoryFeedback.textContent = "Esta categoria possui serviços vinculados e não pode ser excluída.";
+      await carregarServicos();
+      return;
+    }
+    if (!window.confirm(`Excluir a categoria “${categoria.nome}”?`)) return;
+    if (!categoria.persistida) {
+      elements.categoryFeedback.textContent = "Categorias antigas ligadas a serviços não podem ser removidas.";
+      return;
+    }
+    await deleteDoc(doc(db, "categorias", id));
+    elements.categoryFeedback.textContent = "Categoria excluída.";
+    await carregarServicos();
+  } catch (error) {
+    console.error("Erro ao excluir categoria:", error);
+    elements.categoryFeedback.textContent = "Não foi possível excluir a categoria. Tente novamente.";
+  }
+}
+
+function abrirModalCategorias() {
+  elements.categoryFeedback.textContent = "";
+  renderizarCategoriasAdmin();
+  elements.categoriesModal.hidden = false;
+  bloquearRolagemPagina();
+  elements.categoryName.focus();
+}
+
+function fecharModalCategorias() {
+  if (elements.categoriesModal.hidden) return;
+  elements.categoriesModal.hidden = true;
+  limparFormularioCategoria();
+  liberarRolagemPagina();
 }
 
 /* ============================================================
@@ -496,6 +711,7 @@ async function carregarServicos() {
 
   try {
     const snapshot = await getDocs(collection(db, "servicos"));
+    await carregarCategorias(snapshot);
 
     todosServicos = snapshot.docs.map(normalizarServico);
 
@@ -508,6 +724,7 @@ async function carregarServicos() {
     });
 
     atualizarOpcoesCategorias();
+    renderizarCategoriasAdmin();
     atualizarResumo();
     aplicarFiltros();
   } catch (error) {
@@ -570,10 +787,11 @@ function aplicarFiltros() {
     }
 
     const combinaCategoria =
-      categoriaAtual === "todas" || servico.categoria === categoriaAtual;
+      categoriaAtual === "todas" || servico.categoriaId === categoriaAtual;
 
     const textoPesquisavel = normalizarTexto(`
             ${servico.nome}
+            ${servico.categoriaNome}
             ${servico.categoria}
             ${formatarNomePorSlug(servico.categoria)}
             ${servico.descricao}
@@ -751,7 +969,7 @@ function obterIconeExcluir() {
    ============================================================ */
 
 function criarCardServico(servico) {
-  const categoriaVisual = formatarNomePorSlug(servico.categoria);
+  const categoriaVisual = servico.categoriaNome || formatarNomePorSlug(servico.categoria);
 
   const statusVisual = servico.ativo ? "Ativo" : "Inativo";
 
@@ -945,6 +1163,7 @@ function liberarRolagemPagina() {
     !elements.serviceModal.hidden || !elements.deleteModal.hidden;
 
   if (!possuiModalAberto) {
+    if (!elements.categoriesModal.hidden) return;
     document.body.style.overflow = "";
   }
 }
@@ -986,13 +1205,11 @@ function abrirModalEditarServico(id) {
 
   servicoEmEdicaoId = id;
 
-  adicionarOpcaoCategoria(elements.serviceCategory, servico.categoria);
-
   elements.serviceId.value = servico.id;
 
   elements.serviceName.value = servico.nome;
 
-  elements.serviceCategory.value = servico.categoria;
+  elements.serviceCategory.value = servico.categoriaId;
 
   elements.servicePrice.value = formatarPrecoParaCampo(servico.preco);
 
@@ -1004,6 +1221,7 @@ function abrirModalEditarServico(id) {
   elements.serviceDuration.value = servico.duracao;
 
   elements.serviceDescription.value = servico.descricao;
+  if (elements.serviceKeywords) elements.serviceKeywords.value = (servico.dadosOriginais.palavrasChave || []).join(", ");
 
   elements.serviceActive.checked = servico.ativo;
 
@@ -1134,17 +1352,20 @@ function validarFormularioServico() {
 function criarPayloadServico() {
   const ativo = elements.serviceActive.checked;
   const configuracaoSinal = criarConfiguracaoSinalPix();
+  const categoria = categoriasDisponiveis.find((item) => item.id === elements.serviceCategory.value);
 
   return {
     nome: elements.serviceName.value.trim(),
 
-    categoria: elements.serviceCategory.value,
+    categoria: categoria?.slug || "",
+    categoriaId: categoria?.id || "",
 
     preco: converterPrecoParaNumero(elements.servicePrice.value),
 
     duracao: converterDuracaoParaNumero(elements.serviceDuration.value),
 
     descricao: elements.serviceDescription.value.trim(),
+    palavrasChave: String(elements.serviceKeywords?.value || "").split(/[;,\n]/).map((termo) => termo.trim()).filter(Boolean).slice(0, 30),
 
     ...configuracaoSinal,
 
@@ -1374,6 +1595,22 @@ function configurarEventos() {
 
   elements.addServiceButton?.addEventListener("click", abrirModalNovoServico);
 
+  elements.manageCategoriesButton?.addEventListener("click", abrirModalCategorias);
+  elements.categoryForm?.addEventListener("submit", salvarCategoria);
+  elements.categoryCancelEdit?.addEventListener("click", limparFormularioCategoria);
+  elements.categoriesList?.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-category-action]");
+    if (!button) return;
+    const { categoryAction: action, categoryId: id } = button.dataset;
+    if (!id) return;
+    if (action === "edit") abrirEdicaoCategoria(id);
+    if (action === "toggle") await alternarCategoria(id);
+    if (action === "delete") await excluirCategoria(id);
+  });
+  document.querySelectorAll("[data-close-categories]").forEach((button) => {
+    button.addEventListener("click", fecharModalCategorias);
+  });
+
   elements.retryButton?.addEventListener("click", carregarServicos);
 
   elements.clearFiltersButton?.addEventListener("click", limparFiltros);
@@ -1478,6 +1715,11 @@ function configurarEventos() {
 
     if (!elements.serviceModal.hidden) {
       fecharModalServico();
+      return;
+    }
+
+    if (!elements.categoriesModal.hidden) {
+      fecharModalCategorias();
     }
   });
 }
@@ -1530,3 +1772,5 @@ if (document.readyState === "loading") {
 } else {
   iniciarPagina();
 }
+
+

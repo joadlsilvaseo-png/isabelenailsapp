@@ -78,6 +78,10 @@
             Organize preços, duração, categorias e disponibilidade
             dos procedimentos oferecidos.
           </p>
+
+          <button id="admin-manage-categories-button" type="button" class="admin-add-button admin-manage-categories-button">
+            Gerenciar categorias
+          </button>
         </div>
 
         <span class="admin-page-intro-icon" aria-hidden="true">
@@ -481,6 +485,12 @@
             <textarea id="admin-service-description" rows="4" maxlength="300" placeholder="Descreva brevemente o procedimento."></textarea>
           </label>
 
+          <label class="admin-form-field">
+            <span>Palavras-chave de busca (opcional)</span>
+            <input id="admin-service-keywords" type="text" maxlength="300" placeholder="Ex.: fibra, alongamento, manutenção">
+            <small>Separe sinônimos por vírgula. Eles ajudam clientes a encontrar este serviço.</small>
+          </label>
+
           <label class="admin-status-switch">
 
             <span>
@@ -576,9 +586,34 @@
 
   </div>
 
+  <div id="admin-categories-modal" class="admin-category-modal" role="dialog" aria-modal="true" aria-labelledby="admin-categories-title" hidden>
+    <button class="admin-category-backdrop" type="button" data-close-categories aria-label="Fechar categorias"></button>
+    <section class="admin-category-panel">
+      <header class="admin-category-header">
+        <div>
+          <span class="admin-section-eyebrow">Catálogo</span>
+          <h2 id="admin-categories-title">Gerenciar categorias</h2>
+        </div>
+        <button type="button" class="admin-modal-close" data-close-categories aria-label="Fechar">&times;</button>
+      </header>
+      <form id="admin-category-form" class="admin-category-form">
+        <input id="admin-category-id" type="hidden">
+        <label class="admin-form-field"><span>Nome da categoria</span><input id="admin-category-name" type="text" maxlength="60" required></label>
+        <label class="admin-form-field"><span>Descrição curta</span><textarea id="admin-category-description" rows="2" maxlength="180"></textarea></label>
+        <label class="admin-category-active"><input id="admin-category-active" type="checkbox" checked><span>Categoria ativa para clientes</span></label>
+        <div class="admin-category-actions">
+          <button id="admin-category-cancel-edit" class="admin-form-button admin-form-button--secondary" type="button" hidden>Cancelar edição</button>
+          <button id="admin-category-submit" class="admin-form-button" type="submit">Adicionar categoria</button>
+        </div>
+      </form>
+      <p id="admin-category-feedback" class="admin-category-feedback" role="status" aria-live="polite"></p>
+      <div id="admin-categories-list" class="admin-categories-list" aria-live="polite"></div>
+    </section>
+  </div>
+
   <script type="module" src="analytics.js?v=1.0.1"></script>
 
-  <script type="module" src="admin-servicos.js?v=1.0.0"></script>
+  <script type="module" src="admin-servicos.js?v=1.1.0"></script>
 
   <script src="app.js?v=2.0.0" defer></script>
 
@@ -586,3 +621,5 @@
 </body>
 
 </html>
+
+

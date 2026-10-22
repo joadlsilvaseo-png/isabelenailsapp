@@ -1,6 +1,7 @@
 import { auth, db } from "./firebase-config.js";
 import { consultarDisponibilidadePix, reagendarAgendamentoApi } from "./agendamentosApi.js";
 import { consultarIntervalosDisponibilidade, intervaloSobrepoeDisponibilidade, obterLimitesAtendimentoSemanal } from "./agendamentoDisponibilidade.js";
+import { obterJanelaAgendamento, validarDataNaJanela, validarHorarioEspecial } from "./infra/backend/src/agendamentoRegras.mjs";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
 import {
   collection,
@@ -71,17 +72,7 @@ function validarAgendamento(data, hora) {
 
   if (!dataOk || !horaOk) return false;
 
-  // Bloqueia agendamentos anteriores a novembro de 2026.
-  if (data < "2026-11-01") {
-    return false;
-  }
-
-  // Dezembro de 2026 permanece bloqueado.
-  if (data.startsWith("2026-12-") && !DATAS_DEZEMBRO_LIBERADAS.has(data)) {
-    return false;
-  }
-
-  return true;
+  return validarDataNaJanela(data).valido;
 }
 
 function formatarDataIsoLocal(data) {
@@ -232,7 +223,11 @@ function atualizarResumoAgendamento() {
   }
 }
 
-const DATAS_DEZEMBRO_LIBERADAS = new Set([]);
+function obterHojeSaoPauloParaTela() {
+  const partes = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
+  const valores = Object.fromEntries(partes.map((parte) => [parte.type, parte.value]));
+  return `${valores.year}-${valores.month}-${valores.day}`;
+}
 
 function gerarCalendarioDias(container) {
   if (!container) return;
@@ -260,21 +255,15 @@ function gerarCalendarioDias(container) {
 
   const dias = [];
 
-  const hoje = new Date();
-  hoje.setHours(12, 0, 0, 0);
+  const janela = obterJanelaAgendamento();
+  const [inicioAno, inicioMes, inicioDia] = janela.inicio.split("-").map(Number);
+  const [fimAno, fimMes, fimDia] = janela.fim.split("-").map(Number);
+  const hojeIso = obterHojeSaoPauloParaTela();
+  const cursor = new Date(inicioAno, inicioMes - 1, inicioDia, 12, 0, 0);
+  const limite = new Date(fimAno, fimMes - 1, fimDia, 12, 0, 0);
 
-  const hojeIso = formatarDataIsoLocal(hoje);
-
-  const dataLiberacaoAgenda = new Date(2026, 10, 1, 12, 0, 0);
-
-  const cursor =
-    hoje < dataLiberacaoAgenda ? new Date(dataLiberacaoAgenda) : new Date(hoje);
-
-  while (dias.length < 8) {
-    const dezembroBloqueado =
-      cursor.getFullYear() === 2026 &&
-      cursor.getMonth() === 11 &&
-      !DATAS_DEZEMBRO_LIBERADAS.has(formatarDataIsoLocal(cursor));
+  while (cursor <= limite) {
+    const dezembroBloqueado = cursor.getFullYear() === 2026 && cursor.getMonth() === 11;
 
     if (diasAtendimento.has(cursor.getDay()) && !dezembroBloqueado) {
       const dataAtual = new Date(cursor);
@@ -543,44 +532,24 @@ async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null) {
 
     let quantidadeDisponivel = 0;
 
-    for (let atual = minAbertura; atual <= minUltimoInicio; atual += 30) {
+    const iniciosPossiveis = diaSemanaSelecionado === 3
+      ? [timeToMins("09:00"), timeToMins("14:00")]
+      : Array.from({ length: Math.floor((minUltimoInicio - minAbertura) / 30) + 1 }, (_, indice) => minAbertura + indice * 30);
+
+    for (const atual of iniciosPossiveis) {
       const fimServico = atual + duracaoServico;
 
-      if (fimServico > minFechamento) {
+      if (fimServico > minFechamento && diaSemanaSelecionado !== 2 && diaSemanaSelecionado !== 3) {
         continue;
       }
 
       const horarioTexto = minsToTime(atual);
 
-      const bloqueadoPorRegraTerca =
-        diaSemanaSelecionado === 2 &&
-        (atual > timeToMins("15:30") || fimServico > timeToMins("17:30"));
-
-      const horarioPermitidoQuartaManha =
-        atual >= timeToMins("09:00") &&
-        atual <= timeToMins("10:30") &&
-        fimServico <= timeToMins("12:30");
-
-      const horarioPermitidoQuartaEncaixe =
-        atual >= timeToMins("11:00") &&
-        atual <= timeToMins("11:30") &&
-        duracaoServico <= 60 &&
-        fimServico <= timeToMins("12:30");
-
-      const horarioPermitidoQuartaTarde =
-        atual >= timeToMins("13:30") &&
-        atual <= timeToMins("15:30") &&
-        fimServico <= timeToMins("17:30");
-
-      const bloqueadoPorRegraQuarta =
-        diaSemanaSelecionado === 3 &&
-        !horarioPermitidoQuartaManha &&
-        !horarioPermitidoQuartaEncaixe &&
-        !horarioPermitidoQuartaTarde;
+      const bloqueadoPorRegraEspecial =
+        !validarHorarioEspecial(dataIso, horarioTexto, duracaoServico);
 
       const indisponivel =
-        bloqueadoPorRegraTerca ||
-        bloqueadoPorRegraQuarta ||
+        bloqueadoPorRegraEspecial ||
         intervaloSobrepoeDisponibilidade(atual, fimServico, intervalosIndisponiveis);
 
       const botao = document.createElement("button");
@@ -1078,3 +1047,4 @@ async function inicializarAgendamento() {
 }
 
 document.addEventListener("DOMContentLoaded", inicializarAgendamento);
+

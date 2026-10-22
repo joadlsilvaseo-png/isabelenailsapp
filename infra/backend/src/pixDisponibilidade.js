@@ -1,10 +1,9 @@
-const DATAS_DEZEMBRO_LIBERADAS = new Set([]);
-
+import { validarDataNaJanela, validarHorarioEspecial } from "./agendamentoRegras.mjs";
 function horarioInvalido(motivo) {
   return { valido: false, motivo };
 }
 
-export function validarHorarioPix(dataIso, horario, duracao) {
+export function validarHorarioPix(dataIso, horario, duracao, agora = new Date()) {
   if (
     typeof dataIso !== "string" ||
     typeof horario !== "string" ||
@@ -30,15 +29,8 @@ export function validarHorarioPix(dataIso, horario, duracao) {
     return horarioInvalido("Data inexistente");
   }
 
-  // Abertura oficial dos agendamentos: novembro de 2026.
-  if (dataIso < "2026-11-01") {
-    return horarioInvalido("Agenda disponível somente a partir de 01/11/2026");
-  }
-
-  // Dezembro de 2026 permanece fechado até liberação manual.
-  if (ano === 2026 && mes === 12 && !DATAS_DEZEMBRO_LIBERADAS.has(dataIso)) {
-    return horarioInvalido("Agenda de dezembro ainda não disponível");
-  }
+  const validacaoData = validarDataNaJanela(dataIso, agora);
+  if (!validacaoData.valido) return horarioInvalido(validacaoData.motivo);
 
   if (!Number.isSafeInteger(duracao) || duracao <= 0 || duracao > 600) {
     return horarioInvalido("Duracao invalida");
@@ -70,25 +62,8 @@ export function validarHorarioPix(dataIso, horario, duracao) {
     return horarioInvalido("Intervalo de almoco indisponivel");
   }
 
-  // Terca: bloqueio das 09h ate 13h30.
-  if (diaSemana === 2) {
-    if (inicio < 810 || inicio > 930 || fim > 1050) {
-      return horarioInvalido("Horario indisponivel na terca");
-    }
-  }
-
-  // Quarta: mesmas janelas especiais do aplicativo.
-  if (diaSemana === 3) {
-    const manha = inicio >= 540 && inicio <= 630 && fim <= 750;
-
-    const encaixe =
-      inicio >= 660 && inicio <= 690 && duracao <= 60 && fim <= 750;
-
-    const tarde = inicio >= 810 && inicio <= 930 && fim <= 1050;
-
-    if (!manha && !encaixe && !tarde) {
-      return horarioInvalido("Horario indisponivel na quarta");
-    }
+  if (!validarHorarioEspecial(dataIso, horario, duracao)) {
+    return horarioInvalido(diaSemana === 2 ? "Horario indisponivel na terca" : "Horario indisponivel na quarta");
   }
 
   return {
@@ -107,3 +82,4 @@ export function possuiSobreposicao(inicio, fim, intervalos) {
     (ocupado) => inicio < ocupado.fimMinuto && fim > ocupado.inicioMinuto,
   );
 }
+

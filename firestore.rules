@@ -78,6 +78,15 @@ service cloud.firestore {
     }
 
     // =========================
+    // CATEGORIAS DINÂMICAS
+    // =========================
+
+    match /categorias/{categoriaId} {
+      allow read: if true;
+      allow create, update, delete: if ehAdmin();
+    }
+
+    // =========================
     // SERVIÇOS
     // =========================
 
@@ -231,3 +240,4 @@ service cloud.firestore {
 
   }
 }
+
