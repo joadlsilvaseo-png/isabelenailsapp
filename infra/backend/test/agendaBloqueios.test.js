@@ -143,3 +143,174 @@ test("datas de dezembro e horários inválidos não são aceitos pelo servidor",
   );
   assert.equal(pool.chamadas.length, 0);
 });
+
+
+
+// Simula transações concorrentes com semântica de lock por data.
+// A operação concorrente não pode sequer consultar/gravar até a primeira
+// transação concluir. A simulação não acessa PostgreSQL nem Firestore reais.
+function simularConcorrenciaCalendario() {
+  let travado = false;
+  const fila = [];
+  const reservas = [];
+  const bloqueios = [];
+  let numeroCliente = 0;
+  let sinalPrimeiro;
+  let soltarPrimeiro;
+  const primeiroAdquiriu = new Promise((resolve) => { sinalPrimeiro = resolve; });
+  const liberarPrimeiro = new Promise((resolve) => { soltarPrimeiro = resolve; });
+  const eventos = [];
+  function liberarLock() {
+    const proximo = fila.shift();
+    if (proximo) proximo();
+    else travado = false;
+  }
+  const pool = {
+    async connect() {
+      const indice = ++numeroCliente;
+      const pendentes = { reservas: [], bloqueios: [] };
+      let adquiriuLock = false;
+      return {
+        async query(sql, params = []) {
+          if (sql === "BEGIN") return { rows: [], rowCount: 0 };
+          if (sql.includes("pg_advisory_xact_lock")) {
+            if (travado) await new Promise((resolve) => fila.push(resolve));
+            else travado = true;
+            adquiriuLock = true;
+            eventos.push("lock-" + indice);
+            if (indice === 1) {
+              sinalPrimeiro();
+              await liberarPrimeiro;
+            }
+            return { rows: [], rowCount: 1 };
+          }
+          if (sql.includes("SELECT 1 FROM public.agenda_bloqueios")) {
+            const [, inicio, fim] = params;
+            const encontrados = bloqueios.filter((item) =>
+              sobrepoe(inicio, fim, item.inicio, item.fim));
+            return { rows: encontrados, rowCount: encontrados.length };
+          }
+          if (sql.includes("FROM public.pix_reservas")) {
+            const encontrados = reservas.map(({ inicio, fim }) => ({
+              inicio_minuto: inicio, fim_minuto: fim,
+            }));
+            return { rows: encontrados, rowCount: encontrados.length };
+          }
+          if (sql.includes("INSERT INTO public.agenda_bloqueios")) {
+            pendentes.bloqueios.push({ inicio: params[1], fim: params[2] });
+            return { rows: [], rowCount: 1 };
+          }
+          if (sql.includes("INSERT INTO public.pix_reservas")) {
+            pendentes.reservas.push({ inicio: params[1], fim: params[2] });
+            return { rows: [], rowCount: 1 };
+          }
+          if (sql === "COMMIT" || sql === "ROLLBACK") {
+            if (sql === "COMMIT") {
+              bloqueios.push(...pendentes.bloqueios);
+              reservas.push(...pendentes.reservas);
+            }
+            if (adquiriuLock) {
+              eventos.push(sql.toLowerCase() + "-" + indice);
+              liberarLock();
+              adquiriuLock = false;
+            }
+            return { rows: [], rowCount: 0 };
+          }
+          throw Error("SQL desconhecido no teste concorrente: " + sql);
+        },
+        release() {},
+      };
+    },
+  };
+  // Reproduz o trecho transacional utilizado pelas reservas PIX: BEGIN,
+  // advisory lock do dia, consulta de bloqueio e gravação/COMMIT ou ROLLBACK.
+  async function reservar(inicio, fim) {
+    const conexao = await pool.connect();
+    try {
+      await conexao.query("BEGIN");
+      await conexao.query(
+        "SELECT pg_advisory_xact_lock(hashtext('isabele_pix_agenda'), hashtext($1::text))",
+        [DATA],
+      );
+      if (await possuiBloqueio(conexao, DATA, inicio, fim)) {
+        throw new Error("Agenda fechada pela profissional neste horário");
+      }
+      await conexao.query(
+        "INSERT INTO public.pix_reservas (data_servico, inicio_minuto, fim_minuto) VALUES ($1, $2, $3)",
+        [DATA, inicio, fim],
+      );
+      await conexao.query("COMMIT");
+    } catch (erro) {
+      await conexao.query("ROLLBACK");
+      throw erro;
+    } finally { conexao.release(); }
+  }
+  const fechar = () => alterarHorarios({
+    pool, db: criarDb(), uid: "admin-1", data: DATA,
+    horas: [900, 930], acao: "fechar", agora: FIXO,
+  });
+  return {
+    primeiroAdquiriu,
+    liberarPrimeiro: () => soltarPrimeiro(),
+    eventos, reservas, bloqueios, fechar, reservar,
+  };
+}
+
+for (const primeiro of ["reserva", "fechamento"]) {
+  test("corrida reserva x fechamento — " + primeiro + " obtém lock primeiro", async () => {
+    const sim = simularConcorrenciaCalendario();
+    const operacaoReserva = () => sim.reservar(870, 990); // 14h30–16h30.
+    const operacaoFechar = () => sim.fechar(); // 15h–16h.
+    const primeiroProcesso = primeiro === "reserva" ? operacaoReserva() : operacaoFechar();
+    await sim.primeiroAdquiriu;
+    const segundoProcesso = primeiro === "reserva" ? operacaoFechar() : operacaoReserva();
+    let segundoFinalizou = false;
+    // Impede rejeição não tratada durante a simulação.
+    const segundoObservado = segundoProcesso.then(
+      () => { segundoFinalizou = true; },
+      () => { segundoFinalizou = true; },
+    );
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(segundoFinalizou, false, "segundo processo precisa aguardar lock");
+    sim.liberarPrimeiro();
+    const resultados = await Promise.allSettled([primeiroProcesso, segundoProcesso]);
+    await segundoObservado;
+    assert.deepEqual(resultados.map(({ status }) => status), ["fulfilled", "rejected"]);
+    assert.equal(sim.eventos[0], "lock-1");
+    assert.ok(sim.eventos.indexOf("commit-1") < sim.eventos.indexOf("lock-2"));
+    if (primeiro === "reserva") {
+      assert.equal(sim.reservas.length, 1);
+      assert.equal(sim.bloqueios.length, 0, "admin não pode sobrescrever reserva PIX ativa");
+      assert.equal(resultados[1].reason.status, 409);
+    } else {
+      assert.equal(sim.reservas.length, 0, "PIX não pode reservar sobre agenda fechada");
+      assert.equal(sim.bloqueios.length, 2);
+      assert.match(resultados[1].reason.message, /Agenda fechada/);
+    }
+  });
+}
+
+// Guarda de regressão: o simulador acima espelha o caminho real. Verifica
+// estaticamente que os três fluxos continuam tomando o mesmo lock ANTES
+// de consultar agenda_bloqueios, dentro de BEGIN/COMMIT.
+test("PIX, isenção e reagendamento compartilham chave e ordem do lock", async () => {
+  const { readFileSync } = await import("node:fs");
+  for (const nome of ["pixReservas.js", "agendamentosIsencaoPix.js"]) {
+    const codigo = readFileSync(new URL("../src/" + nome, import.meta.url), "utf8");
+    const trechos = nome === "pixReservas.js"
+      ? [codigo.slice(codigo.indexOf('await conexao.query("BEGIN")'))]
+      : [
+          codigo.slice(codigo.indexOf("export async function criarAgendamentoIsento"),
+            codigo.indexOf("export async function reagendarComBloqueio")),
+          codigo.slice(codigo.indexOf("export async function reagendarComBloqueio")),
+        ];
+    for (const trecho of trechos) {
+      const inicio = trecho.indexOf('await conexao.query("BEGIN")');
+      const lock = trecho.indexOf("pg_advisory_xact_lock(hashtext('isabele_pix_agenda')");
+      const consulta = trecho.indexOf("await possuiBloqueio(conexao, data, periodo.inicioMinuto, periodo.fimMinuto)");
+      const commit = trecho.indexOf('await conexao.query("COMMIT")');
+      assert.ok(inicio >= 0 && inicio < lock && lock < consulta && consulta < commit,
+        nome + ": bloqueio deve preceder consulta e gravação na transação");
+    }
+  }
+});
