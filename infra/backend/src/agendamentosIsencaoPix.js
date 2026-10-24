@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { validarHorarioPix } from "./pixDisponibilidade.js";
+import { possuiBloqueio } from "./agendaBloqueios.js";
 import { encontrarConflitoAgendamentoPix } from "./pixDocumentoAgendamento.js";
 
 const ID_UID = /^[A-Za-z0-9_-]{1,128}$/;
@@ -203,6 +204,10 @@ export async function criarAgendamentoIsento({ pool, db, uid, dados, dependencie
       throw new ErroIsencaoPix(409, "A autorização para agendar sem sinal foi revogada", "ISENCAO_INATIVA");
     }
 
+    if (await possuiBloqueio(conexao, data, periodo.inicioMinuto, periodo.fimMinuto)) {
+      throw new ErroIsencaoPix(409, "Agenda fechada pela profissional neste horário", "AGENDA_FECHADA");
+    }
+
     const reservaPropria = await conexao.query(`
       SELECT id, cliente_uid, cobranca_id
       FROM public.pix_reservas
@@ -368,6 +373,10 @@ export async function reagendarComBloqueio({ pool, db, uid, dados, dependencies 
         "SELECT pg_advisory_xact_lock(hashtext('isabele_pix_agenda'), hashtext($1::text))",
         [dataBloqueada],
       );
+    }
+
+    if (await possuiBloqueio(conexao, data, periodo.inicioMinuto, periodo.fimMinuto)) {
+      throw new ErroIsencaoPix(409, "Agenda fechada pela profissional neste horário", "AGENDA_FECHADA");
     }
 
     const reservaExistente = await conexao.query(`
