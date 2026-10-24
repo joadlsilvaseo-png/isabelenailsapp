@@ -59,3 +59,30 @@ export function validarHorarioEspecial(dataIso, horario, duracao) {
   const [hora, minuto] = horario.split(":").map(Number);
   return validarHorarioEspecialSemanal(partes.data.getUTCDay(), hora * 60 + minuto, Number(duracao));
 }
+
+// Horários de 30 minutos que a administradora pode fechar/reabrir.
+// Engloba também partes de serviços já iniciados: na quarta, por exemplo,
+// fechar 09:30 bloqueia um atendimento iniciado às 09:00 que avance até 10:00.
+// NÃO muda os horários de início disponíveis para as clientes.
+export function listarSlotsGerenciaveis(dataIso, agora = new Date()) {
+  const validacao = validarDataNaJanela(dataIso, agora);
+  if (!validacao.valido) return [];
+  const dia = validacao.diaSemana;
+  if (dia === 0 || dia === 1) return [];
+  const limites = {
+    2: [[840, 1050]],                   // Terça: 14:00–17:30.
+    3: [[540, 750], [840, 1050]],      // Quarta: manhã e tarde.
+    4: [[660, 1260]],                  // Quinta: 11:00–21:00.
+    5: [[540, 1260]],                  // Sexta: 09:00–21:00.
+    6: [[540, 1440]],                  // Sábado: início até 16h; respeita duração.
+  };
+  const slots = [];
+  for (const [inicio, fim] of limites[dia] || []) {
+    for (let minuto = inicio; minuto + 30 <= fim; minuto += 30) {
+      // Pausa fixa: 13:30–14:00, não editável.
+      if (minuto === 810) continue;
+      slots.push(minuto);
+    }
+  }
+  return slots;
+}
