@@ -529,6 +529,8 @@ MIGRATION_015="$RELEASE_DIR/infra/migrations/015_calendar_cancelamentos_dispensa
 [[ -f "$MIGRATION_015" ]] || die "Migracao 015 nao encontrada no commit alvo."
 MIGRATION_016="$RELEASE_DIR/infra/migrations/016_cliente_observacoes_admin.sql"
 [[ -f "$MIGRATION_016" ]] || die "Migracao 016 nao encontrada no commit alvo."
+MIGRATION_018="$RELEASE_DIR/infra/migrations/018_agenda_bloqueios.sql"
+[[ -f "$MIGRATION_018" ]] || die "Migracao 018 nao encontrada no commit alvo."
 
 UPDATE_OVERRIDE="$BACKUP_DIR/update-compose.yaml"
 TARGET_IMAGE_TAG="isabele-nails-api:release-${TARGET_COMMIT}"
@@ -972,6 +974,47 @@ case "$MIGRATION_016_STATE" in
   *) die "Nao foi possivel classificar a migracao 016." ;;
 esac
 
+
+# Preflight de bloqueios: ausência total = pendente; estado parcial = abortar.
+MIGRATION_018_STATE_SQL="$BACKUP_DIR/migration-018-state.sql"
+cat >"$MIGRATION_018_STATE_SQL" <<'SQL'
+SELECT CASE
+  WHEN to_regclass('public.agenda_bloqueios') IS NULL THEN 'pending'
+  WHEN (SELECT COUNT(*) = 5 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'agenda_bloqueios'
+          AND (
+            (column_name = 'data_servico' AND data_type = 'date' AND is_nullable = 'NO')
+            OR (column_name IN ('inicio_minuto','fim_minuto') AND data_type = 'integer' AND is_nullable = 'NO')
+            OR (column_name = 'alterado_por_uid' AND data_type = 'text' AND is_nullable = 'NO')
+            OR (column_name = 'criado_em' AND data_type = 'timestamp with time zone' AND is_nullable = 'NO' AND column_default = 'now()')
+          ))
+    AND EXISTS (SELECT 1 FROM pg_constraint
+      WHERE conrelid = to_regclass('public.agenda_bloqueios')
+        AND conname = 'agenda_bloqueios_pkey' AND contype = 'p'
+        AND pg_get_constraintdef(oid) = 'PRIMARY KEY (data_servico, inicio_minuto)')
+    AND EXISTS (SELECT 1 FROM pg_constraint
+      WHERE conrelid = to_regclass('public.agenda_bloqueios')
+        AND conname = 'agenda_bloqueio_intervalo' AND contype = 'c'
+        AND pg_get_constraintdef(oid) LIKE '%inicio_minuto%'
+        AND pg_get_constraintdef(oid) LIKE '%fim_minuto%'
+        AND pg_get_constraintdef(oid) LIKE '%30%')
+    AND EXISTS (SELECT 1 FROM pg_constraint
+      WHERE conrelid = to_regclass('public.agenda_bloqueios')
+        AND conname = 'agenda_bloqueio_uid' AND contype = 'c'
+        AND pg_get_constraintdef(oid) LIKE '%alterado_por_uid%')
+  THEN 'applied'
+  ELSE 'partial'
+END;
+SQL
+chmod 600 "$MIGRATION_018_STATE_SQL"
+MIGRATION_018_STATE="$(compose_snapshot exec -T "$DB_SERVICE" sh -lc 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At' <"$MIGRATION_018_STATE_SQL" | tr -d '\r\n')"
+case "$MIGRATION_018_STATE" in
+  applied) echo "Migracao 018 aplicada; mantendo bloqueios existentes." ;;
+  pending) echo "Migracao 018 pendente: sera aplicada apos backup." ;;
+  partial) die "Migracao 018 parcial; API e dados preservados." ;;
+  *) die "Preflight da migracao 018 falhou." ;;
+esac
+
 printf '%s\n' "$DB_CONTAINER" >"$BACKUP_DIR/db-container-id"
 compose_snapshot exec -T "$DB_SERVICE" sh -lc 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' >"$BACKUP_DIR/postgres-before.dump"
 [[ -s "$BACKUP_DIR/postgres-before.dump" ]] || die "Backup PostgreSQL vazio; atualizacao cancelada."
@@ -990,6 +1033,7 @@ MIGRATION_011_APPLIED=false
 MIGRATION_012_APPLIED=false
 MIGRATION_014_APPLIED=false
 MIGRATION_016_APPLIED=false
+MIGRATION_018_APPLIED=false
 NEW_API_STARTED=false
 restore_old_api_on_error() {
   local rc=$?
@@ -1012,8 +1056,8 @@ EOF
     elif [[ "$API_STOPPED" == true ]]; then
       docker start "$API_CONTAINER" >/dev/null || true
     fi
-    if [[ "$MIGRATION_APPLIED" == true || "$MIGRATION_STATE" == applied || "$MIGRATION_011_APPLIED" == true || "$MIGRATION_011_STATE" == applied || "$MIGRATION_012_APPLIED" == true || "$MIGRATION_012_STATE" == applied || "$MIGRATION_016_APPLIED" == true || "$MIGRATION_016_STATE" == applied ]]; then
-      echo "Migracoes aplicadas (incluindo 016, se executada) permanecem preservadas; nenhum dado foi removido."
+    if [[ "$MIGRATION_APPLIED" == true || "$MIGRATION_STATE" == applied || "$MIGRATION_011_APPLIED" == true || "$MIGRATION_011_STATE" == applied || "$MIGRATION_012_APPLIED" == true || "$MIGRATION_012_STATE" == applied || "$MIGRATION_016_APPLIED" == true || "$MIGRATION_016_STATE" == applied || "$MIGRATION_018_APPLIED" == true || "$MIGRATION_018_STATE" == applied ]]; then
+      echo "Migracoes aplicadas (incluindo 016 e 018, se executadas) permanecem preservadas; nenhum dado foi removido."
     fi
     echo "Backup e configuracao efetiva anterior: $BACKUP_DIR"
   fi
@@ -1057,6 +1101,13 @@ if [[ "$MIGRATION_016_STATE" == pending ]]; then
   MIGRATION_016_APPLIED=true
 else
   echo "Pulando migracao 016 ja aplicada; observacoes existentes serao mantidas."
+fi
+if [[ "$MIGRATION_018_STATE" == pending ]]; then
+  compose_snapshot exec -T "$DB_SERVICE" sh -lc 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <"$MIGRATION_018"
+  MIGRATION_018_APPLIED=true
+  echo "Migracao 018 aplicada com sucesso."
+else
+  echo "Pulando migracao 018 ja aplicada; bloqueios serao mantidos."
 fi
 NEW_API_STARTED=true
 compose_snapshot up -d --no-deps "$API_SERVICE"
