@@ -18,6 +18,7 @@ import { iniciarWorkerPixWebhook } from "./pixWebhookWorker.js";
 import { iniciarWorkerPixPolling } from "./pixPollingWorker.js";
 import { atenderAgendamentoIsencao } from "./agendamentosIsencaoPix.js";
 import { consultarDisponibilidadePix } from "./pixDisponibilidadeApi.js";
+import { atenderGerenciarCalendario } from "./agendaBloqueios.js";
 import { atenderGestaoClientes } from "./gestaoClientes.js";
 import { atenderFotosPerfil } from "./fotosPerfil.js";
 
@@ -106,6 +107,12 @@ const server = http.createServer(async (req, res) => {
     /^\/admin\/clientes\/[^/]+\/foto$/.test(caminhoFoto)
   ) {
     await atenderFotosPerfil(req, res, pool);
+    return;
+  }
+
+  // Bloqueios operacionais: exclusivamente administração, sem Google Agenda.
+  if (new URL(req.url, "http://localhost").pathname === "/admin/calendario") {
+    await atenderGerenciarCalendario(req, res, pool);
     return;
   }
 
