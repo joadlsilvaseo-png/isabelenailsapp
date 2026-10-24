@@ -15,11 +15,11 @@ function responder(res, status, dados) {
   res.end(JSON.stringify(dados));
 }
 
-export async function atenderCentralNotificacoes(req, res, pool) {
+export async function atenderCentralNotificacoes(req, res, pool, dependencias = {}) {
   let uid;
 
   try {
-    uid = await verificarUsuario(req);
+    uid = await (dependencias.verificarUsuario || verificarUsuario)(req);
   } catch {
     responder(res, 401, {
       erro: "Usuario nao autenticado",
@@ -78,6 +78,7 @@ export async function atenderCentralNotificacoes(req, res, pool) {
         SET lida_em = NOW()
         WHERE destinatario_uid = $1
           AND lida_em IS NULL
+          AND ${FILTRO_VISIBILIDADE_CENTRAL}
         `,
         [uid],
       );
@@ -101,6 +102,7 @@ export async function atenderCentralNotificacoes(req, res, pool) {
         SET lida_em = COALESCE(lida_em, NOW())
         WHERE id = $1
           AND destinatario_uid = $2
+          AND ${FILTRO_VISIBILIDADE_CENTRAL}
         RETURNING id
         `,
         [correspondencia[1], uid],

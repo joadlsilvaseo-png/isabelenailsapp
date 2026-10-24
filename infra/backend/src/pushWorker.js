@@ -19,6 +19,7 @@ const HOSTS_PERMITIDOS = new Set([
 ]);
 const PROJECT_ID = "isabele-nails-app";
 const TIPOS_LEMBRETE = new Set(["lembrete_24h", "lembrete_1h"]);
+const ATRASO_MAXIMO_LEMBRETE_MS = 10 * 60 * 1000;
 
 let processamentoAtivo = false;
 
@@ -216,6 +217,39 @@ async function finalizarEntrega(pool, id, estado) {
   );
 }
 
+function verificarJanelaLembrete(entrega, agora) {
+  const agendadoPara = entrega?.agendado_para
+    ? new Date(entrega.agendado_para)
+    : null;
+  const agendadoMs = agendadoPara?.getTime();
+  const agoraMs = new Date(agora).getTime();
+
+  if (!Number.isFinite(agendadoMs) || !Number.isFinite(agoraMs)) {
+    return { estado: "expirada" };
+  }
+
+  if (agendadoMs > agoraMs) {
+    return { estado: "aguardando", agendadoPara };
+  }
+
+  if (agoraMs - agendadoMs > ATRASO_MAXIMO_LEMBRETE_MS) {
+    return { estado: "expirada" };
+  }
+
+  return { estado: "valida", agendadoPara };
+}
+
+async function reagendarParaHorario(pool, id, agendadoPara) {
+  await pool.query(
+    `
+    UPDATE public.push_entregas
+    SET estado = 'pendente', reservado_em = NULL, proxima_tentativa = $2
+    WHERE id = $1
+    `,
+    [id, agendadoPara],
+  );
+}
+
 // ======================================================
 // REAGENDAR ENTREGA QUE FALHOU
 // ======================================================
@@ -315,11 +349,22 @@ async function processarFila(pool) {
 export async function processarEntrega(pool, entrega, dependencias = {}) {
   let validacao = null;
   if (TIPOS_LEMBRETE.has(entrega.tipo)) {
+    const agora = dependencias.agora || new Date();
+    const janela = verificarJanelaLembrete(entrega, agora);
+    if (janela.estado === "expirada") {
+      await finalizarEntrega(pool, entrega.id, "expirada");
+      return "expirada";
+    }
+    if (janela.estado === "aguardando") {
+      await reagendarParaHorario(pool, entrega.id, janela.agendadoPara);
+      return "aguardando";
+    }
+
     validacao = await (dependencias.validar || validarLembreteAgendamento)(
       pool,
       entrega,
       dependencias.firestore,
-      dependencias.agora || new Date(),
+      agora,
     );
     if (!validacao) {
       await finalizarEntrega(pool, entrega.id, "cancelado");
