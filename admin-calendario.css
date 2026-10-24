@@ -1,0 +1,73 @@
+/* Mesma estrutura visual do agendamento da cliente, controles exclusivos da admin. */
+.calendario-acesso {
+  margin: 24px 16px;
+  border-radius: 16px;
+  padding: 24px 18px;
+  background: #fffafb;
+  color: #591c31;
+  font-size: 14px;
+  text-align: center;
+}
+.calendario-modos {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 8px 0 16px;
+}
+.calendario-modo {
+  min-height: 48px;
+  padding: 10px;
+  border: 1px solid #e8cdd7;
+  border-radius: 12px;
+  background: #fffafb;
+  color: #591c31;
+  font: 600 13px "Poppins", sans-serif;
+  cursor: pointer;
+}
+.calendario-modo.is-active {
+  border-color: #7c334c;
+  background: #7c334c;
+  color: #fff;
+}
+.calendario-legenda {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.calendario-legenda-fechado {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #745875;
+}
+.agendamento-time.calendario-fechado {
+  background: #eee6ed;
+  color: #654563;
+  border-color: #b9a3b9;
+}
+.agendamento-time.calendario-selecionado {
+  background: #7c334c !important;
+  color: white !important;
+  border-color: #7c334c !important;
+  box-shadow: 0 0 0 2px #e9becf;
+}
+.agendamento-time.calendario-fechado:disabled {
+  opacity: .75;
+}
+.calendario-ajuda {
+  font-size: 12px;
+  line-height: 1.6;
+  color: #765464;
+  margin: 14px 0 6px;
+}
+.calendario-footer {
+  display: grid;
+  gap: 14px;
+}
+.calendario-footer .agendamento-button {
+  width: 100%;
+}
+@media (min-width: 460px) {
+  .calendario-footer { grid-template-columns: 1fr; }
+}
