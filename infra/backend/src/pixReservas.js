@@ -9,6 +9,7 @@ import { getFirestore } from "firebase-admin/firestore";
 import { verificarUsuario } from "./pushSubscriptions.js";
 import { validarHorarioPix } from "./pixDisponibilidade.js";
 import { verificarConflitoFirestore } from "./pixAgendaFirestore.js";
+import { possuiBloqueio } from "./agendaBloqueios.js";
 import {
   ambienteMercadoPagoAtual,
   consultarPedidoPixComLock,
@@ -319,6 +320,10 @@ export async function criarReservaPix(req, res, pool) {
             )
           )
       `, [data]);
+
+      if (await possuiBloqueio(conexao, data, periodo.inicioMinuto, periodo.fimMinuto)) {
+        throw new ErroReserva(409, "Agenda fechada pela profissional neste horário");
+      }
 
       const conflito = await verificarConflitoFirestore(
         data,
