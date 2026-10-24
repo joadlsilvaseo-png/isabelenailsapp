@@ -13,6 +13,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "infra/scripts/atualizar-vps-pix.sh"
 MIGRATION = ROOT / "infra/migrations/012_agendamento_cancelamentos.sql"
+REMINDERS_MIGRATION = ROOT / "infra/migrations/019_lembretes_agendamento.sql"
 SOURCE = SCRIPT.read_text(encoding="utf-8")
 
 
@@ -181,6 +182,36 @@ class TestAtualizacaoVpsPix(unittest.TestCase):
         self.assertIn('if [[ "$MIGRATION_016_STATE" == pending ]]; then', source)
         self.assertIn("MIGRATION_016_APPLIED", source)
         self.assertIn("cliente_observacoes_admin_nota_check", source)
+
+    def test_migracao_019_classifica_pendente_aplicada_parcial_e_dependencia_ausente(self):
+        expected = {
+            "pending": "pending|",
+            "applied": "applied|",
+            "partial": "partial|colunas/tipos/nullable,indice_lembretes",
+            "missing-table": "missing_table|push_entregas",
+        }
+        for scenario, value in expected.items():
+            with self.subTest(scenario=scenario):
+                result = subprocess.run(
+                    ["bash", str(SCRIPT), "--test-migration-019-state", scenario],
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout.strip(), value)
+
+    def test_migracao_019_tem_preflight_backup_transacional_e_rollback_conservador(self):
+        self.assertIn("019_lembretes_agendamento.sql", SOURCE)
+        self.assertIn('if [[ "$MIGRATION_019_STATE" == pending ]]; then', SOURCE)
+        self.assertLess(SOURCE.index('MIGRATION_019_STATE_ROW='), SOURCE.index('compose_snapshot stop "$API_SERVICE"'))
+        self.assertIn("MIGRATION_019_APPLIED", SOURCE)
+        sql = REMINDERS_MIGRATION.read_text(encoding="utf-8")
+        self.assertTrue(sql.lstrip().startswith("BEGIN;"))
+        self.assertTrue(sql.rstrip().endswith("COMMIT;"))
+        self.assertIn("ADD COLUMN IF NOT EXISTS agendado_para", sql)
+        self.assertIn("ADD COLUMN IF NOT EXISTS agendamento_versao", sql)
+        self.assertNotRegex(sql, r"(?im)^\s*(UPDATE|DELETE|DROP|TRUNCATE)\b")
 
     def test_migracao_012_rejeita_duas_variantes_da_constraint_calendar(self):
         result = subprocess.run(

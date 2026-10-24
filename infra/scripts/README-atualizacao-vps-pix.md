@@ -1,10 +1,10 @@
 # Atualização controlada da VPS (PIX)
 
-Este roteiro é para uma execução única, iniciada manualmente pelo responsável. O script não foi executado nesta revisão e a VPS não foi acessada. As migrações 010, 011 e 012 são verificadas pelo catálogo PostgreSQL; o script pula cada migração já aplicada e aborta se encontrar estado parcial. Não cria cobranças.
+Este roteiro é para uma execução única, iniciada manualmente pelo responsável. O script não foi executado nesta revisão e a VPS não foi acessada. As migrações suportadas pelo procedimento, incluindo 010, 011, 012, 014, 015, 016, 018 e 019, são verificadas pelo catálogo PostgreSQL; o script pula cada migração já aplicada e aborta se encontrar estado parcial. Não cria cobranças.
 
 ## Testes locais do procedimento
 
-Na raiz do repositório, execute `python3 infra/scripts/test_atualizar_vps_pix.py` e `bash -n infra/scripts/atualizar-vps-pix.sh`. A suíte verifica a aceitação do sandbox e da produção habilitada, que os overlays de atualização/rollback não substituem ambiente, credenciais, volumes ou redes, o uso do snapshot efetivo no rollback, a decisão da migração 012 e a ausência de chamadas de cobrança/reembolso. Esses testes não acessam Docker, PostgreSQL, VPS, Mercado Pago ou Google Apps Script.
+Na raiz do repositório, execute `python3 infra/scripts/test_atualizar_vps_pix.py` e `bash -n infra/scripts/atualizar-vps-pix.sh`. A suíte verifica a aceitação do sandbox e da produção habilitada, que os overlays de atualização/rollback não substituem ambiente, credenciais, volumes ou redes, o uso do snapshot efetivo no rollback, os preflights das migrações 012, 016 e 019 e a ausência de chamadas de cobrança/reembolso. Esses testes não acessam Docker, PostgreSQL, VPS, Mercado Pago ou Google Apps Script.
 
 ## O que o script verifica e preserva
 
@@ -82,7 +82,7 @@ Use a versão do script atualizada junto ao PR. O script busca o commit mais rec
 2. Salva a configuração renderizada e os arquivos-fonte Compose com acesso restrito; registra alterações locais e imagem anterior.
 3. Gera dump PostgreSQL antes de parar qualquer serviço.
 4. Constrói o backend do commit mais recente em worktree isolado.
-5. Detecta as migrações 010, 011 e 012 pela estrutura de tabelas, colunas, constraints e índices. Se já estiverem aplicadas, não executa o SQL novamente. Se estiverem pendentes, aplica uma vez com `ON_ERROR_STOP`; estado parcial interrompe o processo antes da parada da API. Atualiza somente `api` usando o snapshot efetivo do Compose.
+5. Detecta as migrações 010, 011, 012, 014, 015, 016, 018 e 019 pela estrutura de tabelas, colunas, constraints e índices. Se já estiverem aplicadas, não executa o SQL novamente. Se estiverem pendentes, aplica uma vez com `ON_ERROR_STOP`; estado parcial interrompe o processo antes da parada da API. Atualiza somente `api` usando o snapshot efetivo do Compose.
 6. Confirma que o container foi recriado com a referência de imagem versionada e que o container e a imagem têm label de revisão igual ao commit Git alvo. Depois verifica `/health` e a conexão PostgreSQL e registra a contagem da fila por ambiente.
 
 O ambiente e todos os flags financeiros são preservados exatamente como encontrados no Compose efetivo. Isso inclui `MP_ENVIRONMENT`, `PIX_PRODUCTION_ORDERS_ENABLED`, `PIX_POLLING_WORKER_ENABLED`, `PIX_WEBHOOK_ENABLED` e `PIX_WEBHOOK_WORKER_ENABLED`, além de credenciais. Na configuração de produção validada, a atualização mantém `MP_ENVIRONMENT=production`, `PIX_PRODUCTION_ORDERS_ENABLED=true`, `PIX_POLLING_WORKER_ENABLED=true`, `PIX_WEBHOOK_ENABLED=false` e `PIX_WEBHOOK_WORKER_ENABLED=false`. No sandbox, mantém os valores de teste que já estiverem configurados. Nenhuma variável nova ou segredo ausente é inventado. Se `MP_ENVIRONMENT` estiver ausente, o backend mantém seu padrão de `test`; para produção o valor precisa constar da configuração efetiva e coincidir com o ambiente em execução.

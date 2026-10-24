@@ -1,6 +1,7 @@
 import { initializeApp, applicationDefault, getApps } from "firebase-admin/app";
 
 import { getFirestore } from "firebase-admin/firestore";
+import { extrairAgendamento, sincronizarLembretesAgendamento } from "./agendaLembretes.js";
 import { identificarNotificacoesAgendamento } from "./agendaNotificacoes.js";
 
 const PROJECT_ID = "isabele-nails-app";
@@ -18,30 +19,11 @@ function normalizarStatus(valor) {
 // ======================================================
 
 function extrairEstado(documento) {
-  const dados = documento.data();
-
+  const dados = documento.data() || {};
   return {
-    id: documento.id,
-
-    clienteId: texto(
-      dados.clienteId ||
-        dados.idCliente ||
-        dados.usuarioId ||
-        dados.uidCliente ||
-        dados.userId,
-    ),
-
+    ...extrairAgendamento(dados, documento.id),
     status: normalizarStatus(dados.status),
-
-    data: texto(dados.data || dados.dataAgendamento),
-
-    horario: texto(dados.horario || dados.hora),
-
-    servico: texto(dados.servico || dados.nomeServico || dados.servicoNome),
-
     reagendadoPor: texto(dados.reagendadoPor),
-    nomeCliente: texto(dados.nomeCliente),
-    origemPagamento: texto(dados.origemPagamento),
   };
 }
 
@@ -73,8 +55,10 @@ async function processarAgendamento(
   firestore,
   documento,
   importacaoInicial,
+  removido = false,
 ) {
   const atual = extrairEstado(documento);
+  if (removido) atual.status = "removido";
   const conexao = await pool.connect();
 
   try {
@@ -102,6 +86,11 @@ async function processarAgendamento(
       texto(anterior.reagendado_por) !== atual.reagendadoPor;
 
     if (!mudou) {
+      await sincronizarLembretesAgendamento(
+        conexao,
+        atual,
+        Number(anterior.versao),
+      );
       await conexao.query("COMMIT");
       return;
     }
@@ -145,8 +134,12 @@ async function processarAgendamento(
       ],
     );
 
-    // Na primeira instalação, apenas importa as reservas
-    // existentes sem gerar notificações antigas.
+    // O estado e os lembretes são gravados na mesma transação. Assim,
+    // reagendamentos/cancelamentos invalidam a outbox antiga atomicamente.
+    await sincronizarLembretesAgendamento(conexao, atual, versao);
+
+    // Na primeira leitura, importa o estado e programa apenas lembretes futuros;
+    // notificações legadas sobre alterações não são emitidas em lote.
     const eventos = importacaoInicial
       ? []
       : identificarNotificacoesAgendamento(anterior, atual);
@@ -240,8 +233,7 @@ export async function iniciarMonitorAgendamentos(pool) {
       primeiraLeitura = false;
 
       const alteracoes = snapshot
-        .docChanges()
-        .filter((alteracao) => alteracao.type !== "removed");
+        .docChanges();
 
       fila = fila
         .then(async () => {
@@ -251,6 +243,7 @@ export async function iniciarMonitorAgendamentos(pool) {
               firestore,
               alteracao.doc,
               importacaoInicial,
+              alteracao.type === "removed",
             );
           }
 

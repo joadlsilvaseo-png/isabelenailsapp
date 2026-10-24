@@ -1,4 +1,11 @@
 import webpush from "web-push";
+import { applicationDefault, getApps, initializeApp } from "firebase-admin/app";
+import { getFirestore } from "firebase-admin/firestore";
+import {
+  agendamentoAtivo,
+  extrairAgendamento,
+  instanteAgendamentoSaoPaulo,
+} from "./agendaLembretes.js";
 
 // ======================================================
 // CONFIGURAÇÃO DO WEB PUSH
@@ -10,6 +17,8 @@ const HOSTS_PERMITIDOS = new Set([
   "push.services.mozilla.com",
   "web.push.apple.com",
 ]);
+const PROJECT_ID = "isabele-nails-app";
+const TIPOS_LEMBRETE = new Set(["lembrete_24h", "lembrete_1h"]);
 
 let processamentoAtivo = false;
 
@@ -40,7 +49,7 @@ function endpointPermitido(endpoint) {
 // ENVIAR NOTIFICAÇÃO AOS DISPOSITIVOS DO DESTINATÁRIO
 // ======================================================
 
-async function enviarNotificacao(entrega, pool) {
+async function enviarNotificacao(entrega, pool, inicioAgendamento = null) {
   const consulta = await pool.query(
     `
     SELECT id, endpoint, p256dh, auth
@@ -60,8 +69,19 @@ async function enviarNotificacao(entrega, pool) {
     title: entrega.titulo,
     body: entrega.mensagem,
     url: entrega.destino,
-    tag: `agendamento-${entrega.agendamento_id}`,
+    tag: TIPOS_LEMBRETE.has(entrega.tipo)
+      ? `agendamento-${entrega.agendamento_id}-${entrega.tipo}`
+      : `agendamento-${entrega.agendamento_id}`,
   });
+
+  let ttl = 3600;
+  if (inicioAgendamento) {
+    ttl = Math.min(
+      24 * 60 * 60,
+      Math.floor((inicioAgendamento.getTime() - Date.now()) / 1000) - 5,
+    );
+    if (ttl <= 0) return "expirada";
+  }
 
   let enviados = 0;
   let falhasTemporarias = 0;
@@ -84,7 +104,7 @@ async function enviarNotificacao(entrega, pool) {
 
     try {
       await webpush.sendNotification(subscription, payload, {
-        TTL: 3600,
+        TTL: ttl,
         timeout: 10000,
         urgency: "normal",
       });
@@ -119,6 +139,60 @@ async function enviarNotificacao(entrega, pool) {
   }
 
   return "sem_dispositivo";
+}
+
+async function obterFirestore() {
+  if (!getApps().length) {
+    initializeApp({
+      credential: applicationDefault(),
+      projectId: PROJECT_ID,
+    });
+  }
+  return getFirestore();
+}
+
+/** Revalida o snapshot PostgreSQL e o documento Firestore imediatamente antes do Push. */
+export async function validarLembreteAgendamento(
+  pool,
+  entrega,
+  firestore,
+  agora = new Date(),
+) {
+  if (!TIPOS_LEMBRETE.has(entrega?.tipo)) return null;
+
+  const estado = await pool.query(
+    `
+    SELECT agendamento_id, cliente_id, status, data_agendamento,
+           horario, servico, versao
+    FROM public.push_agendamento_estado
+    WHERE agendamento_id = $1
+      AND cliente_id = $2
+      AND versao = $3
+    `,
+    [entrega.agendamento_id, entrega.destinatario_uid, Number(entrega.agendamento_versao)],
+  );
+  const salvo = estado.rows[0];
+  if (!salvo || !agendamentoAtivo(salvo)) return null;
+
+  const db = firestore || await obterFirestore();
+  const documento = await db.collection("agendamentos").doc(entrega.agendamento_id).get();
+  if (!documento.exists) return null;
+
+  const atual = extrairAgendamento(documento.data(), documento.id);
+  if (
+    !agendamentoAtivo(atual) ||
+    atual.clienteId !== entrega.destinatario_uid ||
+    atual.status !== String(salvo.status).toLowerCase() ||
+    atual.data !== String(salvo.data_agendamento || "") ||
+    atual.horario !== String(salvo.horario || "").slice(0, 5) ||
+    atual.servico !== String(salvo.servico || "")
+  ) {
+    return null;
+  }
+
+  const inicio = instanteAgendamentoSaoPaulo(atual.data, atual.horario);
+  if (!inicio || inicio.getTime() <= new Date(agora).getTime()) return null;
+  return { inicio };
 }
 
 // ======================================================
@@ -224,9 +298,7 @@ async function processarFila(pool) {
 
     for (const entrega of entregas) {
       try {
-        const resultado = await enviarNotificacao(entrega, pool);
-
-        await finalizarEntrega(pool, entrega.id, resultado);
+        const resultado = await processarEntrega(pool, entrega);
 
         console.log("[PushWorker] Entrega processada:", entrega.id, resultado);
       } catch (erro) {
@@ -238,6 +310,27 @@ async function processarFila(pool) {
   } finally {
     processamentoAtivo = false;
   }
+}
+
+export async function processarEntrega(pool, entrega, dependencias = {}) {
+  let validacao = null;
+  if (TIPOS_LEMBRETE.has(entrega.tipo)) {
+    validacao = await (dependencias.validar || validarLembreteAgendamento)(
+      pool,
+      entrega,
+      dependencias.firestore,
+      dependencias.agora || new Date(),
+    );
+    if (!validacao) {
+      await finalizarEntrega(pool, entrega.id, "cancelado");
+      return "cancelado";
+    }
+  }
+
+  const enviar = dependencias.enviar || enviarNotificacao;
+  const resultado = await enviar(entrega, pool, validacao?.inicio || null);
+  await finalizarEntrega(pool, entrega.id, resultado);
+  return resultado;
 }
 
 // ======================================================

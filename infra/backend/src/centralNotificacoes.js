@@ -1,5 +1,10 @@
 import { verificarUsuario } from "./pushSubscriptions.js";
 
+export const FILTRO_VISIBILIDADE_CENTRAL = `
+  (agendado_para IS NULL OR agendado_para <= NOW())
+  AND (tipo NOT IN ('lembrete_24h', 'lembrete_1h') OR estado <> 'cancelado')
+`;
+
 function responder(res, status, dados) {
   res.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
@@ -40,6 +45,7 @@ export async function atenderCentralNotificacoes(req, res, pool) {
           lida_em
         FROM public.push_entregas
         WHERE destinatario_uid = $1
+          AND ${FILTRO_VISIBILIDADE_CENTRAL}
         ORDER BY criado_em DESC, id DESC
         LIMIT 50
         `,
@@ -52,6 +58,7 @@ export async function atenderCentralNotificacoes(req, res, pool) {
         FROM public.push_entregas
         WHERE destinatario_uid = $1
           AND lida_em IS NULL
+          AND ${FILTRO_VISIBILIDADE_CENTRAL}
         `,
         [uid],
       );
