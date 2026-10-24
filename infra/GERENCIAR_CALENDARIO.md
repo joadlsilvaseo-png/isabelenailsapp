@@ -8,12 +8,13 @@ na janela mensal já existente, respeitando o bloqueio de dezembro de 2026.
 
 1. Fazer backup consistente do PostgreSQL da VPS e registrar o commit
    anterior da API para rollback.
-2. Aplicar `infra/migrations/018_agenda_bloqueios.sql` **uma única vez**
-   ao PostgreSQL real, conferindo a existência da tabela e das constraints.
-   A migration é aditiva: não edita reservas ou pagamentos existentes.
-3. Atualizar a **imagem Docker da API** com o mesmo commit desta PR,
-   preservando as variáveis de ambiente, volumes, secret mounts e
-   parâmetros PIX. Verificar `/health` e os logs de startup.
+2. Executar o script versionado `infra/scripts/atualizar-vps-pix.sh` com
+   `BRANCH=feat/gerenciar-calendario-bloqueios-20261024`. O script confere
+   a estrutura, cria backup PostgreSQL antes de parar a API, aplica a
+   migração `018_agenda_bloqueios.sql` somente se pendente e atualiza a
+   imagem Docker da API sem trocar os parâmetros PIX, credenciais e volumes.
+   A migração é aditiva: não edita reservas nem pagamentos existentes.
+3. Conferir `/health`, o commit da imagem e os logs da API na VPS.
 4. Testar a API autenticada `GET /admin/calendario?data=YYYY-MM-DD`
    com uma conta administrativa real (consulta apenas), sem criar
    bloqueios de teste em dados de produção.
@@ -24,9 +25,10 @@ na janela mensal já existente, respeitando o bloqueio de dezembro de 2026.
    cliente e reabrir após a validação. Nunca manipular um horário já
    reservado.
 
-O script `infra/scripts/atualizar-vps-pix.sh` não aplica a migration
-018 automaticamente. Não deixar o frontend novo apontar para uma
-API anterior ou para uma tabela ainda inexistente.
+O script desta PR agora aplica a migração 018 automaticamente, de forma
+condicional, **após criar o backup**, e aborta antes da parada da API se
+houver estrutura parcial. Não utilizar uma versão antiga do script para
+este deploy. Não deixar o frontend apontar para API ou tabela antigas.
 
 ## Contrato de dados
 
