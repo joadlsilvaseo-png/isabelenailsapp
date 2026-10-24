@@ -1,6 +1,5 @@
 import { validarDataNaJanela, listarSlotsGerenciaveis } from "./agendamentoRegras.mjs";
 import { verificarUsuario } from "./pushSubscriptions.js";
-import { encontrarConflitoAgendamentoPix } from "./pixDocumentoAgendamento.js";
 
 const DATA_ISO = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_CORPO = 8192;
