@@ -1,3 +1,5 @@
+/* Garante que verificações de acesso não exponham a interface ao carregar. */
+#calendario-main[hidden], #calendario-acesso[hidden] { display: none !important; }
 /* Mesma estrutura visual do agendamento da cliente, controles exclusivos da admin. */
 .calendario-acesso {
   margin: 24px 16px;
