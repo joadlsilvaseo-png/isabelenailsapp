@@ -25,6 +25,8 @@ jobs:
       - name: Verificar sintaxe
         run: |
           node --check src/pixCalendarWorker.js
+          node --check src/agendaBloqueios.js
+          node --check ../../admin-calendario.js
           node --check test/agendamentoCancelamentos.test.js
       - name: Testes do backend
         run: npm test
