@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 15607)
-Total output lines: 1220
-
 #!/usr/bin/env bash
 set -Eeuo pipefail
 umask 077
@@ -497,7 +494,281 @@ for service_name, container in (("api", api_container), (db_service_name, db_con
 
 configured_db_image = services[db_service_name].get("image")
 live_db_image = db_container.get("Config", {}).get("Image")
-…3607 tokens truncated…s_pendentes')
+if configured_db_image and configured_db_image != live_db_image:
+    raise SystemExit("A imagem do PostgreSQL no Compose difere do container ativo. Abortando sem alteracoes.")
+
+print("Configuracao efetiva conferida para API e PostgreSQL: variaveis declaradas, identidade da imagem e volumes iguais aos containers ativos.")
+PY
+
+# Aceita sandbox ou produção ativa. A validação não escreve flags: o snapshot
+# efetivo é a única fonte de configuração e os overlays abaixo só alteram imagem/build.
+MP_ENVIRONMENT_EFFECTIVE="$(python3 - "$BACKUP_DIR/effective-before.json" <<'PY'
+import json, sys
+with open(sys.argv[1], encoding="utf-8") as f:
+    config = json.load(f)
+env = (config.get("services", {}).get("api", {}) or {}).get("environment", {}) or {}
+if isinstance(env, list):
+    env = dict(item.split("=", 1) if "=" in item else (item, None) for item in env)
+value = env.get("MP_ENVIRONMENT")
+print("test" if value in (None, "") else str(value))
+PY
+)"
+validate_pix_environment "$MP_ENVIRONMENT_EFFECTIVE" || die "Configuracao MP_ENVIRONMENT nao suportada; abortando sem alteracoes."
+echo "Ambiente PIX efetivo preservado: $MP_ENVIRONMENT_EFFECTIVE; flags financeiros permanecem inalterados."
+
+# Salva status/diff e arquivos nao rastreados; nada e limpo nem sobrescrito.
+git -C "$APP_DIR" fetch --no-tags origin "$BRANCH"
+TARGET_COMMIT="$(git -C "$APP_DIR" rev-parse FETCH_HEAD)"
+[[ "$TARGET_COMMIT" =~ ^[0-9a-f]{40}$ ]] || die "Nao foi possivel resolver o commit remoto."
+printf '%s\n' "$TARGET_COMMIT" >"$BACKUP_DIR/target-commit"
+printf '%s\n' "$(git -C "$APP_DIR" rev-parse HEAD)" >"$BACKUP_DIR/checkout-head"
+git -C "$APP_DIR" status --porcelain=v1 >"$BACKUP_DIR/git-status.txt"
+git -C "$APP_DIR" diff --binary HEAD >"$BACKUP_DIR/working-tree.patch"
+git -C "$APP_DIR" ls-files --others --exclude-standard -z >"$BACKUP_DIR/untracked-files.list"
+if [[ -s "$BACKUP_DIR/untracked-files.list" ]]; then
+  tar -C "$APP_DIR" --null -T "$BACKUP_DIR/untracked-files.list" -czf "$BACKUP_DIR/untracked-files.tar.gz"
+fi
+find "$BACKUP_DIR" -maxdepth 1 -type f -exec chmod 600 {} +
+
+API_IMAGE_ID="$(docker inspect --format '{{.Image}}' "$API_CONTAINER")"
+[[ "$API_IMAGE_ID" =~ ^sha256:[0-9a-f]{64}$ ]] || die "Imagem ativa da API nao identificada."
+printf '%s\n' "$API_IMAGE_ID" >"$BACKUP_DIR/old-api-image-id"
+OLD_API_IMAGE_TAG="isabele-nails-api:rollback-$(timestamp)-$$"
+docker image tag "$API_IMAGE_ID" "$OLD_API_IMAGE_TAG"
+[[ "$(docker image inspect --format '{{.Id}}' "$OLD_API_IMAGE_TAG")" == "$API_IMAGE_ID" ]] || die "Nao foi possivel criar referencia persistente para a imagem anterior."
+printf '%s\n' "$OLD_API_IMAGE_TAG" >"$BACKUP_DIR/old-api-image-tag"
+chmod 600 "$BACKUP_DIR/old-api-image-id" "$BACKUP_DIR/old-api-image-tag"
+
+RELEASE_DIR="$RELEASE_ROOT/$TARGET_COMMIT"
+[[ ! -e "$RELEASE_DIR" ]] || die "Release ja existe: $RELEASE_DIR"
+mkdir -p "$RELEASE_ROOT"
+git -C "$APP_DIR" worktree add --detach "$RELEASE_DIR" "$TARGET_COMMIT"
+MIGRATION="$RELEASE_DIR/infra/migrations/010_pix_webhook_ambientes.sql"
+[[ -f "$MIGRATION" ]] || die "Migracao 010 nao encontrada no commit alvo."
+MIGRATION_011="$RELEASE_DIR/infra/migrations/011_pix_polling_worker.sql"
+[[ -f "$MIGRATION_011" ]] || die "Migracao 011 nao encontrada no commit alvo."
+MIGRATION_012="$RELEASE_DIR/infra/migrations/012_agendamento_cancelamentos.sql"
+[[ -f "$MIGRATION_012" ]] || die "Migracao 012 nao encontrada no commit alvo."
+MIGRATION_014="$RELEASE_DIR/infra/migrations/014_calendar_criacoes_dispensadas.sql"
+[[ -f "$MIGRATION_014" ]] || die "Migracao 014 nao encontrada no commit alvo."
+MIGRATION_015="$RELEASE_DIR/infra/migrations/015_calendar_cancelamentos_dispensados.sql"
+[[ -f "$MIGRATION_015" ]] || die "Migracao 015 nao encontrada no commit alvo."
+MIGRATION_016="$RELEASE_DIR/infra/migrations/016_cliente_observacoes_admin.sql"
+[[ -f "$MIGRATION_016" ]] || die "Migracao 016 nao encontrada no commit alvo."
+MIGRATION_018="$RELEASE_DIR/infra/migrations/018_agenda_bloqueios.sql"
+[[ -f "$MIGRATION_018" ]] || die "Migracao 018 nao encontrada no commit alvo."
+MIGRATION_019="$RELEASE_DIR/infra/migrations/019_lembretes_agendamento.sql"
+[[ -f "$MIGRATION_019" ]] || die "Migracao 019 nao encontrada no commit alvo."
+
+UPDATE_OVERRIDE="$BACKUP_DIR/update-compose.yaml"
+TARGET_IMAGE_TAG="isabele-nails-api:release-${TARGET_COMMIT}"
+printf '%s\n' "$TARGET_IMAGE_TAG" >"$BACKUP_DIR/target-api-image-tag"
+cat >"$UPDATE_OVERRIDE" <<EOF
+services:
+  $API_SERVICE:
+    image: "$TARGET_IMAGE_TAG"
+    build:
+      context: "$RELEASE_DIR/infra/backend"
+      dockerfile: Dockerfile
+      args:
+        APP_REVISION: "$TARGET_COMMIT"
+    labels:
+      org.opencontainers.image.revision: "$TARGET_COMMIT"
+EOF
+chmod 600 "$UPDATE_OVERRIDE"
+
+compose_snapshot() {
+  docker compose --project-directory "$PROJECT_WORKDIR" --project-name "$PROJECT_NAME" \
+    --file "$BACKUP_DIR/effective-before.yaml" --file "$UPDATE_OVERRIDE" "$@"
+}
+
+# A migration 010 pode já ter sido aplicada por uma tentativa anterior. Detecta
+# a estrutura final no catálogo PostgreSQL e só aplica se a estrutura ainda for
+# a versão pré-010. Estado parcial é ambíguo e interrompe a atualização.
+MIGRATION_STATE_SQL="$BACKUP_DIR/migration-010-state.sql"
+cat >"$MIGRATION_STATE_SQL" <<'SQL'
+WITH state AS (
+  SELECT
+    to_regclass('public.pix_webhook_inbox') IS NOT NULL AS has_table,
+    EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'pix_webhook_inbox'
+        AND column_name = 'mp_environment'
+    ) AS has_environment_column,
+    EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'pix_webhook_inbox'
+        AND column_name = 'mp_environment' AND is_nullable = 'NO'
+    ) AS environment_column_not_null,
+    EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'pix_webhook_inbox'
+        AND column_name = 'mp_environment' AND column_default = '''test''::text'
+    ) AS environment_default_test,
+    EXISTS (
+      SELECT 1 FROM pg_constraint
+      WHERE conrelid = to_regclass('public.pix_webhook_inbox')
+        AND conname = 'pix_webhook_inbox_environment_check' AND contype = 'c'
+        AND pg_get_constraintdef(oid) LIKE '%test%'
+        AND pg_get_constraintdef(oid) LIKE '%production%'
+    ) AS has_environment_check,
+    EXISTS (
+      SELECT 1 FROM pg_constraint
+      WHERE conrelid = to_regclass('public.pix_webhook_inbox')
+        AND conname = 'pix_webhook_inbox_pkey' AND contype = 'p'
+        AND pg_get_constraintdef(oid) = 'PRIMARY KEY (mp_environment, mp_order_id)'
+    ) AS has_environment_primary_key,
+    EXISTS (
+      SELECT 1 FROM pg_index i
+      WHERE i.indexrelid = to_regclass('public.idx_pix_webhook_pendentes')
+        AND i.indisvalid
+        AND pg_get_indexdef(i.indexrelid) LIKE '%(mp_environment, proxima_tentativa_em)%'
+        AND pg_get_expr(i.indpred, i.indrelid) = '(processado_em IS NULL)'
+    ) AS has_environment_pending_index
+)
+SELECT CASE
+  WHEN NOT has_table THEN 'missing_table'
+  WHEN has_environment_column AND environment_column_not_null AND environment_default_test AND has_environment_check
+    AND has_environment_primary_key AND has_environment_pending_index THEN 'applied'
+  WHEN NOT has_environment_column AND NOT has_environment_check THEN 'pending'
+  ELSE 'partial'
+END
+FROM state;
+SQL
+chmod 600 "$MIGRATION_STATE_SQL"
+MIGRATION_STATE="$(compose_snapshot exec -T "$DB_SERVICE" sh -lc 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At' <"$MIGRATION_STATE_SQL" | tr -d '\r\n')"
+case "$MIGRATION_STATE" in
+  applied) echo "Migracao 010 ja aplicada; sera preservada sem nova execucao." ;;
+  pending) echo "Migracao 010 ainda pendente; sera aplicada uma vez nesta atualizacao." ;;
+  partial) die "Estado parcial da migracao 010; nenhuma migracao foi executada e a API nao sera parada." ;;
+  missing_table) die "Tabela da migracao 008 ausente; nao e seguro aplicar a migracao 010." ;;
+  *) die "Nao foi possivel determinar o estado da migracao 010 (resultado: $MIGRATION_STATE)." ;;
+esac
+
+# A migracao 012 cria o registro duravel de cancelamento e a fila de Calendar.
+# O preflight aceita somente a estrutura completa (antes ou depois da 015) ou
+# a ausencia total da tabela. Cada resultado estrutural e identificado abaixo.
+MIGRATION_012_STATE_SQL="$BACKUP_DIR/migration-012-state.sql"
+cat >"$MIGRATION_012_STATE_SQL" <<'SQL'
+WITH flags AS (
+  SELECT
+    to_regclass('public.pix_cobrancas') IS NOT NULL AS has_charge_table,
+    to_regclass('public.agendamento_cancelamentos') IS NOT NULL AS has_table,
+    NOT EXISTS (
+      SELECT 1 FROM (VALUES
+        ('agendamento_id', 'text', 'NO'), ('cobranca_id', 'uuid', 'YES'),
+        ('cliente_uid', 'text', 'NO'), ('solicitante_uid', 'text', 'NO'),
+        ('tipo', 'text', 'NO'), ('estado', 'text', 'NO'),
+        ('calendar_event_id', 'text', 'YES'), ('calendar_estado', 'text', 'NO'),
+        ('calendar_tentativas', 'int4', 'NO'), ('calendar_proxima_tentativa_em', 'timestamptz', 'NO'),
+        ('calendar_bloqueado_ate', 'timestamptz', 'YES'), ('calendar_ultimo_erro', 'text', 'YES'),
+        ('calendar_enviado_em', 'timestamptz', 'YES'), ('tentativas', 'int4', 'NO'),
+        ('proxima_tentativa_em', 'timestamptz', 'NO'), ('bloqueado_ate', 'timestamptz', 'YES'),
+        ('ultimo_erro', 'text', 'YES'), ('criado_em', 'timestamptz', 'NO'),
+        ('atualizado_em', 'timestamptz', 'NO'), ('concluido_em', 'timestamptz', 'YES')
+      ) AS esperado(nome, tipo, nullable)
+      WHERE NOT EXISTS (
+        SELECT 1 FROM information_schema.columns c
+        WHERE c.table_schema = 'public'
+          AND c.table_name = 'agendamento_cancelamentos'
+          AND c.column_name = esperado.nome
+          AND c.udt_name = esperado.tipo
+          AND c.is_nullable = esperado.nullable
+      )
+    ) AS has_columns,
+    EXISTS (
+      SELECT 1 FROM pg_constraint
+      WHERE conrelid = to_regclass('public.agendamento_cancelamentos')
+        AND conname = 'agendamento_cancelamentos_pkey' AND contype = 'p'
+        AND pg_get_constraintdef(oid) = 'PRIMARY KEY (agendamento_id)'
+    ) AS has_primary_key,
+    NOT EXISTS (
+      SELECT 1 FROM (VALUES
+        ('estado', '''solicitada''::text'),
+        ('calendar_estado', '''dispensado''::text'),
+        ('calendar_tentativas', '0'), ('tentativas', '0'),
+        ('calendar_proxima_tentativa_em', 'now()'),
+        ('proxima_tentativa_em', 'now()'), ('criado_em', 'now()'),
+        ('atualizado_em', 'now()')
+      ) AS esperado(nome, padrao)
+      WHERE NOT EXISTS (
+        SELECT 1 FROM information_schema.columns c
+        WHERE c.table_schema = 'public'
+          AND c.table_name = 'agendamento_cancelamentos'
+          AND c.column_name = esperado.nome
+          AND c.column_default = esperado.padrao
+      )
+    ) AS has_defaults,
+    EXISTS (
+      SELECT 1 FROM pg_constraint
+      WHERE conrelid = to_regclass('public.agendamento_cancelamentos')
+        AND conname = 'agendamento_cancelamentos_cobranca_id_fkey' AND contype = 'f'
+        AND confrelid = to_regclass('public.pix_cobrancas')
+        AND pg_get_constraintdef(oid) LIKE '%REFERENCES pix_cobrancas(id)%'
+    ) AS has_charge_fk,
+    EXISTS (
+      SELECT 1 FROM pg_constraint
+      WHERE conrelid = to_regclass('public.agendamento_cancelamentos')
+        AND conname = 'agendamento_cancelamentos_tipo_check' AND contype = 'c'
+        AND pg_get_constraintdef(oid) LIKE '%cliente%'
+        AND pg_get_constraintdef(oid) LIKE '%profissional%'
+    ) AS has_tipo_check,
+    EXISTS (
+      SELECT 1 FROM pg_constraint
+      WHERE conrelid = to_regclass('public.agendamento_cancelamentos')
+        AND conname = 'agendamento_cancelamentos_estado_check' AND contype = 'c'
+        AND pg_get_constraintdef(oid) LIKE '%solicitada%'
+        AND pg_get_constraintdef(oid) LIKE '%concluida%'
+        AND pg_get_constraintdef(oid) LIKE '%falha_permanente%'
+    ) AS has_estado_check,
+    EXISTS (
+      SELECT 1 FROM pg_constraint
+      WHERE conrelid = to_regclass('public.agendamento_cancelamentos')
+        AND conname = 'agendamento_cancelamentos_calendar_estado_check' AND contype = 'c'
+        AND pg_get_constraintdef(oid) LIKE '%dispensado%'
+        AND pg_get_constraintdef(oid) LIKE '%pendente%'
+        AND pg_get_constraintdef(oid) LIKE '%enviando%'
+        AND pg_get_constraintdef(oid) LIKE '%enviado%'
+    ) AS has_calendar_estado_check,
+    EXISTS (
+      SELECT 1 FROM pg_constraint
+      WHERE conrelid = to_regclass('public.agendamento_cancelamentos')
+        AND conname = 'agendamento_cancelamentos_calendar_tentativas_check' AND contype = 'c'
+        AND pg_get_constraintdef(oid) LIKE '%calendar_tentativas%'
+        AND pg_get_constraintdef(oid) LIKE '%>= 0%'
+    ) AS has_calendar_tentativas_check,
+    EXISTS (
+      SELECT 1 FROM pg_constraint
+      WHERE conrelid = to_regclass('public.agendamento_cancelamentos')
+        AND conname = 'agendamento_cancelamentos_tentativas_check' AND contype = 'c'
+        AND pg_get_constraintdef(oid) LIKE '%tentativas%'
+        AND pg_get_constraintdef(oid) LIKE '%>= 0%'
+    ) AS has_tentativas_check,
+    EXISTS (
+      SELECT 1 FROM pg_constraint
+      WHERE conrelid = to_regclass('public.agendamento_cancelamentos')
+        AND conname = 'agendamento_cancelamentos_check' AND contype = 'c'
+        AND regexp_replace(lower(pg_get_constraintdef(oid)), '[[:space:]()]', '', 'g') =
+          'checkcalendar_event_idisnullandcalendar_estado=''dispensado''::textorcalendar_event_idisnotnullandcalendar_estado<>''dispensado''::text'
+    ) AS has_legacy_calendar_check,
+    EXISTS (
+      SELECT 1 FROM pg_constraint
+      WHERE conrelid = to_regclass('public.agendamento_cancelamentos')
+        AND conname = 'agendamento_cancelamentos_calendar_evento_check' AND contype = 'c'
+        AND regexp_replace(lower(pg_get_constraintdef(oid)), '[[:space:]()]', '', 'g') =
+          'checkcalendar_event_idisnotnullorcalendar_estado=''dispensado''::text'
+    ) AS has_015_calendar_check,
+    (
+      SELECT count(*)
+      FROM pg_constraint
+      WHERE conrelid = to_regclass('public.agendamento_cancelamentos')
+        AND contype = 'c'
+        AND pg_get_constraintdef(oid) LIKE '%calendar_event_id%'
+        AND pg_get_constraintdef(oid) LIKE '%calendar_estado%'
+    ) AS calendar_check_count,
+    EXISTS (
+      SELECT 1 FROM pg_index i
+      WHERE i.indexrelid = to_regclass('public.idx_agendamento_cancelamentos_pendentes')
         AND i.indisvalid
         AND pg_get_indexdef(i.indexrelid) LIKE '%(proxima_tentativa_em, criado_em)%'
         AND pg_get_expr(i.indpred, i.indrelid) = '(estado = ''solicitada''::text)'
