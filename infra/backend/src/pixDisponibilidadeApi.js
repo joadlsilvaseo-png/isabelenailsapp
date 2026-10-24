@@ -98,12 +98,17 @@ export async function consultarDisponibilidadePix(req, res, pool, dependencies =
       clienteUidExcluido = acesso.clienteUid;
     }
 
+    // Bloqueios administrativos continuam valendo inclusive no reagendamento.
     const resultado = await pool.query(`
       SELECT inicio_minuto, fim_minuto
       FROM public.pix_reservas
       WHERE data_servico = $1
         AND estado IN ('reservada', 'confirmada')
         AND ($2::text IS NULL OR agendamento_id IS DISTINCT FROM $2 OR cliente_uid IS DISTINCT FROM $3)
+      UNION ALL
+      SELECT inicio_minuto, fim_minuto
+      FROM public.agenda_bloqueios
+      WHERE data_servico = $1
       ORDER BY inicio_minuto, fim_minuto
     `, [data, agendamentoId, clienteUidExcluido]);
 
