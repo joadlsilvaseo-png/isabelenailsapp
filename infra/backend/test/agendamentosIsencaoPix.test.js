@@ -126,7 +126,10 @@ function criarFixture({ isenta = true, reservas = [], documentos = {}, falharCom
           }
           if (sql === "ROLLBACK") { pendingReservations = null; release?.(); release = null; return { rows: [], rowCount: 0 }; }
           if (sql.includes("pg_advisory_xact_lock")) return { rows: [], rowCount: 0 };
-          if (sql.includes("SELECT ativa") && sql.includes("FOR SHARE")) {
+          if (sql.includes("FROM public.agenda_bloqueios")) {
+             return { rows: [], rowCount: 0 };
+           }
+           if (sql.includes("SELECT ativa") && sql.includes("FOR SHARE")) {
             const ativa = state.isencoes.get(params[0]) === true;
             return { rows: ativa ? [{ ativa: true }] : [], rowCount: ativa ? 1 : 0 };
           }
