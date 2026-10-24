@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Controle administrativo de horários da Isabele Mariana Nails">
+  <meta name="theme-color" content="#591c31">
+  <title>Gerenciar Calendário | Isabele Mariana Nails</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="base.css?v=1.0.4">
+  <link rel="stylesheet" href="agendamento.css?v=2.0.0">
+  <link rel="stylesheet" href="admin-calendario.css?v=1.0.0">
+</head>
+<body data-page="admin-calendario">
+  <div class="app-container">
+    <header class="agendamento-header">
+      <nav class="agendamento-nav" aria-label="Navegação administrativa">
+        <a href="principal.html" class="agendamento-nav-link" aria-label="Voltar para gestão">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M15 18L9 12L15 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </a>
+        <h1 class="agendamento-title">Gerenciar Calendário</h1>
+        <a href="admin-agendamentos.html" class="agendamento-nav-link" aria-label="Ver agendamentos">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <rect x="4" y="5" width="16" height="16" rx="2" stroke="currentColor" stroke-width="1.8"/>
+            <path d="M4 10H20M8 3V7M16 3V7" stroke="currentColor" stroke-width="1.8"/>
+          </svg>
+        </a>
+      </nav>
+    </header>
+
+    <main class="agendamento-main" id="calendario-main" hidden>
+      <section class="agendamento-panel" aria-labelledby="calendario-title">
+        <header class="agendamento-panel-header">
+          <span class="agendamento-eyebrow">Controle de disponibilidade</span>
+          <h2 id="calendario-title">Escolha os horários para fechar</h2>
+          <p>Selecione vários intervalos no mesmo dia. Reservas existentes nunca são alteradas.</p>
+        </header>
+
+        <section class="agendamento-step" aria-labelledby="calendario-data-title">
+          <div class="agendamento-step-heading">
+            <span class="agendamento-step-number">1</span>
+            <div class="agendamento-step-content">
+              <span class="agendamento-step-label">Data</span>
+              <h3 id="calendario-data-title">Escolha o dia</h3>
+            </div>
+            <span id="calendar-month-label" class="agendamento-month-label">Mês</span>
+          </div>
+          <div class="agendamento-calendar" role="group" aria-label="Escolher dia do calendário"></div>
+          <div class="agendamento-selected-date">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M6 3V6M18 3V6M4 9H20" stroke="currentColor" stroke-width="1.8"/>
+              <rect x="4" y="5" width="16" height="16" rx="3" stroke="currentColor" stroke-width="1.8"/>
+            </svg>
+            <span id="selected-date-text">Selecione uma data</span>
+          </div>
+        </section>
+
+        <div class="agendamento-divider"></div>
+
+        <section class="agendamento-step" aria-labelledby="calendario-horarios-title">
+          <div class="agendamento-step-heading">
+            <span class="agendamento-step-number">2</span>
+            <div class="agendamento-step-content">
+              <span class="agendamento-step-label">Disponibilidade</span>
+              <h3 id="calendario-horarios-title">Selecione vários horários</h3>
+            </div>
+            <span id="availability-status" class="agendamento-availability" aria-live="polite">Carregando</span>
+          </div>
+
+          <div class="calendario-modos" role="group" aria-label="Ação no calendário">
+            <button type="button" id="modo-fechar" class="calendario-modo is-active" aria-pressed="true">Fechar horários</button>
+            <button type="button" id="modo-reabrir" class="calendario-modo" aria-pressed="false">Reabrir horários</button>
+          </div>
+
+          <div class="agendamento-time-legend calendario-legenda">
+            <span><i class="legend-dot legend-dot--available"></i> Disponível</span>
+            <span><i class="legend-dot legend-dot--occupied"></i> Reservado</span>
+            <span><i class="legend-dot calendario-legenda-fechado"></i> Fechado</span>
+          </div>
+
+          <div class="agendamento-times" role="group" aria-label="Selecionar intervalos de 30 minutos" aria-live="polite"></div>
+          <p class="calendario-ajuda">Cada seleção corresponde a 30 minutos. Um serviço com duração maior ficará indisponível se qualquer parte coincidir com um horário fechado.</p>
+        </section>
+
+        <footer class="agendamento-footer calendario-footer">
+          <div class="agendamento-summary">
+            <span class="agendamento-eyebrow">Resumo da alteração</span>
+            <strong id="calendario-selecao">Nenhum horário selecionado</strong>
+            <p id="calendario-mensagem" role="status" aria-live="polite">Escolha os intervalos que deseja fechar.</p>
+          </div>
+          <button id="calendario-confirmar" type="button" class="agendamento-button" disabled>Fechar Agenda</button>
+        </footer>
+      </section>
+    </main>
+    <section id="calendario-acesso" class="calendario-acesso" role="status" aria-live="polite">Conferindo acesso administrativo...</section>
+  </div>
+  <script type="module" src="admin-calendario.js?v=1.0.0"></script>
+</body>
+</html>
