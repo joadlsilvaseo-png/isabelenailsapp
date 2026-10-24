@@ -142,7 +142,7 @@ test("não cria lembrete atrasado nem para agendamento que já começou", () => 
 
 test("central oculta lembretes futuros e cancelados até que sejam devidos", () => {
   assert.match(FILTRO_VISIBILIDADE_CENTRAL, /agendado_para IS NULL OR agendado_para <= NOW\(\)/);
-  assert.match(FILTRO_VISIBILIDADE_CENTRAL, /lembrete_24h.*lembrete_1h.*estado <> 'cancelado'/s);
+  assert.match(FILTRO_VISIBILIDADE_CENTRAL, /lembrete_24h.*lembrete_1h.*estado NOT IN \('cancelado', 'expirada'\)/s);
 });
 
 test("marcar todas como lidas altera apenas notificações visíveis", async () => {
@@ -159,7 +159,7 @@ test("marcar todas como lidas altera apenas notificações visíveis", async () 
   assert.equal(resposta.status, 200);
   assert.equal(resposta.dados.quantidade, 2);
   assert.match(consultas[0], /agendado_para IS NULL OR agendado_para <= NOW\(\)/);
-  assert.match(consultas[0], /lembrete_24h.*lembrete_1h.*estado <> 'cancelado'/s);
+  assert.match(consultas[0], /lembrete_24h.*lembrete_1h.*estado NOT IN \('cancelado', 'expirada'\)/s);
 });
 
 test("lembretes futuros continuam não lidos e lembretes cancelados não aparecem", async () => {
@@ -170,14 +170,15 @@ test("lembretes futuros continuam não lidos e lembretes cancelados não aparece
     { id: "3", tipo: "lembrete_1h", estado: "cancelado", agendado_para: new Date("2026-11-07T19:00:00.000Z"), lida_em: null },
     { id: "4", tipo: "lembrete_1h", estado: "enviado", agendado_para: new Date("2026-11-07T17:00:00.000Z"), lida_em: null },
     { id: "5", tipo: "lembrete_24h", estado: "cancelado", agendado_para: new Date("2026-11-07T17:00:00.000Z"), lida_em: null },
+    { id: "6", tipo: "lembrete_24h", estado: "expirada", agendado_para: new Date("2026-11-07T17:00:00.000Z"), lida_em: null },
   ];
   const visivel = (notificacao) =>
     (!notificacao.agendado_para || notificacao.agendado_para <= agora) &&
-    (!["lembrete_24h", "lembrete_1h"].includes(notificacao.tipo) || notificacao.estado !== "cancelado");
+    (!["lembrete_24h", "lembrete_1h"].includes(notificacao.tipo) || !["cancelado", "expirada"].includes(notificacao.estado));
   const pool = {
     async query(sql) {
       assert.match(sql, /agendado_para IS NULL OR agendado_para <= NOW\(\)/);
-      assert.match(sql, /estado <> 'cancelado'/);
+      assert.match(sql, /estado NOT IN \('cancelado', 'expirada'\)/);
       if (sql.includes("COUNT(*)")) {
         return { rows: [{ total: notificacoes.filter((item) => visivel(item) && item.lida_em === null).length }] };
       }
@@ -206,6 +207,7 @@ test("lembretes futuros continuam não lidos e lembretes cancelados não aparece
   assert.equal(marcar.dados.quantidade, 2);
   assert.equal(notificacoes.find(({ id }) => id === "2").lida_em, null);
   assert.equal(notificacoes.find(({ id }) => id === "3").lida_em, null);
+  assert.equal(notificacoes.find(({ id }) => id === "6").lida_em, null);
   assert.equal(notificacoes.find(({ id }) => id === "1").lida_em.toISOString(), agora.toISOString());
   assert.equal(notificacoes.find(({ id }) => id === "4").lida_em.toISOString(), agora.toISOString());
 });
@@ -225,7 +227,7 @@ test("marcar individualmente não altera lembrete futuro ou cancelado, mas aceit
   assert.equal(futura.status, 404);
   assert.equal(comum.status, 200);
   assert.ok(consultas.every(({ sql }) => /agendado_para IS NULL OR agendado_para <= NOW\(\)/.test(sql)));
-  assert.ok(consultas.every(({ sql }) => /lembrete_24h.*lembrete_1h.*estado <> 'cancelado'/s.test(sql)));
+  assert.ok(consultas.every(({ sql }) => /lembrete_24h.*lembrete_1h.*estado NOT IN \('cancelado', 'expirada'\)/s.test(sql)));
   assert.deepEqual(consultas.map(({ parametros }) => parametros), [
     ["10", "cliente-1"],
     ["11", "cliente-1"],

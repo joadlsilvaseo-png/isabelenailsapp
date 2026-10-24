@@ -2,7 +2,7 @@ import { verificarUsuario } from "./pushSubscriptions.js";
 
 export const FILTRO_VISIBILIDADE_CENTRAL = `
   (agendado_para IS NULL OR agendado_para <= NOW())
-  AND (tipo NOT IN ('lembrete_24h', 'lembrete_1h') OR estado <> 'cancelado')
+  AND (tipo NOT IN ('lembrete_24h', 'lembrete_1h') OR estado NOT IN ('cancelado', 'expirada'))
 `;
 
 function responder(res, status, dados) {
