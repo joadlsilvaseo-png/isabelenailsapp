@@ -11,7 +11,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="base.css?v=1.0.4">
   <link rel="stylesheet" href="agendamento.css?v=2.0.0">
-  <link rel="stylesheet" href="admin-calendario.css?v=1.0.0">
+  <link rel="stylesheet" href="admin-calendario.css?v=2.0.0">
 </head>
 <body data-page="admin-calendario">
   <div class="app-container">
@@ -37,7 +37,7 @@
         <header class="agendamento-panel-header">
           <span class="agendamento-eyebrow">Controle de disponibilidade</span>
           <h2 id="calendario-title">Escolha os horários para fechar</h2>
-          <p>Selecione vários intervalos no mesmo dia. Reservas existentes nunca são alteradas.</p>
+          <p>Selecione intervalos em diferentes datas para reservar horários negociados diretamente com a cliente. Reservas existentes nunca são alteradas.</p>
         </header>
 
         <section class="agendamento-step" aria-labelledby="calendario-data-title">
@@ -47,7 +47,12 @@
               <span class="agendamento-step-label">Data</span>
               <h3 id="calendario-data-title">Escolha o dia</h3>
             </div>
-            <span id="calendar-month-label" class="agendamento-month-label">Mês</span>
+            <div class="calendario-seletor-mes">
+              <button id="calendar-month-label" class="agendamento-month-label calendario-mes-botao" type="button" aria-expanded="false" aria-controls="calendar-month-options">
+                Carregando meses…
+              </button>
+              <div id="calendar-month-options" class="calendario-meses" role="group" aria-label="Meses disponíveis" hidden></div>
+            </div>
           </div>
           <div class="agendamento-calendar" role="group" aria-label="Escolher dia do calendário"></div>
           <div class="agendamento-selected-date">
@@ -83,21 +88,27 @@
           </div>
 
           <div class="agendamento-times" role="group" aria-label="Selecionar intervalos de 30 minutos" aria-live="polite"></div>
+          <button id="calendario-tentar-novamente" class="calendario-tentar-novamente" type="button" hidden>Tentar novamente</button>
           <p class="calendario-ajuda">Cada seleção corresponde a 30 minutos. Um serviço com duração maior ficará indisponível se qualquer parte coincidir com um horário fechado.</p>
         </section>
 
         <footer class="agendamento-footer calendario-footer">
           <div class="agendamento-summary">
-            <span class="agendamento-eyebrow">Resumo da alteração</span>
+            <span class="agendamento-eyebrow" id="calendario-resumo-titulo">Resumo da alteração</span>
             <strong id="calendario-selecao">Nenhum horário selecionado</strong>
+            <p id="calendario-contagem" class="calendario-contagem">Escolha horários disponíveis.</p>
+            <ul id="calendario-resumo-lista" class="calendario-resumo-lista" aria-label="Datas e intervalos selecionados"></ul>
             <p id="calendario-mensagem" role="status" aria-live="polite">Escolha os intervalos que deseja fechar.</p>
           </div>
-          <button id="calendario-confirmar" type="button" class="agendamento-button" disabled>Fechar Agenda</button>
+          <div class="calendario-acoes-resumo">
+            <button id="calendario-limpar" class="calendario-limpar" type="button" disabled>Limpar seleção</button>
+            <button id="calendario-confirmar" type="button" class="agendamento-button" disabled>Fechar horários selecionados</button>
+          </div>
         </footer>
       </section>
     </main>
     <section id="calendario-acesso" class="calendario-acesso" role="status" aria-live="polite">Conferindo acesso administrativo...</section>
   </div>
-  <script type="module" src="admin-calendario.js?v=1.0.0"></script>
+  <script type="module" src="admin-calendario.js?v=2.0.0"></script>
 </body>
 </html>

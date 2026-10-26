@@ -1,7 +1,20 @@
 import { auth, db } from "./firebase-config.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
 import { doc, getDoc } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
-import { obterJanelaAgendamento, listarSlotsGerenciaveis } from "./infra/backend/src/agendamentoRegras.mjs";
+import { obterMesesGerenciaveis, listarSlotsGerenciaveis } from "./infra/backend/src/agendamentoRegras.mjs";
+import {
+  alternarIntervalo,
+  agruparIntervalos,
+  criarPayloadLote,
+  formatarErroCalendario,
+  formatarFalhaDeRede,
+  iniciarOperacaoCalendario,
+  encerrarOperacaoCalendario,
+  limparDatasAplicadas,
+  obterDataAtiva,
+  removerIntervalos,
+  resumirSelecoes,
+} from "./admin-calendario-state.mjs";
 
 const el = {
   acesso: document.getElementById("calendario-acesso"),
@@ -9,39 +22,146 @@ const el = {
   datas: document.querySelector(".agendamento-calendar"),
   horario: document.querySelector(".agendamento-times"),
   mes: document.getElementById("calendar-month-label"),
+  meses: document.getElementById("calendar-month-options"),
   data: document.getElementById("selected-date-text"),
   status: document.getElementById("availability-status"),
   resumo: document.getElementById("calendario-selecao"),
+  contagem: document.getElementById("calendario-contagem"),
+  listaResumo: document.getElementById("calendario-resumo-lista"),
   mensagem: document.getElementById("calendario-mensagem"),
   confirmar: document.getElementById("calendario-confirmar"),
+  limpar: document.getElementById("calendario-limpar"),
+  tentarNovamente: document.getElementById("calendario-tentar-novamente"),
   fechar: document.getElementById("modo-fechar"),
   reabrir: document.getElementById("modo-reabrir"),
 };
-const estado = { data: null, modo: "fechar", selecionados: new Set(), bloqueados: [], ocupados: [], carregando: false, requisicao: 0 };
+
+const estado = {
+  meses: [],
+  mes: null,
+  data: null,
+  dataPorMes: new Map(),
+  modo: "fechar",
+  selecoes: new Map(),
+  bloqueados: [],
+  ocupados: [],
+  carregando: false,
+  salvando: false,
+  erroConsulta: false,
+  requisicao: 0,
+  controlador: null,
+};
+
 const diasSemana = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
-const meses = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 const formatoHora = (m) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 const sobrepoe = (a, b, c, d) => a < d && b > c;
 const estaOcupado = (m) => estado.ocupados.some(({ inicioMinuto, fimMinuto }) => sobrepoe(m, m + 30, inicioMinuto, fimMinuto));
 const estaFechado = (m) => estado.bloqueados.some(({ inicioMinuto, fimMinuto }) => sobrepoe(m, m + 30, inicioMinuto, fimMinuto));
-const dataFormatada = (iso) => new Intl.DateTimeFormat("pt-BR", { weekday: "long", day: "2-digit", month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${iso}T12:00:00Z`));
-const horasValidas = () => listarSlotsGerenciaveis(estado.data);
-function atualizarResumo() {
-  const quantidade = estado.selecionados.size;
-  el.resumo.textContent = quantidade ? `${quantidade} intervalo${quantidade === 1 ? "" : "s"} de 30 minutos selecionado${quantidade === 1 ? "" : "s"}` : "Nenhum horário selecionado";
-  el.confirmar.disabled = quantidade === 0 || estado.carregando;
-  el.confirmar.textContent = estado.modo === "fechar" ? "Fechar Agenda" : "Reabrir horários";
+const dataFormatada = (iso, opcoes = { weekday: "long", day: "2-digit", month: "long", year: "numeric" }) =>
+  new Intl.DateTimeFormat("pt-BR", { ...opcoes, timeZone: "UTC" }).format(new Date(`${iso}T12:00:00Z`));
+const horaFormatada = (minuto) => formatoHora(minuto);
+const mesFormatado = (chave) => dataFormatada(`${chave}-01`, { month: "long", year: "numeric" });
+
+function mostrarErro(erro) {
+  return formatarFalhaDeRede(erro);
 }
-function escolherModo(modo) {
-  estado.modo = modo;
-  estado.selecionados.clear();
-  for (const [botao, valor] of [[el.fechar, "fechar"], [el.reabrir, "reabrir"]]) {
-    botao.classList.toggle("is-active", valor === modo);
-    botao.setAttribute("aria-pressed", String(valor === modo));
+
+async function api(method, path, body, signal) {
+  const user = auth.currentUser;
+  if (!user) throw new Error("Sua sessão expirou. Entre novamente para continuar.");
+  const token = await user.getIdToken();
+  const resposta = await fetch(path, {
+    method,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      ...(body ? { "Content-Type": "application/json" } : {}),
+    },
+    body: body ? JSON.stringify(body) : undefined,
+    cache: "no-store",
+    signal,
+  });
+  let resultado = null;
+  try { resultado = await resposta.json(); } catch { /* resposta não JSON tratada abaixo */ }
+  if (!resposta.ok) throw new Error(formatarErroCalendario(resposta.status, resultado || {}));
+  if (!resultado || typeof resultado !== "object" || Array.isArray(resultado)) {
+    throw new Error("A API respondeu com dados inválidos. Tente consultar novamente.");
   }
-  el.mensagem.textContent = modo === "fechar" ? "Selecione horários disponíveis para fechar." : "Selecione horários fechados para reabrir.";
-  renderizarHorarios();
+  return resultado;
 }
+
+function atualizarControles() {
+  const resumo = resumirSelecoes(estado.selecoes);
+  el.confirmar.disabled = !resumo.quantidadeIntervalos || estado.carregando || estado.salvando || estado.erroConsulta;
+  el.confirmar.textContent = estado.modo === "fechar" ? "Fechar horários selecionados" : "Reabrir horários selecionados";
+  el.limpar.disabled = !resumo.quantidadeIntervalos || estado.salvando;
+  el.fechar.disabled = estado.carregando || estado.salvando || estado.erroConsulta;
+  el.reabrir.disabled = estado.carregando || estado.salvando || estado.erroConsulta;
+  el.mes.disabled = estado.salvando;
+  el.datas.querySelectorAll("button").forEach((botao) => { botao.disabled = estado.salvando; });
+  el.tentarNovamente.hidden = !estado.erroConsulta || estado.salvando;
+  el.tentarNovamente.disabled = estado.salvando || !estado.data;
+  el.conteudo.setAttribute("aria-busy", String(estado.carregando || estado.salvando));
+}
+
+function criarBotaoRemover(texto, descricao, aoClicar, classe = "calendario-remover") {
+  const botao = document.createElement("button");
+  botao.type = "button";
+  botao.className = classe;
+  botao.textContent = texto;
+  botao.setAttribute("aria-label", descricao);
+  botao.disabled = estado.salvando;
+  botao.addEventListener("click", aoClicar);
+  return botao;
+}
+
+function renderizarResumo() {
+  const resumo = resumirSelecoes(estado.selecoes);
+  el.listaResumo.replaceChildren();
+  if (!resumo.quantidadeDatas) {
+    el.resumo.textContent = "Nenhum horário selecionado";
+    el.contagem.textContent = estado.modo === "fechar"
+      ? "Escolha horários disponíveis em uma ou mais datas."
+      : "Escolha intervalos fechados para reabrir.";
+    atualizarControles();
+    return;
+  }
+
+  el.resumo.textContent = `${resumo.quantidadeDatas} ${resumo.quantidadeDatas === 1 ? "data" : "datas"} selecionada${resumo.quantidadeDatas === 1 ? "" : "s"}`;
+  el.contagem.textContent = `${resumo.quantidadeIntervalos} intervalos de 30 minutos no total.`;
+  for (const item of resumo.datas) {
+    const linha = document.createElement("li");
+    linha.className = "calendario-resumo-data";
+    const cabecalho = document.createElement("div");
+    cabecalho.className = "calendario-resumo-data-cabecalho";
+    const data = document.createElement("span");
+    data.textContent = dataFormatada(item.data, { day: "2-digit", month: "2-digit", year: "numeric" });
+    const removerData = criarBotaoRemover(
+      "Remover data",
+      `Remover todos os horários de ${data.textContent}`,
+      () => { estado.selecoes.delete(item.data); renderizarResumo(); renderizarHorarios(); },
+    );
+    cabecalho.append(data, removerData);
+    const intervalos = document.createElement("div");
+    intervalos.className = "calendario-resumo-intervalos";
+    for (const grupo of item.grupos) {
+      const texto = `${horaFormatada(grupo.inicio)} às ${horaFormatada(grupo.fim)}`;
+      intervalos.append(criarBotaoRemover(
+        texto,
+        `Remover intervalo ${texto} de ${data.textContent}`,
+        () => {
+          removerIntervalos(estado.selecoes, item.data, grupo.inicios);
+          renderizarResumo();
+          renderizarHorarios();
+        },
+        "calendario-resumo-intervalo",
+      ));
+    }
+    linha.append(cabecalho, intervalos);
+    el.listaResumo.append(linha);
+  }
+  atualizarControles();
+}
+
 function criarPeriodo(titulo, slots) {
   if (!slots.length) return;
   const secao = document.createElement("section");
@@ -55,10 +175,12 @@ function criarPeriodo(titulo, slots) {
   cabecalho.append(nome, detalhe);
   const grade = document.createElement("div");
   grade.className = "agendamento-time-grid";
+  const selecionados = estado.selecoes.get(estado.data) || new Set();
   for (const minuto of slots) {
     const reservado = estaOcupado(minuto);
     const fechado = estaFechado(minuto);
-    const selecionado = estado.selecionados.has(minuto);
+    const selecionado = selecionados.has(minuto);
+    const elegivel = estado.modo === "fechar" ? !fechado : fechado;
     const botao = document.createElement("button");
     botao.type = "button";
     botao.className = "agendamento-time";
@@ -68,10 +190,11 @@ function criarPeriodo(titulo, slots) {
     if (reservado) botao.classList.add("horario-ocupado");
     if (fechado) botao.classList.add("calendario-fechado");
     if (selecionado) botao.classList.add("calendario-selecionado");
-    botao.disabled = estado.carregando || reservado || (estado.modo === "fechar" ? fechado : !fechado);
+    botao.disabled = estado.carregando || estado.salvando || reservado || !elegivel;
     botao.addEventListener("click", () => {
-      if (estado.selecionados.has(minuto)) estado.selecionados.delete(minuto);
-      else estado.selecionados.add(minuto);
+      if (estado.carregando || estado.salvando || reservado || !elegivel) return;
+      alternarIntervalo(estado.selecoes, estado.data, minuto);
+      renderizarResumo();
       renderizarHorarios();
     });
     grade.append(botao);
@@ -79,144 +202,317 @@ function criarPeriodo(titulo, slots) {
   secao.append(cabecalho, grade);
   el.horario.append(secao);
 }
+
 function renderizarHorarios() {
   el.horario.replaceChildren();
-  const slots = horasValidas();
+  el.tentarNovamente.hidden = !estado.erroConsulta;
+  if (!estado.data) {
+    el.status.textContent = "Selecione uma data";
+    el.horario.textContent = "Escolha um dia de atendimento.";
+    atualizarControles();
+    return;
+  }
+  if (estado.carregando) {
+    el.status.textContent = "Consultando";
+    el.horario.textContent = "Carregando horários e reservas…";
+    atualizarControles();
+    return;
+  }
+  if (estado.erroConsulta) {
+    el.status.textContent = "Consulta falhou";
+    el.horario.textContent = "Os horários não foram carregados. A seleção está bloqueada até a consulta ser refeita.";
+    atualizarControles();
+    return;
+  }
+
+  const slots = listarSlotsGerenciaveis(estado.data);
   if (!slots.length) {
+    el.status.textContent = "Sem expediente";
+    el.horario.textContent = "Não há horários gerenciáveis nesta data.";
+    atualizarControles();
+    return;
+  }
+  criarPeriodo("Manhã", slots.filter((m) => m < 720));
+  criarPeriodo("Tarde e noite", slots.filter((m) => m >= 720));
+  const elegiveis = slots.filter((m) => !estaOcupado(m) && (estado.modo === "fechar" ? !estaFechado(m) : estaFechado(m))).length;
+  el.status.textContent = estado.modo === "fechar" ? `${elegiveis} disponíveis` : `${elegiveis} fechados`;
+  if (!elegiveis) {
     const vazio = document.createElement("p");
     vazio.className = "agendamento-time-state";
-    vazio.textContent = "Não há horários gerenciáveis nesta data.";
+    vazio.textContent = estado.modo === "fechar"
+      ? "Não há intervalos disponíveis para fechar nesta data."
+      : "Não há intervalos fechados para reabrir nesta data.";
     el.horario.append(vazio);
-  } else {
-    criarPeriodo("Manhã", slots.filter((m) => m < 720));
-    criarPeriodo("Tarde e noite", slots.filter((m) => m >= 720));
   }
-  const disponiveis = slots.filter((m) => !estaFechado(m) && !estaOcupado(m)).length;
-  el.status.textContent = `${disponiveis} disponíveis`;
-  atualizarResumo();
+  atualizarControles();
 }
-async function api(method, data, body) {
-  const user = auth.currentUser;
-  if (!user) throw new Error("Entre novamente na sua conta.");
-  const token = await user.getIdToken();
-  const resposta = await fetch(`/api/admin/calendario${method === "GET" ? `?data=${encodeURIComponent(data)}` : ""}`, {
-    method, headers: { Authorization: `Bearer ${token}`, ...(body ? { "Content-Type": "application/json" } : {}) },
-    body: body ? JSON.stringify(body) : undefined, cache: "no-store",
-    signal: AbortSignal.timeout(15000),
-  });
-  const resultado = await resposta.json().catch(() => ({}));
-  if (!resposta.ok) throw new Error(resultado.erro || "Falha ao consultar a disponibilidade.");
-  return resultado;
-}
-async function carregarDia(data) {
-  const numero = ++estado.requisicao;
-  estado.data = data;
-  estado.selecionados.clear();
-  estado.bloqueados = [];
-  estado.ocupados = [];
-  estado.carregando = true;
-  el.data.textContent = dataFormatada(data);
-  el.mensagem.textContent = "Conferindo reservas e horários fechados...";
-  el.status.textContent = "Buscando";
-  el.horario.textContent = "Carregando horários...";
-  atualizarResumo();
-  try {
-    const dia = await api("GET", data);
-    if (numero !== estado.requisicao) return;
-    if (!Array.isArray(dia.ocupados) || !Array.isArray(dia.bloqueados)) throw new Error("Dados de disponibilidade inválidos");
-    estado.ocupados = dia.ocupados;
-    estado.bloqueados = dia.bloqueados;
-    el.mensagem.textContent = "Toque em vários horários e confirme a alteração.";
-  } catch (erro) {
-    if (numero !== estado.requisicao) return;
-    el.mensagem.textContent = erro.message;
-    el.status.textContent = "Indisponível";
-    estado.carregando = true;
-    el.horario.textContent = "Falha ao consultar horários. Selecione novamente o dia para tentar.";
-    atualizarResumo();
-    return;
+
+function renderizarMeses() {
+  const mes = estado.meses.find((item) => item.chave === estado.mes);
+  if (mes) el.mes.textContent = mesFormatado(mes.chave);
+  el.meses.replaceChildren();
+  for (const item of estado.meses) {
+    const botao = document.createElement("button");
+    botao.type = "button";
+    botao.className = "calendario-mes-opcao";
+    botao.textContent = mesFormatado(item.chave);
+    botao.setAttribute("aria-pressed", String(item.chave === estado.mes));
+    botao.addEventListener("click", () => {
+      el.meses.hidden = true;
+      el.mes.setAttribute("aria-expanded", "false");
+      selecionarMes(item.chave);
+    });
+    el.meses.append(botao);
   }
-  estado.carregando = false;
-  renderizarHorarios();
 }
-function criarCalendario() {
-  const janela = obterJanelaAgendamento();
-  if (janela.inicio > janela.fim) {
-    el.datas.textContent = "Não há datas disponíveis nesta janela.";
-    return;
-  }
-  const inicio = new Date(`${janela.inicio}T12:00:00Z`);
-  const fim = new Date(`${janela.fim}T12:00:00Z`);
-  let primeira = null;
-  for (let cursor = new Date(inicio); cursor <= fim; cursor.setUTCDate(cursor.getUTCDate() + 1)) {
+
+function renderizarDatas() {
+  el.datas.replaceChildren();
+  const mes = estado.meses.find((item) => item.chave === estado.mes);
+  if (!mes) return;
+  const datas = [];
+  const cursor = new Date(`${mes.inicio}T12:00:00Z`);
+  const fim = new Date(`${mes.fim}T12:00:00Z`);
+  while (cursor <= fim) {
     const dia = cursor.getUTCDay();
-    if (dia < 2 || dia > 6) continue;
     const data = cursor.toISOString().slice(0, 10);
-    if (!listarSlotsGerenciaveis(data).length) continue; // Dezembro bloqueado permanece indisponível.
+    if (dia >= 2 && dia <= 6 && listarSlotsGerenciaveis(data).length) datas.push({ data, dia, cursor: new Date(cursor) });
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  if (!datas.length) {
+    el.datas.textContent = "Não há datas futuras de atendimento neste mês.";
+    estado.data = null;
+    el.data.textContent = "Selecione uma data";
+    renderizarHorarios();
+    return;
+  }
+
+  const dataAnterior = estado.dataPorMes.get(mes.chave);
+  const dataAtiva = obterDataAtiva(datas.map(({ data }) => data), dataAnterior);
+  for (const item of datas) {
     const botao = document.createElement("button");
     botao.type = "button";
     botao.className = "agendamento-date";
-    botao.dataset.dateIso = data;
-    botao.setAttribute("aria-pressed", "false");
-    botao.setAttribute("aria-label", dataFormatada(data));
+    botao.dataset.dateIso = item.data;
+    botao.setAttribute("aria-pressed", String(item.data === dataAtiva));
+    botao.setAttribute("aria-label", dataFormatada(item.data));
+    if (item.data === dataAtiva) botao.classList.add("agendamento-date--active");
     const diaSemana = document.createElement("span");
     diaSemana.className = "agendamento-date-label";
-    diaSemana.textContent = diasSemana[dia];
+    diaSemana.textContent = diasSemana[item.dia];
     const numero = document.createElement("span");
     numero.className = "agendamento-date-day";
-    numero.textContent = String(cursor.getUTCDate()).padStart(2, "0");
-    const mes = document.createElement("span");
-    mes.className = "agendamento-date-month";
-    mes.textContent = meses[cursor.getUTCMonth()];
-    botao.append(diaSemana, numero, mes);
-    botao.addEventListener("click", () => {
-      el.datas.querySelectorAll(".agendamento-date").forEach((b) => {
-        const ativo = b === botao;
-        b.classList.toggle("agendamento-date--active", ativo);
-        b.setAttribute("aria-pressed", String(ativo));
-      });
-      el.mes.textContent = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${data}T12:00:00Z`));
-      carregarDia(data);
-    });
+    numero.textContent = String(item.cursor.getUTCDate()).padStart(2, "0");
+    const mesCurto = document.createElement("span");
+    mesCurto.className = "agendamento-date-month";
+    mesCurto.textContent = new Intl.DateTimeFormat("pt-BR", { month: "short", timeZone: "UTC" }).format(item.cursor);
+    botao.append(diaSemana, numero, mesCurto);
+    botao.addEventListener("click", () => selecionarData(item.data));
     el.datas.append(botao);
-    if (!primeira) primeira = botao;
   }
-  primeira?.click();
+  if (estado.data !== dataAtiva) selecionarData(dataAtiva);
+  else {
+    el.data.textContent = dataFormatada(dataAtiva);
+    renderizarHorarios();
+  }
 }
-el.fechar.addEventListener("click", () => escolherModo("fechar"));
-el.reabrir.addEventListener("click", () => escolherModo("reabrir"));
-el.confirmar.addEventListener("click", async () => {
-  if (!estado.data || !estado.selecionados.size || estado.carregando) return;
-  const data = estado.data;
-  const acao = estado.modo;
-  const horas = [...estado.selecionados].sort((a, b) => a - b);
+
+function selecionarMes(chave) {
+  if (estado.salvando) return;
+  if (estado.mes === chave) { renderizarMeses(); return; }
+  estado.mes = chave;
+  renderizarMeses();
+  renderizarDatas();
+}
+
+async function carregarDia(data, mensagemFinal = "") {
+  if (!data || estado.salvando) return;
+  estado.controlador?.abort();
+  const numero = ++estado.requisicao;
+  const controlador = new AbortController();
+  estado.controlador = controlador;
+  const timeout = setTimeout(() => controlador.abort(), 15000);
+  estado.data = data;
+  estado.dataPorMes.set(data.slice(0, 7), data);
   estado.carregando = true;
+  estado.erroConsulta = false;
+  el.data.textContent = dataFormatada(data);
+  el.mensagem.textContent = "Conferindo reservas e horários fechados…";
   renderizarHorarios();
-  el.mensagem.textContent = "Salvando alteração...";
+  renderizarResumo();
   try {
-    await api("POST", data, { data, acao, horas });
-    if (estado.data !== data) return;
-    await carregarDia(data);
-    el.mensagem.textContent = acao === "fechar" ? "Horários fechados com sucesso." : "Horários reabertos com sucesso.";
-  } catch (erro) {
+    const dia = await api("GET", `/api/admin/calendario?data=${encodeURIComponent(data)}`, null, controlador.signal);
+    if (numero !== estado.requisicao) return;
+    if (!Array.isArray(dia.ocupados) || !Array.isArray(dia.bloqueados)) {
+      throw new Error("A API retornou uma resposta de disponibilidade incompleta.");
+    }
+    estado.ocupados = dia.ocupados;
+    estado.bloqueados = dia.bloqueados;
+    const selecionados = estado.selecoes.get(data);
+    if (selecionados) {
+      const validos = new Set(listarSlotsGerenciaveis(data).filter((minuto) =>
+        !estaOcupado(minuto) && (estado.modo === "fechar" ? !estaFechado(minuto) : estaFechado(minuto))));
+      removerIntervalos(estado.selecoes, data, [...selecionados].filter((minuto) => !validos.has(minuto)));
+    }
     estado.carregando = false;
-    el.mensagem.textContent = erro.message;
-    // Atualiza o dia para recuperar conflitos surgidos durante a seleção.
-    await carregarDia(data);
-    el.mensagem.textContent = erro.message;
+    estado.erroConsulta = false;
+    el.mensagem.textContent = mensagemFinal || "Selecione horários em diferentes datas. Suas escolhas ficam no resumo até confirmar.";
+  } catch (erro) {
+    if (numero !== estado.requisicao) return;
+    estado.carregando = false;
+    estado.erroConsulta = true;
+    estado.ocupados = [];
+    estado.bloqueados = [];
+    el.status.textContent = "Consulta falhou";
+    el.mensagem.textContent = mostrarErro(erro);
+  } finally {
+    clearTimeout(timeout);
+    if (numero === estado.requisicao) {
+      estado.controlador = null;
+      renderizarHorarios();
+      renderizarResumo();
+    }
+  }
+}
+
+function selecionarData(data) {
+  if (estado.salvando) return;
+  const dataAnterior = estado.data;
+  estado.data = data;
+  estado.dataPorMes.set(data.slice(0, 7), data);
+  el.datas.querySelectorAll(".agendamento-date").forEach((botao) => {
+    const ativo = botao.dataset.dateIso === data;
+    botao.classList.toggle("agendamento-date--active", ativo);
+    botao.setAttribute("aria-pressed", String(ativo));
+  });
+  el.data.textContent = dataFormatada(data);
+  if (!estado.erroConsulta && !estado.carregando && dataAnterior === data && estado.loadedDate === data) {
+    renderizarHorarios();
+    return;
+  }
+  estado.loadedDate = data;
+  carregarDia(data);
+}
+
+function escolherModo(modo) {
+  if (estado.carregando || estado.salvando || estado.erroConsulta || estado.modo === modo) return;
+  const resumo = resumirSelecoes(estado.selecoes);
+  if (resumo.quantidadeIntervalos && !window.confirm("Trocar entre Fechar e Reabrir limpará a seleção atual para não misturar operações. Continuar?")) return;
+  estado.selecoes.clear();
+  estado.modo = modo;
+  for (const [botao, valor] of [[el.fechar, "fechar"], [el.reabrir, "reabrir"]]) {
+    botao.classList.toggle("is-active", valor === modo);
+    botao.setAttribute("aria-pressed", String(valor === modo));
+  }
+  el.mensagem.textContent = modo === "fechar"
+    ? "Selecione intervalos disponíveis para fechar."
+    : "Selecione intervalos fechados para reabrir.";
+  renderizarHorarios();
+  renderizarResumo();
+}
+
+function textoConfirmacao(payload) {
+  const linhas = payload.datas.map(({ data, horas }) => {
+    const grupos = agruparIntervalos(horas).map(({ inicio, fim }) => `${formatoHora(inicio)}–${formatoHora(fim)}`).join(", ");
+    return `${dataFormatada(data, { day: "2-digit", month: "2-digit", year: "numeric" })}: ${grupos}`;
+  });
+  const verbo = payload.acao === "fechar" ? "Fechar" : "Reabrir";
+  return `${verbo} ${resumirSelecoes(estado.selecoes).quantidadeIntervalos} intervalos em ${payload.datas.length} datas?\n\n${linhas.join("\n")}`;
+}
+
+async function confirmarAlteracao() {
+  if (estado.salvando || estado.carregando || estado.erroConsulta) return;
+  const payload = criarPayloadLote(estado.selecoes, estado.modo);
+  if (!payload.datas.length) return;
+  if (!window.confirm(textoConfirmacao(payload))) return;
+
+  if (!iniciarOperacaoCalendario(estado)) return;
+  el.mensagem.textContent = "Validando e salvando todas as datas numa única operação…";
+  renderizarHorarios();
+  renderizarResumo();
+  try {
+    const resultado = await api("POST", "/api/admin/calendario/lote", payload);
+    const aplicadas = Array.isArray(resultado.datas) ? resultado.datas : payload.datas.map(({ data }) => data);
+    limparDatasAplicadas(estado.selecoes, aplicadas);
+    encerrarOperacaoCalendario(estado);
+    const sucesso = payload.acao === "fechar" ? "Horários fechados em todas as datas." : "Horários reabertos em todas as datas.";
+    renderizarResumo();
+    if (estado.data) await carregarDia(estado.data, sucesso);
+    else el.mensagem.textContent = sucesso;
+  } catch (erro) {
+    const mensagem = mostrarErro(erro);
+    encerrarOperacaoCalendario(estado);
+    renderizarResumo();
+    if (estado.data) await carregarDia(estado.data, mensagem);
+    else el.mensagem.textContent = mensagem;
+  }
+}
+
+el.mes.addEventListener("click", () => {
+  if (estado.salvando) return;
+  el.meses.hidden = !el.meses.hidden;
+  el.mes.setAttribute("aria-expanded", String(!el.meses.hidden));
+  if (!el.meses.hidden) el.meses.querySelector("[aria-pressed='true']")?.focus();
+});
+el.mes.addEventListener("keydown", (evento) => {
+  if (evento.key === "Escape") {
+    el.meses.hidden = true;
+    el.mes.setAttribute("aria-expanded", "false");
   }
 });
+el.meses.addEventListener("keydown", (evento) => {
+  if (evento.key === "Escape") {
+    el.meses.hidden = true;
+    el.mes.setAttribute("aria-expanded", "false");
+    el.mes.focus();
+  }
+});
+document.addEventListener("click", (evento) => {
+  if (!el.meses.hidden && !evento.target.closest(".calendario-seletor-mes")) {
+    el.meses.hidden = true;
+    el.mes.setAttribute("aria-expanded", "false");
+  }
+});
+el.fechar.addEventListener("click", () => escolherModo("fechar"));
+el.reabrir.addEventListener("click", () => escolherModo("reabrir"));
+el.limpar.addEventListener("click", () => {
+  if (estado.salvando) return;
+  estado.selecoes.clear();
+  renderizarResumo();
+  renderizarHorarios();
+  el.mensagem.textContent = "Seleção removida. Escolha os horários que deseja alterar.";
+});
+el.tentarNovamente.addEventListener("click", () => carregarDia(estado.data));
+el.confirmar.addEventListener("click", confirmarAlteracao);
+
 onAuthStateChanged(auth, async (user) => {
-  if (!user) { el.acesso.textContent = "Acesso restrito. Faça login para gerenciar o calendário."; return; }
+  if (!user) {
+    estado.controlador?.abort();
+    estado.requisicao++;
+    el.conteudo.hidden = true;
+    el.acesso.hidden = false;
+    el.acesso.textContent = "Acesso restrito. Faça login para gerenciar o calendário.";
+    return;
+  }
+  el.acesso.textContent = "Conferindo acesso administrativo…";
   try {
     const usuario = await getDoc(doc(db, "usuarios", user.uid));
     if (auth.currentUser?.uid !== user.uid) return;
     if (!usuario.exists() || usuario.data()?.role !== "admin" || usuario.data()?.ativo !== true) {
+      el.conteudo.hidden = true;
+      el.acesso.hidden = false;
       el.acesso.textContent = "Apenas a administradora pode gerenciar o calendário.";
       return;
     }
     el.acesso.hidden = true;
     el.conteudo.hidden = false;
-    criarCalendario();
-  } catch { el.acesso.textContent = "Não foi possível confirmar a permissão administrativa."; }
+    estado.meses = obterMesesGerenciaveis();
+    estado.mes = estado.meses[0]?.chave || null;
+    renderizarMeses();
+    renderizarDatas();
+  } catch {
+    el.conteudo.hidden = true;
+    el.acesso.hidden = false;
+    el.acesso.textContent = "Não foi possível confirmar sua permissão. Atualize a página e tente novamente.";
+  }
 });
