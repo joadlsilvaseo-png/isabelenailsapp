@@ -52,6 +52,7 @@ test("disponibilidade inclui reservas PIX pendentes, vencidas ainda reservadas e
   assert.match(pool.chamadas[0].sql, /estado IN \('reservada', 'confirmada'\)/);
   assert.equal(pool.chamadas[0].sql.trim().toLowerCase().startsWith("select"), true);
   assert.doesNotMatch(pool.chamadas[0].sql, /\b(insert|update|delete|upsert)\b/i);
+  assert.match(pool.chamadas[0].sql, /FROM public\.agenda_bloqueios/);
 });
 
 test("consulta de disponibilidade é autenticada e valida a data", async () => {

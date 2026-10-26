@@ -111,7 +111,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   // Bloqueios operacionais: exclusivamente administração, sem Google Agenda.
-  if (new URL(req.url, "http://localhost").pathname === "/admin/calendario") {
+  if (/^\/admin\/calendario(?:\/lote)?$/.test(new URL(req.url, "http://localhost").pathname)) {
     await atenderGerenciarCalendario(req, res, pool);
     return;
   }

@@ -36,6 +36,42 @@ export function obterJanelaAgendamento(agora = new Date()) {
   };
 }
 
+/** Janela administrativa independente da janela pública de reservas. */
+export function obterMesesGerenciaveis(agora = new Date()) {
+  const hoje = obterHojeSaoPaulo(agora);
+  const [anoAtual, mesAtual] = hoje.split("-").map(Number);
+  return Array.from({ length: 3 }, (_, deslocamento) => {
+    const indice = mesAtual - 1 + deslocamento;
+    const ano = anoAtual + Math.floor(indice / 12);
+    const mesZero = indice % 12;
+    const mes = mesZero + 1;
+    const primeiroDia = `${ano}-${String(mes).padStart(2, "0")}-01`;
+    const ultimoDia = new Date(Date.UTC(ano, mesZero + 1, 0)).getUTCDate();
+    return {
+      chave: `${ano}-${String(mes).padStart(2, "0")}`,
+      ano,
+      mes,
+      inicio: deslocamento === 0 ? hoje : primeiroDia,
+      fim: `${ano}-${String(mes).padStart(2, "0")}-${String(ultimoDia).padStart(2, "0")}`,
+    };
+  });
+}
+
+/** Valida datas de trabalho apenas para bloqueios administrativos; não libera reservas públicas. */
+export function validarDataGerenciavel(dataIso, agora = new Date()) {
+  const partes = partesDataISO(dataIso);
+  if (!partes) return { valido: false, motivo: "Data inexistente" };
+  const hoje = obterHojeSaoPaulo(agora);
+  const meses = obterMesesGerenciaveis(agora);
+  if (dataIso < hoje) return { valido: false, motivo: "Não é possível gerenciar datas passadas" };
+  if (dataIso > meses[2].fim) return { valido: false, motivo: "Data fora da janela administrativa" };
+  return {
+    valido: true,
+    diaSemana: partes.data.getUTCDay(),
+    janela: { inicio: hoje, fim: meses[2].fim },
+  };
+}
+
 export function validarDataNaJanela(dataIso, agora = new Date()) {
   const partes = partesDataISO(dataIso);
   if (!partes) return { valido: false, motivo: "Data inexistente" };
@@ -65,7 +101,7 @@ export function validarHorarioEspecial(dataIso, horario, duracao) {
 // fechar 09:30 bloqueia um atendimento iniciado às 09:00 que avance até 10:00.
 // NÃO muda os horários de início disponíveis para as clientes.
 export function listarSlotsGerenciaveis(dataIso, agora = new Date()) {
-  const validacao = validarDataNaJanela(dataIso, agora);
+  const validacao = validarDataGerenciavel(dataIso, agora);
   if (!validacao.valido) return [];
   const dia = validacao.diaSemana;
   if (dia === 0 || dia === 1) return [];
