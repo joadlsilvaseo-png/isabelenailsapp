@@ -502,6 +502,23 @@ a {
   color: var(--terms-secondary);
 }
 
+.terms-section--pix h3 {
+  margin: 16px 0 0;
+  color: var(--terms-dark);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.terms-section--pix p {
+  font-size: 10px;
+  line-height: 1.7;
+}
+
+.terms-section--pix strong {
+  color: var(--terms-dark);
+}
+
 /* ============================================================
    CARD FINAL
    ============================================================ */
