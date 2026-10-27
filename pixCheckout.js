@@ -92,6 +92,24 @@ function configurarModal() {
         <div><span>Sinal PIX</span><strong id="im-pix-sinal"></strong></div>
         <div><span>Restante no atendimento</span><strong id="im-pix-restante"></strong></div>
       </div>
+      <aside class="im-pix-politica" aria-label="Política de cancelamento do sinal PIX">
+        <p class="im-pix-politica-resumo">
+          <strong>Política de cancelamento</strong>
+          Cancelamentos e reagendamentos devem ser solicitados com pelo menos
+          <strong>24 horas de antecedência.</strong> Fora desse prazo, o sinal
+          poderá ser retido, respeitados os direitos legais.
+        </p>
+        <details class="im-pix-politica-regras">
+          <summary>Regras para o Sinal</summary>
+          <div class="im-pix-politica-detalhes">
+            <p><strong>Com 24h ou mais:</strong> cancelamento com devolução integral do sinal ou reagendamento com aproveitamento do valor pago, conforme disponibilidade.</p>
+            <p><strong>Com menos de 24h:</strong> a profissional poderá autorizar um reagendamento excepcional mantendo o sinal. Cancelamentos poderão resultar em retenção quando legalmente cabível.</p>
+            <p><strong>Falta sem aviso:</strong> o sinal poderá ser retido nas condições contratadas e permitidas por lei.</p>
+            <p><strong>Direitos da cliente:</strong> permanecem preservados, inclusive o direito de arrependimento quando aplicável.</p>
+            <a href="termos.html#sinal-pix" target="_blank" rel="noopener noreferrer">Consultar os Termos de Uso completos</a>
+          </div>
+        </details>
+      </aside>
       <img class="im-pix-qr" alt="QR Code PIX para pagamento do sinal" hidden>
       <p class="im-pix-instrucao">Escaneie o código pelo aplicativo do seu banco ou copie a chave abaixo.</p>
       <label for="im-pix-codigo">PIX Copia e Cola</label>
