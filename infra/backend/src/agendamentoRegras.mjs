@@ -87,9 +87,11 @@ export function validarHorarioEspecialSemanal(diaSemana, inicioMinuto, duracao) 
   if (diaSemana === 2) return [840, 870, 900].includes(inicioMinuto) && fim <= 1050;
   if (diaSemana === 3) return (inicioMinuto === 540 && fim <= 750) || (inicioMinuto === 840 && fim <= 1050);
   if (diaSemana === 6) {
-    if (inicioMinuto < 540 || inicioMinuto > 1020 || inicioMinuto % 30 !== 0 || fim > 1080) return false;
+    // Exceção única: serviço iniciado às 16h com 150 min termina às 18h30.
+    const excecao16h = inicioMinuto === 960 && duracao === 150;
+    if (inicioMinuto < 540 || inicioMinuto > 1020 || inicioMinuto % 30 !== 0 || (fim > 1080 && !excecao16h)) return false;
     if (inicioMinuto === 900 || inicioMinuto === 930) return duracao <= 60;
-    if (inicioMinuto === 960) return [60, 90, 120].includes(duracao);
+    if (inicioMinuto === 960) return [60, 90, 120, 150].includes(duracao);
     if (inicioMinuto === 990) return duracao === 90;
     if (inicioMinuto === 1020) return duracao <= 60;
   }
@@ -117,7 +119,7 @@ export function listarSlotsGerenciaveis(dataIso, agora = new Date()) {
     3: [[540, 750], [840, 1050]],      // Quarta: manhã e tarde.
     4: [[660, 1140]],                  // Quinta: 11:00–19:00.
     5: [[540, 1140]],                  // Sexta: 09:00–19:00.
-    6: [[540, 1080]],                  // Sábado: 09:00–18:00, com regras de duração.
+    6: [[540, 1110]],                  // Sábado: grade de bloqueios cobre a exceção até 18h30.
   };
   const slots = [];
   for (const [inicio, fim] of limites[dia] || []) {
