@@ -124,3 +124,73 @@ dialog.im-pix-dialog[open] {
         width: min(220px, 100%);
     }
 }
+/* Cotação informativa antes da reserva — mantém as cores e o modal PIX existentes. */
+.im-pix-cotacao[hidden] { display: none !important; }
+.im-pix-cotacao-resumo {
+  border: 1px solid #ead1dd;
+  border-radius: 12px;
+  padding: 14px;
+  background: #fff;
+}
+.im-pix-cotacao-resumo span,
+.im-pix-cotacao-valores span {
+  display: block;
+  color: #684857;
+  font-size: .84rem;
+}
+.im-pix-cotacao-resumo strong {
+  display: block;
+  margin: 6px 0 3px;
+  color: #591c31;
+  font-size: 1rem;
+}
+.im-pix-cotacao-resumo p {
+  margin: 0;
+  color: #654e59;
+  font-size: .9rem;
+}
+.im-pix-cotacao-valores {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+}
+.im-pix-cotacao-valores div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 14px;
+  background: #f8edf2;
+  border-radius: 12px;
+}
+.im-pix-cotacao-valores strong {
+  color: #591c31;
+  font-size: 1rem;
+  text-align: right;
+}
+.im-pix-cotacao-aviso {
+  margin: 12px 0;
+  color: #654e59;
+  font-size: .88rem;
+  line-height: 1.5;
+}
+.im-pix-prosseguir,
+.im-pix-voltar {
+  display: block;
+  width: 100%;
+  padding: 13px 16px;
+  margin-top: 10px;
+  border-radius: 12px;
+  border: 0;
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+.im-pix-prosseguir { background: #591c31; color: #fff; }
+.im-pix-prosseguir:disabled { opacity: .65; cursor: wait; }
+.im-pix-voltar { background: #f5e6ec; color: #591c31; }
+.im-pix-prosseguir:focus-visible,
+.im-pix-voltar:focus-visible {
+  outline: 2px solid #903751;
+  outline-offset: 3px;
+}
