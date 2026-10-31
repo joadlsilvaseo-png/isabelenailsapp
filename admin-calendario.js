@@ -233,7 +233,7 @@ function renderizarHorarios() {
     return;
   }
   criarPeriodo("Manhã", slots.filter((m) => m < 720));
-  criarPeriodo("Tarde e noite", slots.filter((m) => m >= 720));
+  criarPeriodo("Tarde", slots.filter((m) => m >= 720));
   const elegiveis = slots.filter((m) => !estaOcupado(m) && (estado.modo === "fechar" ? !estaFechado(m) : estaFechado(m))).length;
   el.status.textContent = estado.modo === "fechar" ? `${elegiveis} disponíveis` : `${elegiveis} fechados`;
   if (!elegiveis) {
