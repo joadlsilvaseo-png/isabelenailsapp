@@ -76,6 +76,15 @@ test("terça, quarta, quinta, sexta e sábado mantêm os slots administrativos",
   assert.deepEqual(listarSlotsGerenciaveis(dataDoDia(3), agora).slice(0, 2), [540, 570]);
   for (const weekday of [4, 5, 6]) assert.equal(validarHorarioEspecial(dataDoDia(weekday), "16:00", 60), true);
   assert.equal(listarSlotsGerenciaveis(dataDoDia(6), agora).includes(960), true);
+  for (const dia of [4, 5]) {
+    const slots = listarSlotsGerenciaveis(dataDoDia(dia), agora);
+    assert.equal(slots.includes(1110), true);
+    assert.equal(slots.includes(1140), false);
+  }
+  const slotsSabado = listarSlotsGerenciaveis(dataDoDia(6), agora);
+  assert.equal(slotsSabado.includes(810), true); // sábado sem almoço fixo
+  assert.equal(slotsSabado.includes(1050), true); // 17h30–18h gerenciável
+  assert.equal(slotsSabado.includes(1080), false);
 });
 
 import { validarHorarioPix } from "../infra/backend/src/pixDisponibilidade.js";
@@ -93,12 +102,19 @@ test("validador backend PIX aplica terça, quarta, fechamento e bloqueio de deze
   assert.equal(validarHorarioPix("2026-12-02", "14:00", 60, now).valido, false);
 });
 
-test("quinta, sexta e sábado conservam o validador anterior, inclusive o último início de sábado", () => {
+test("backend PIX respeita os novos limites e horários especiais de sábado", () => {
   const now = new Date("2026-10-22T12:00:00Z");
-  assert.equal(validarHorarioPix("2026-11-05", "18:30", 120, now).valido, true);
-  assert.equal(validarHorarioPix("2026-11-06", "18:30", 120, now).valido, true);
-  assert.equal(validarHorarioPix("2026-11-07", "16:00", 60, now).valido, true);
-  assert.equal(validarHorarioPix("2026-11-07", "16:30", 60, now).valido, false);
+  for (const data of ["2026-11-05", "2026-11-06"]) {
+    assert.equal(validarHorarioPix(data, "18:00", 60, now).valido, true);
+    assert.equal(validarHorarioPix(data, "18:30", 60, now).valido, false);
+    assert.equal(validarHorarioPix(data, "19:00", 30, now).valido, false);
+  }
+  for (const [horario, duracao] of [["13:30", 90], ["15:00", 60], ["15:30", 60], ["16:00", 60], ["16:00", 90], ["16:00", 120], ["16:30", 90], ["17:00", 60]]) {
+    assert.equal(validarHorarioPix("2026-11-07", horario, duracao, now).valido, true, horario);
+  }
+  for (const [horario, duracao] of [["15:00", 90], ["15:30", 90], ["16:00", 30], ["16:30", 60], ["17:00", 90], ["17:30", 30]]) {
+    assert.equal(validarHorarioPix("2026-11-07", horario, duracao, now).valido, false, horario);
+  }
 });
 
 
