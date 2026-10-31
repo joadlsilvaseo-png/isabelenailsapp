@@ -25,6 +25,40 @@ test("reserva de duas horas bloqueia sobreposições e libera o horário exato d
   assert.equal(intervaloSobrepoeDisponibilidade(930, 990, reservas), false);
 });
 
+test("quarta: horários adicionais respeitam agendamento anterior, duração e próximo início", () => {
+  // Manhã: serviço das 09:00 às 11:30 impede outro serviço que comece às 10h,
+  // 10h30 ou 11h; se terminar às 10h, libera exatamente 10h.
+  const manhaOcupada = [{ inicioMinuto: 540, fimMinuto: 690 }];
+  for (const [inicio, fim] of [[600, 660], [630, 720], [660, 720]]) {
+    assert.equal(intervaloSobrepoeDisponibilidade(inicio, fim, manhaOcupada), true);
+  }
+  assert.equal(
+    intervaloSobrepoeDisponibilidade(600, 690, [{ inicioMinuto: 540, fimMinuto: 600 }]),
+    false,
+  );
+
+  // Tarde: quem terminou às 15:00 não impede novo início exatamente às 15h;
+  // serviço iniciado às 14h que ultrapassa 15h continua bloqueando.
+  assert.equal(
+    intervaloSobrepoeDisponibilidade(900, 990, [{ inicioMinuto: 840, fimMinuto: 900 }]),
+    false,
+  );
+  assert.equal(
+    intervaloSobrepoeDisponibilidade(900, 990, [{ inicioMinuto: 840, fimMinuto: 930 }]),
+    true,
+  );
+  // Reservas PIX e bloqueios administrativos usam a mesma verificação.
+  assert.equal(
+    intervaloSobrepoeDisponibilidade(900, 960, [{ inicioMinuto: 930, fimMinuto: 960 }]),
+    true,
+  );
+  // A API rejeita durações não autorizadas mesmo que o intervalo esteja livre.
+  const agora = new Date("2026-10-22T12:00:00Z");
+  assert.equal(validarHorarioPix("2026-11-11", "15:00", 60, agora).valido, true);
+  assert.equal(validarHorarioPix("2026-11-11", "15:00", 90, agora).valido, true);
+  assert.equal(validarHorarioPix("2026-11-11", "15:00", 120, agora).valido, false);
+});
+
 test("falha de rede em uma fonte rejeita toda a disponibilidade e não libera horários", async () => {
   await assert.rejects(consultarIntervalosDisponibilidade({
     consultarAgendamentosFirestore: async () => [],
