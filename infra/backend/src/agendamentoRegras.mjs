@@ -85,7 +85,17 @@ export function validarHorarioEspecialSemanal(diaSemana, inicioMinuto, duracao) 
   if (!Number.isInteger(inicioMinuto) || !Number.isInteger(duracao) || duracao <= 0) return false;
   const fim = inicioMinuto + duracao;
   if (diaSemana === 2) return [840, 870, 900].includes(inicioMinuto) && fim <= 1050;
-  if (diaSemana === 3) return (inicioMinuto === 540 && fim <= 750) || (inicioMinuto === 840 && fim <= 1050);
+  if (diaSemana === 3) {
+    // Quarta de manhã: janelas comerciais autorizadas, com duração real.
+    if (inicioMinuto === 540) return [60, 90, 120, 150].includes(duracao); // 09:00
+    if (inicioMinuto === 600) return [60, 90, 120].includes(duracao);      // 10:00
+    if (inicioMinuto === 630) return [60, 90].includes(duracao);           // 10:30
+    if (inicioMinuto === 660) return duracao <= 60;                         // 11:00
+    // À tarde, preserva 14:00 e abre 15:00 apenas para 1h e 1h30.
+    if (inicioMinuto === 840) return fim <= 1050;                           // 14:00
+    if (inicioMinuto === 900) return [60, 90].includes(duracao);           // 15:00
+    return false;
+  }
   if (diaSemana === 6) {
     // Exceção única: serviço iniciado às 16h com 150 min termina às 18h30.
     const excecao16h = inicioMinuto === 960 && duracao === 150;
