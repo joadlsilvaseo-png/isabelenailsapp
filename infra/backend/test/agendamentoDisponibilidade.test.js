@@ -77,26 +77,27 @@ test("sexta também encerra atendimento às 19h", () => {
   }
 });
 
-test("sábado aplica a duração permitida por início e fecha às 18h", () => {
+test("sábado mantém encerramento às 18h com exceção às 16h para 150 min", () => {
   const limites = obterLimitesAtendimentoSemanal(6);
   assert.deepEqual(limites, {
     minAbertura: 540,
     minUltimoInicio: 1020,
-    minFechamento: 1080,
+    minFechamento: 1110,
   });
   for (const [horario, duracao] of [
     ["09:00", 120], ["12:00", 120], ["13:00", 60],
     ["13:30", 30], ["13:30", 120], ["14:00", 120],
     ["15:00", 30], ["15:00", 60],
     ["15:30", 30], ["15:30", 60],
-    ["16:00", 60], ["16:00", 90], ["16:00", 120],
+    ["16:00", 60], ["16:00", 90], ["16:00", 120], ["16:00", 150],
     ["16:30", 90], ["17:00", 30], ["17:00", 60],
   ]) {
     conferir("2026-11-07", horario, duracao, true);
   }
   for (const [horario, duracao] of [
     ["15:00", 90], ["15:30", 90],
-    ["16:00", 30], ["16:00", 150],
+    ["16:00", 30], ["16:00", 151], ["16:00", 180],
+    ["14:00", 270], ["14:30", 240],
     ["16:30", 30], ["16:30", 60], ["16:30", 120],
     ["17:00", 90], ["17:30", 30], ["23:00", 120],
   ]) {
