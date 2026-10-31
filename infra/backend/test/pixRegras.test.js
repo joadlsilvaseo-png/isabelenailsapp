@@ -1270,3 +1270,32 @@ test("cotacao e reserva dependem do mesmo calculador de sinal por servico", asyn
   assert.match(reservas, /valores\.valorTotalCentavos,[\s\S]*valores\.percentualSinal,[\s\S]*valores\.valorSinalCentavos,[\s\S]*valores\.valorRestanteCentavos/);
   assert.match(reservas, /valores\.tipoSinal,[\s\S]*valores\.valorFixoConfiguradoCentavos/);
 });
+
+test("checkout consulta sinal antes de criar reserva PIX", async () => {
+  const [checkout, cotacao, html] = await Promise.all([
+    readFile(new URL("../../../pixCheckout.js", import.meta.url), "utf8"),
+    readFile(new URL("../src/pixCotacao.js", import.meta.url), "utf8"),
+    readFile(new URL("../../../agendamento.html", import.meta.url), "utf8"),
+  ]);
+
+  // A consulta de valores não pode gerar cobranças nem bloquear intervalos.
+  assert.match(cotacao, /calcularSinalServico\(dadosServico\)/);
+  assert.doesNotMatch(cotacao, /\b(?:INSERT INTO|UPDATE public|DELETE FROM)\b/i);
+  assert.match(checkout, /postApi\("\/pix\/cotacao",\s*\{/);
+  assert.match(checkout, /if \(!reservaAtual && !prosseguirPagamento\)/);
+  assert.match(checkout, /btnProsseguirPix\.addEventListener\("click",/);
+  assert.match(checkout, /prosseguirPagamento:\s*true/);
+
+  const trechoCheckout = checkout.slice(checkout.indexOf("async function iniciarCheckout"));
+  assert.ok(
+    trechoCheckout.indexOf('postApi("/pix/cotacao"') <
+      trechoCheckout.indexOf('postApi("/pix/reservar"'),
+    "A cotação deve acontecer antes de qualquer tentativa de reserva",
+  );
+  assert.match(trechoCheckout, /if \(!reservaAtual && !prosseguirPagamento\)\s*\{[\s\S]*?apresentarCotacao\(cotacao, dados\);\s*return;/);
+  assert.match(trechoCheckout, /cotacaoAtual\.servicoId !== dados\.servicoId/);
+  assert.match(trechoCheckout, /caixaCotacao\.hidden = true;[\s\S]*?postApi\("\/pix\/reservar"/);
+  assert.match(checkout, /getApi\("\/agendamentos\/isencao"\)/);
+  assert.match(checkout, /postApi\("\/agendamentos\/sem-pix"/);
+  assert.match(html, /pixCheckout\.js\?v=1\.0\.2/);
+});
