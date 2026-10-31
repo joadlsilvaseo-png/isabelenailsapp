@@ -532,8 +532,10 @@ async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null) {
 
     let quantidadeDisponivel = 0;
 
+    // Quarta-feira: exibir somente os inícios aprovados pela profissional.
+    // A duração de cada serviço é validada pela regra compartilhada com o backend.
     const iniciosPossiveis = diaSemanaSelecionado === 3
-      ? [timeToMins("09:00"), timeToMins("14:00")]
+      ? ["09:00", "10:00", "10:30", "11:00", "14:00", "15:00"].map(timeToMins)
       : Array.from({ length: Math.floor((minUltimoInicio - minAbertura) / 30) + 1 }, (_, indice) => minAbertura + indice * 30);
 
     for (const atual of iniciosPossiveis) {
