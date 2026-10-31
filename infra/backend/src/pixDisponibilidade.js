@@ -50,20 +50,23 @@ export function validarHorarioPix(dataIso, horario, duracao, agora = new Date())
   const horarioEstendido = diaSemana === 4 || diaSemana === 5;
   const sabado = diaSemana === 6;
   const abertura = diaSemana === 4 ? 660 : 540;
-  const ultimoInicio = sabado ? 960 : horarioEstendido ? 1140 : 1080;
-  const fechamento = sabado ? 1440 : horarioEstendido ? 1260 : 1200;
+  const ultimoInicio = sabado ? 1020 : horarioEstendido ? 1110 : 1080;
+  const fechamento = sabado ? 1080 : horarioEstendido ? 1140 : 1200;
   if (inicio < abertura || inicio > ultimoInicio || inicio % 30 !== 0 || fim > fechamento) {
     return horarioInvalido("Fora do horario permitido");
   }
 
-  // Pausa de 30 minutos: qualquer servico que toque 13h30-14h fica indisponivel.
-  // Terminar exatamente as 13h30 ou iniciar as 14h e permitido.
-  if (inicio < 14 * 60 && fim > 13 * 60 + 30) {
+  // Pausa fixa de 30 minutos nos dias úteis; sábado não tem almoço fixo.
+  if (!sabado && inicio < 14 * 60 && fim > 13 * 60 + 30) {
     return horarioInvalido("Intervalo de almoco indisponivel");
   }
 
   if (!validarHorarioEspecial(dataIso, horario, duracao)) {
-    return horarioInvalido(diaSemana === 2 ? "Horario indisponivel na terca" : "Horario indisponivel na quarta");
+    return horarioInvalido(
+      diaSemana === 2 ? "Horario indisponivel na terca"
+        : diaSemana === 3 ? "Horario indisponivel na quarta"
+        : "Horario ou duracao indisponivel no sabado"
+    );
   }
 
   return {
