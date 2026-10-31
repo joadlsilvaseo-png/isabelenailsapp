@@ -84,7 +84,8 @@ test("terça, quarta, quinta, sexta e sábado mantêm os slots administrativos",
   const slotsSabado = listarSlotsGerenciaveis(dataDoDia(6), agora);
   assert.equal(slotsSabado.includes(810), true); // sábado sem almoço fixo
   assert.equal(slotsSabado.includes(1050), true); // 17h30–18h gerenciável
-  assert.equal(slotsSabado.includes(1080), false);
+  assert.equal(slotsSabado.includes(1080), true); // 18h–18h30 gerenciável para exceção
+  assert.equal(slotsSabado.includes(1110), false);
 });
 
 import { validarHorarioPix } from "../infra/backend/src/pixDisponibilidade.js";
@@ -109,10 +110,10 @@ test("backend PIX respeita os novos limites e horários especiais de sábado", (
     assert.equal(validarHorarioPix(data, "18:30", 60, now).valido, false);
     assert.equal(validarHorarioPix(data, "19:00", 30, now).valido, false);
   }
-  for (const [horario, duracao] of [["13:30", 90], ["15:00", 60], ["15:30", 60], ["16:00", 60], ["16:00", 90], ["16:00", 120], ["16:30", 90], ["17:00", 60]]) {
+  for (const [horario, duracao] of [["13:30", 90], ["15:00", 60], ["15:30", 60], ["16:00", 60], ["16:00", 90], ["16:00", 120], ["16:00", 150], ["16:30", 90], ["17:00", 60]]) {
     assert.equal(validarHorarioPix("2026-11-07", horario, duracao, now).valido, true, horario);
   }
-  for (const [horario, duracao] of [["15:00", 90], ["15:30", 90], ["16:00", 30], ["16:30", 60], ["17:00", 90], ["17:30", 30]]) {
+  for (const [horario, duracao] of [["15:00", 90], ["15:30", 90], ["16:00", 30], ["16:00", 180], ["14:00", 270], ["16:30", 60], ["17:00", 90], ["17:30", 30]]) {
     assert.equal(validarHorarioPix("2026-11-07", horario, duracao, now).valido, false, horario);
   }
 });
