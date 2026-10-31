@@ -86,6 +86,13 @@ export function validarHorarioEspecialSemanal(diaSemana, inicioMinuto, duracao) 
   const fim = inicioMinuto + duracao;
   if (diaSemana === 2) return [840, 870, 900].includes(inicioMinuto) && fim <= 1050;
   if (diaSemana === 3) return (inicioMinuto === 540 && fim <= 750) || (inicioMinuto === 840 && fim <= 1050);
+  if (diaSemana === 6) {
+    if (inicioMinuto < 540 || inicioMinuto > 1020 || inicioMinuto % 30 !== 0 || fim > 1080) return false;
+    if (inicioMinuto === 900 || inicioMinuto === 930) return duracao <= 60;
+    if (inicioMinuto === 960) return [60, 90, 120].includes(duracao);
+    if (inicioMinuto === 990) return duracao === 90;
+    if (inicioMinuto === 1020) return duracao <= 60;
+  }
   return true;
 }
 
@@ -108,15 +115,15 @@ export function listarSlotsGerenciaveis(dataIso, agora = new Date()) {
   const limites = {
     2: [[840, 1050]],                   // Terça: 14:00–17:30.
     3: [[540, 750], [840, 1050]],      // Quarta: manhã e tarde.
-    4: [[660, 1260]],                  // Quinta: 11:00–21:00.
-    5: [[540, 1260]],                  // Sexta: 09:00–21:00.
-    6: [[540, 1440]],                  // Sábado: início até 16h; respeita duração.
+    4: [[660, 1140]],                  // Quinta: 11:00–19:00.
+    5: [[540, 1140]],                  // Sexta: 09:00–19:00.
+    6: [[540, 1080]],                  // Sábado: 09:00–18:00, com regras de duração.
   };
   const slots = [];
   for (const [inicio, fim] of limites[dia] || []) {
     for (let minuto = inicio; minuto + 30 <= fim; minuto += 30) {
-      // Pausa fixa: 13:30–14:00, não editável.
-      if (minuto === 810) continue;
+      // Pausa fixa em dias úteis; sábado permite 13h30 normalmente.
+      if (dia !== 6 && minuto === 810) continue;
       slots.push(minuto);
     }
   }
