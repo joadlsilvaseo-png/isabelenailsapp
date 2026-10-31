@@ -432,7 +432,7 @@ function obterIntervalosBloqueadosFixos(dataIso) {
    * 6 = Sábado
    */
 
-  const intervalos = [
+  const intervalos = diaSemana === 6 ? [] : [
     {
       start: timeToMins("13:30"),
       end: timeToMins("14:00"),

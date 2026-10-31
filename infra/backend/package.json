@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node test/pixRegras.test.js && node test/agendamentoCancelamentos.test.js && node test/agendamentosIsencaoPix.test.js && node test/pixDisponibilidadeApi.test.js && node test/agendamentoDisponibilidade.test.js && node test/agendaLembretes.test.js && node test/gestaoClientes.test.js && node test/clientePerfilIntegridade.test.js && node test/admin-clientes-state.test.js && node test/admin-clientes-modal.test.js && node test/fotosPerfil.test.js && node test/agendaBloqueios.test.js && node test/adminCalendarioEstado.test.js",
+    "test": "node test/pixRegras.test.js && node test/agendamentoCancelamentos.test.js && node test/agendamentosIsencaoPix.test.js && node test/pixDisponibilidadeApi.test.js && node test/agendamentoDisponibilidade.test.js && node test/agendaLembretes.test.js && node test/gestaoClientes.test.js && node test/clientePerfilIntegridade.test.js && node test/admin-clientes-state.test.js && node test/admin-clientes-modal.test.js && node test/fotosPerfil.test.js && node test/agendaBloqueios.test.js && node test/adminCalendarioEstado.test.js && node ../../scripts/agenda-regras.test.mjs",
     "start": "node src/server.js"
   },
   "dependencies": {
