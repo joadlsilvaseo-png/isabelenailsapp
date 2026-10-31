@@ -124,6 +124,19 @@ test("slots administrativos seguem expediente especial e permitem dezembro", () 
   assert.ok(listarSlotsGerenciaveis("2026-12-03", FIXO).includes(660));
 });
 
+test("Gerenciar Calendário não oferece intervalos fora do expediente", () => {
+  for (const data of ["2026-11-05", "2026-11-06"]) {
+    const slots = listarSlotsGerenciaveis(data, FIXO);
+    assert.equal(slots.includes(1110), true); // 18h30–19h
+    assert.equal(slots.includes(1140), false); // a partir das 19h
+    assert.equal(slots.some((minuto) => minuto > 1140), false);
+  }
+  const sabado = listarSlotsGerenciaveis("2026-11-07", FIXO);
+  assert.equal(sabado.includes(810), true); // sem almoço fixo
+  assert.equal(sabado.includes(1050), true); // 17h30–18h
+  assert.equal(sabado.includes(1080), false); // após as 18h
+});
+
 test("validação no banco usa sobreposição real e não igualdade de hora", async () => {
   const pool = criarPool({ bloqueios: [{ inicio: 900, fim: 930 }] });
   assert.equal(await possuiBloqueio(pool.conexao, DATA, 870, 990), true);
