@@ -1,7 +1,7 @@
 import { auth, db } from "./firebase-config.js";
 import { consultarDisponibilidadePix, reagendarAgendamentoApi } from "./agendamentosApi.js";
 import { consultarIntervalosDisponibilidade, intervaloSobrepoeDisponibilidade, obterLimitesAtendimentoSemanal } from "./agendamentoDisponibilidade.js";
-import { obterJanelaAgendamento, validarDataNaJanela, validarHorarioEspecial } from "./infra/backend/src/agendamentoRegras.mjs";
+import { obterJanelaAgendamento, validarDataNaJanela, validarHorarioEspecial } from "./infra/backend/src/agendamentoRegras.mjs?v=2.0.1";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
 import {
   collection,
