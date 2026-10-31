@@ -499,6 +499,10 @@ async function iniciarCheckout({ prosseguirPagamento = false } = {}) {
       throw new Error("O horário selecionado mudou. Confira o valor do sinal novamente.");
     }
 
+    // A confirmação foi dada: a reserva pode começar agora. Não exibir mais
+    // o aviso de "horário ainda não reservado" enquanto a API trabalha.
+    caixaCotacao.hidden = true;
+    modal.querySelector("#im-pix-titulo").textContent = "Pagamento do sinal";
     mensagem("Preparando a reserva e gerando o PIX...");
     if (!reservaAtual) {
       const criada = await postApi("/pix/reservar", {
