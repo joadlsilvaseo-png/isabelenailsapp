@@ -134,7 +134,8 @@ test("Gerenciar Calendário não oferece intervalos fora do expediente", () => {
   const sabado = listarSlotsGerenciaveis("2026-11-07", FIXO);
   assert.equal(sabado.includes(810), true); // sem almoço fixo
   assert.equal(sabado.includes(1050), true); // 17h30–18h
-  assert.equal(sabado.includes(1080), false); // após as 18h
+  assert.equal(sabado.includes(1080), true); // 18h–18h30 gerenciável para exceção
+  assert.equal(sabado.includes(1110), false); // após as 18h30
 });
 
 test("validação no banco usa sobreposição real e não igualdade de hora", async () => {
