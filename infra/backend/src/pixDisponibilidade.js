@@ -51,7 +51,8 @@ export function validarHorarioPix(dataIso, horario, duracao, agora = new Date())
   const sabado = diaSemana === 6;
   const abertura = diaSemana === 4 ? 660 : 540;
   const ultimoInicio = sabado ? 1020 : horarioEstendido ? 1110 : 1080;
-  const fechamento = sabado ? 1080 : horarioEstendido ? 1140 : 1200;
+  // A exceção das 16h/150 min permite 18h30; demais horários encerram até 18h.
+  const fechamento = sabado ? 1110 : horarioEstendido ? 1140 : 1200;
   if (inicio < abertura || inicio > ultimoInicio || inicio % 30 !== 0 || fim > fechamento) {
     return horarioInvalido("Fora do horario permitido");
   }
