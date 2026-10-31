@@ -10,9 +10,12 @@ const novoAgendamentoCliente =
 let modal;
 let status;
 let caixaPix;
+let caixaCotacao;
+let btnProsseguirPix;
 let btnRepetir;
 let btnCopiar;
 let reservaAtual = null;
+let cotacaoAtual = null;
 let codigoPix = "";
 let executando = false;
 let conferindo = false;
@@ -87,6 +90,21 @@ function configurarModal() {
       <button type="button" class="im-pix-fechar" aria-label="Fechar pagamento">×</button>
     </div>
     <p class="im-pix-status" role="status" aria-live="polite"></p>
+    <section class="im-pix-cotacao" hidden aria-label="Confira o valor do sinal">
+      <div class="im-pix-cotacao-resumo">
+        <span>Resumo do agendamento</span>
+        <strong id="im-pix-cotacao-servico"></strong>
+        <p id="im-pix-cotacao-data"></p>
+      </div>
+      <div class="im-pix-cotacao-valores">
+        <div><span>Valor do serviço</span><strong id="im-pix-cotacao-total"></strong></div>
+        <div><span>Sinal para confirmar</span><strong id="im-pix-cotacao-sinal"></strong></div>
+        <div><span>Restante no atendimento</span><strong id="im-pix-cotacao-restante"></strong></div>
+      </div>
+      <p class="im-pix-cotacao-aviso" id="im-pix-cotacao-aviso"></p>
+      <button type="button" class="im-pix-prosseguir">Prosseguir para pagamento PIX</button>
+      <button type="button" class="im-pix-voltar">Voltar e revisar horário</button>
+    </section>
     <section class="im-pix-conteudo" hidden>
       <div class="im-pix-valores">
         <div><span>Sinal PIX</span><strong id="im-pix-sinal"></strong></div>
@@ -122,6 +140,8 @@ function configurarModal() {
   document.body.appendChild(modal);
   status = modal.querySelector(".im-pix-status");
   caixaPix = modal.querySelector(".im-pix-conteudo");
+  caixaCotacao = modal.querySelector(".im-pix-cotacao");
+  btnProsseguirPix = modal.querySelector(".im-pix-prosseguir");
   btnRepetir = modal.querySelector(".im-pix-repetir");
   btnCopiar = modal.querySelector(".im-pix-copiar");
   modal
@@ -139,6 +159,12 @@ function configurarModal() {
       return;
     }
     btnCopiar.textContent = "Código copiado!";
+  });
+  btnProsseguirPix.addEventListener("click", () => void iniciarCheckout({ prosseguirPagamento: true }));
+  modal.querySelector(".im-pix-voltar").addEventListener("click", () => {
+    cotacaoAtual = null;
+    caixaCotacao.hidden = true;
+    modal.close();
   });
   btnRepetir.addEventListener("click", () => void iniciarCheckout());
   modal.addEventListener("cancel", () => {
@@ -224,6 +250,48 @@ function selecionarDados() {
   };
 }
 
+function apresentarCotacao(cotacao, dados) {
+  const total = Number(cotacao.valorTotalCentavos);
+  const sinal = Number(cotacao.valorSinalCentavos);
+  const restante = Number(cotacao.valorRestanteCentavos);
+  const minutos = Number(cotacao.reservaMinutos);
+
+  if (
+    !Number.isSafeInteger(total) || total <= 0 ||
+    !Number.isSafeInteger(sinal) || sinal <= 0 ||
+    !Number.isSafeInteger(restante) || restante < 0 ||
+    total !== sinal + restante ||
+    !Number.isInteger(minutos) || minutos < 30 || minutos > 60 ||
+    cotacao.servicoId !== dados.servicoId
+  ) {
+    throw new Error("Não foi possível conferir o valor do sinal. Tente novamente.");
+  }
+
+  cotacaoAtual = {
+    servicoId: dados.servicoId,
+    data: dados.data,
+    horario: dados.horario,
+  };
+
+  const [ano, mes, dia] = dados.data.split("-");
+  modal.querySelector("#im-pix-cotacao-servico").textContent =
+    cotacao.servico || dados.nomeServico;
+  modal.querySelector("#im-pix-cotacao-data").textContent =
+    `${dia}/${mes}/${ano} às ${dados.horario}`;
+  modal.querySelector("#im-pix-cotacao-total").textContent = moeda(total);
+  modal.querySelector("#im-pix-cotacao-sinal").textContent = moeda(sinal);
+  modal.querySelector("#im-pix-cotacao-restante").textContent = moeda(restante);
+  modal.querySelector("#im-pix-cotacao-aviso").textContent =
+    `Nenhum horário foi reservado ainda. Ao prosseguir, a reserva temporária terá um prazo inicial de ${minutos} minutos para o pagamento do sinal. A disponibilidade será verificada novamente.`;
+
+  modal.querySelector("#im-pix-titulo").textContent = "Confira o valor do sinal";
+  btnProsseguirPix.disabled = false;
+  btnProsseguirPix.textContent = "Prosseguir para pagamento PIX";
+  caixaCotacao.hidden = false;
+  mensagem("Confira os valores antes de iniciar o pagamento.");
+  if (modal.open) btnProsseguirPix.focus();
+}
+
 function mostrarPedido(pedido) {
   const pix = pedido.pix || {};
   codigoPix = pix.copiaECola || "";
@@ -250,6 +318,8 @@ function mostrarPedido(pedido) {
   btnCopiar.disabled = !codigoPix;
   btnCopiar.textContent = "Copiar código PIX";
   btnRepetir.textContent = "Tentar novamente";
+  caixaCotacao.hidden = true;
+  modal.querySelector("#im-pix-titulo").textContent = "Pagamento do sinal";
   caixaPix.hidden = false;
   mensagem("PIX gerado! Aguardando confirmação do pagamento de teste...");
 }
@@ -342,12 +412,16 @@ async function conferirPagamento() {
   }
 }
 
-async function iniciarCheckout() {
+async function iniciarCheckout({ prosseguirPagamento = false } = {}) {
   configurarModal();
   if (executando) return;
   if (!modal.open) modal.showModal();
   if (concluido) return;
   restaurarReservaPix();
+  // O cliente só pode prosseguir depois de conferir uma cotação desta seleção.
+  if (prosseguirPagamento && (
+    !cotacaoAtual || caixaCotacao.hidden || reservaAtual
+  )) return;
   if (reservaAtual && codigoPix) {
     mensagem("Aguardando confirmação do pagamento de teste...");
     if (!polling) {
@@ -359,6 +433,13 @@ async function iniciarCheckout() {
   executando = true;
   btnRepetir.hidden = true;
   caixaPix.hidden = true;
+  if (prosseguirPagamento) {
+    btnProsseguirPix.disabled = true;
+    btnProsseguirPix.textContent = "Preparando pagamento...";
+  } else {
+    caixaCotacao.hidden = true;
+    cotacaoAtual = null;
+  }
   try {
     mensagem("Verificando a autorização para o agendamento...");
     const dados = selecionarDados();
@@ -399,6 +480,25 @@ async function iniciarCheckout() {
       }
     }
 
+    if (!reservaAtual && !prosseguirPagamento) {
+      mensagem("Consultando o valor do sinal...");
+      // Cotação de leitura: não cria PIX e não reserva horários.
+      const cotacao = await postApi("/pix/cotacao", {
+        servicoId: dados.servicoId,
+      });
+      apresentarCotacao(cotacao, dados);
+      return;
+    }
+
+    if (!reservaAtual && (
+      !cotacaoAtual ||
+      cotacaoAtual.servicoId !== dados.servicoId ||
+      cotacaoAtual.data !== dados.data ||
+      cotacaoAtual.horario !== dados.horario
+    )) {
+      throw new Error("O horário selecionado mudou. Confira o valor do sinal novamente.");
+    }
+
     mensagem("Preparando a reserva e gerando o PIX...");
     if (!reservaAtual) {
       const criada = await postApi("/pix/reservar", {
@@ -412,6 +512,7 @@ async function iniciarCheckout() {
       salvarReservaPix();
     }
     await emitirAteObterPedido();
+    cotacaoAtual = null;
     pararConsulta();
     polling = setInterval(() => void conferirPagamento(), 5000);
     void conferirPagamento();
@@ -421,6 +522,10 @@ async function iniciarCheckout() {
     btnRepetir.hidden = false;
   } finally {
     executando = false;
+    if (btnProsseguirPix) {
+      btnProsseguirPix.disabled = false;
+      btnProsseguirPix.textContent = "Prosseguir para pagamento PIX";
+    }
   }
 }
 
