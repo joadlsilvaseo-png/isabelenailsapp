@@ -1,4 +1,5 @@
 import { db } from "./firebase-config.js";
+import { criarEtiquetaManutencao } from "./servicosOrientacao.mjs?v=1.0.0";
 import { categoriaAtiva, servicoAtivo, servicoPertenceCategoria } from "./categoriasCatalogo.mjs";
 import { collection, getDocs } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
 
@@ -16,7 +17,14 @@ function renderState(message) { list.replaceChildren(); const li=html("li","mani
 function renderService(service) {
  const li=html("li","manicure-card",""); li.dataset.serviceId=service.id; li.dataset.serviceName=service.nome || "Serviço"; li.setAttribute("role","button"); li.setAttribute("tabindex","0"); li.setAttribute("aria-pressed","false");
  const top=html("div","manicure-card-top",""); const icon=html("span","manicure-card-icon",""); icon.setAttribute("aria-hidden","true"); icon.innerHTML='<svg viewBox="0 0 24 24" fill="none"><path d="M12 3L13.2 6.2L16.5 7.5L13.2 8.8L12 12L10.8 8.8L7.5 7.5L10.8 6.2L12 3Z" stroke="currentColor" stroke-width="1.8"/></svg>';
- const content=html("div","manicure-card-content",""); content.append(html("p","manicure-card-name",service.nome || "Serviço"),html("p","manicure-card-description",service.descricao || "Procedimento oferecido nesta categoria."));
+ const content=html("div","manicure-card-content","");
+ const etiquetaManutencao = criarEtiquetaManutencao(service.nome);
+ content.append(html("p","manicure-card-name",service.nome || "Serviço"));
+ if (etiquetaManutencao) {
+  content.append(etiquetaManutencao);
+  li.setAttribute("aria-label", `Selecionar ${service.nome}. Somente para quem já possui a aplicação.`);
+ }
+ content.append(html("p","manicure-card-description",service.descricao || "Procedimento oferecido nesta categoria."));
  const check=html("span","manicure-card-check",""); check.setAttribute("aria-hidden","true"); top.append(icon,content,check);
  const details=html("div","manicure-card-details",""); const duration=html("span","manicure-card-duration",`${Number(service.duracao)||60} min`); details.append(duration,html("strong","manicure-card-price",formatPrice(service.preco))); li.append(top,details);
  const select=()=>{list.querySelectorAll(".manicure-card").forEach(card=>{card.classList.toggle("selected",card===li);card.setAttribute("aria-pressed",String(card===li));});selectedId=service.id;continueButton.disabled=false;document.getElementById("selected-service-summary").textContent=`${service.nome} selecionado`;};
