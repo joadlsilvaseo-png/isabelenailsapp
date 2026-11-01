@@ -1,4 +1,8 @@
 import test from "node:test";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { servicoEhManutencao } from "../servicosOrientacao.mjs";
 import assert from "node:assert/strict";
 import { categoriaAtiva, categoriaPossuiServicos, montarCatalogoCliente, nomeCategoriaDuplicado, servicoPertenceCategoria } from "../categoriasCatalogo.mjs";
 import { montarResultadosBusca } from "../catalogoBusca.mjs";
@@ -40,4 +44,27 @@ test("pesquisa dinâmica considera serviço, categoria, descrições, acentos, p
   assert.deepEqual(montarResultadosBusca(indexado, "manutencoes").map((item) => item.id), ["svc-1"]);
   assert.deepEqual(montarResultadosBusca(indexado, "cilios").map((item) => item.id), ["svc-1"]);
   assert.deepEqual(montarResultadosBusca([...indexado, indexado[0]], "alongamento").map((item) => item.id), ["svc-1"]);
+});
+
+test("etiqueta de manutenção identifica nomes reais e ignora primeira aplicação", () => {
+  assert.equal(servicoEhManutencao("Manutenção Banho de Gel"), true);
+  assert.equal(servicoEhManutencao("Manutencao de Fibra de Vidro"), true);
+  assert.equal(servicoEhManutencao("Banho de Gel"), false);
+  assert.equal(servicoEhManutencao("Alongamento em Fibra de Vidro"), false);
+});
+
+test("todas as telas do catálogo compartilham a orientação antes do agendamento", async () => {
+  const raiz = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  for (const pagina of ["manicure.html", "pedicure.html", "unhas-em-gel.html", "categoria.html"]) {
+    const html = await readFile(path.join(raiz, pagina), "utf8");
+    assert.match(html, /servicos-orientacao\.css\?v=1\.0\.0/);
+    assert.match(html, /Confira antes de agendar/);
+    assert.match(html, /Manutenção é para quem já possui a aplicação/);
+    assert.ok(html.indexOf("Confira antes de agendar") < html.indexOf("Continuar para agendamento"));
+  }
+  for (const js of ["manicure.js", "pedicure.js", "unhas-em-gel.js", "categoria.js"]) {
+    const source = await readFile(path.join(raiz, js), "utf8");
+    assert.match(source, /criarEtiquetaManutencao/);
+    assert.match(source, /servicosOrientacao\.mjs\?v=1\.0\.0/);
+  }
 });
