@@ -1,4 +1,5 @@
 (async function () {
+  const { criarEtiquetaManutencao } = await import("./servicosOrientacao.mjs?v=1.0.0");
   const serviceList = document.querySelector(".unhas-list");
   const serviceCount = document.getElementById("unhas-service-count");
   const actionButton = document.querySelector(".unhas-action-button");
@@ -380,6 +381,11 @@
     `;
 
     content.appendChild(title);
+    const etiquetaManutencao = criarEtiquetaManutencao(serviceName);
+    if (etiquetaManutencao) {
+      content.appendChild(etiquetaManutencao);
+      card.setAttribute("aria-label", `Selecionar ${serviceName}. Somente para quem já possui a aplicação.`);
+    }
     content.appendChild(description);
 
     cardTop.appendChild(icon);
