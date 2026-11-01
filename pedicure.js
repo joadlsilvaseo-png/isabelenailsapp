@@ -1,4 +1,5 @@
 import { db } from "./firebase-config.js";
+import { criarEtiquetaManutencao } from "./servicosOrientacao.mjs?v=1.0.0";
 
 import {
   collection,
@@ -355,6 +356,11 @@ function createServiceCard(service) {
   `;
 
   cardContent.appendChild(cardName);
+  const etiquetaManutencao = criarEtiquetaManutencao(serviceName);
+  if (etiquetaManutencao) {
+    cardContent.appendChild(etiquetaManutencao);
+    listItem.setAttribute("aria-label", `Selecionar ${serviceName}. Somente para quem já possui a aplicação.`);
+  }
   cardContent.appendChild(cardDescription);
 
   cardTop.appendChild(icon);
