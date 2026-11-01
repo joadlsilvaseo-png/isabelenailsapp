@@ -20,6 +20,7 @@
 
   <link rel="stylesheet" href="base.css?v=1.0.4">
   <link rel="stylesheet" href="manicure.css?v=2.0.0">
+  <link rel="stylesheet" href="servicos-orientacao.css?v=1.0.0">
 </head>
 
 <body data-page="manicure">
@@ -106,7 +107,15 @@
           Selecione um procedimento para continuar
         </p>
 
-        <button type="button" class="manicure-button" disabled>
+                <div class="service-choice-note" role="note">
+          <span class="service-choice-note-icon" aria-hidden="true">i</span>
+          <div class="service-choice-note-content">
+            <strong>Confira antes de agendar</strong>
+            <p>Leia a descrição e escolha o procedimento correto. Manutenção é para quem já possui a aplicação.</p>
+          </div>
+        </div>
+
+<button type="button" class="manicure-button" disabled>
           <span>Continuar para agendamento</span>
 
           <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -168,7 +177,7 @@
 
   </div>
 
-  <script type="module" src="manicure.js?v=2.0.0"></script>
+  <script type="module" src="manicure.js?v=2.0.1"></script>
 
   <script src="app.js?v=2.0.0" defer></script>
 
