@@ -204,10 +204,11 @@ function criarPeriodo(titulo, slots) {
         ? "calendario-sem-inicio" : "calendario-inicio-limitado");
     }
     botao.setAttribute("aria-pressed", String(selecionado));
-    botao.setAttribute("aria-label", `${formatoHora(minuto)}, ${estadoVisual}. ${regra.detalhe}`);
-    botao.title = reservado
+    const detalheVisual = reservado
       ? "Horário ocupado por agendamento ou reserva PIX."
       : fechado ? "Intervalo fechado manualmente pela profissional." : regra.detalhe;
+    botao.setAttribute("aria-label", `${formatoHora(minuto)}, ${estadoVisual}. ${detalheVisual}`);
+    botao.title = detalheVisual;
     if (reservado) botao.classList.add("horario-ocupado");
     if (fechado) botao.classList.add("calendario-fechado");
     if (selecionado) botao.classList.add("calendario-selecionado");
