@@ -432,12 +432,9 @@ function obterIntervalosBloqueadosFixos(dataIso) {
    * 6 = Sábado
    */
 
-  const intervalos = diaSemana === 6 ? [] : [
-    {
-      start: timeToMins("13:30"),
-      end: timeToMins("14:00"),
-    },
-  ];
+  // Não há pausa fixa de almoço. O intervalo é fechado manualmente
+  // pela administradora no Gerenciar Calendário quando necessário.
+  const intervalos = [];
 
   if (diaSemana === 2) {
     intervalos.push({
