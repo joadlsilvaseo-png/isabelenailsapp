@@ -134,8 +134,8 @@ export function listarSlotsGerenciaveis(dataIso, agora = new Date()) {
   const slots = [];
   for (const [inicio, fim] of limites[dia] || []) {
     for (let minuto = inicio; minuto + 30 <= fim; minuto += 30) {
-      // Pausa fixa em dias úteis; sábado permite 13h30 normalmente.
-      if (dia !== 6 && minuto === 810) continue;
+      // A administradora pode fechar qualquer intervalo dentro da
+      // janela de atendimento, inclusive 13h30–14h quando houver expediente.
       slots.push(minuto);
     }
   }
