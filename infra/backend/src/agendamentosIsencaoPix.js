@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { validarHorarioPix } from "./pixDisponibilidade.js";
+import { validarServicoDezembro2026 } from "./agendamentoRegras.mjs";
 import { possuiBloqueio } from "./agendaBloqueios.js";
 import { encontrarConflitoAgendamentoPix } from "./pixDocumentoAgendamento.js";
 
@@ -173,6 +174,8 @@ export async function criarAgendamentoIsento({ pool, db, uid, dados, dependencie
     throw new ErroIsencaoPix(404, "Serviço indisponível");
   }
   const servico = servicoSnap.data();
+  const permitido = validarServicoDezembro2026(data, servico);
+  if (!permitido.valido) throw new ErroIsencaoPix(400, permitido.motivo, "SERVICO_INDISPONIVEL");
   const duracao = Number(servico.duracao ?? servico.duracaoMinutos ?? servico.tempo);
   const periodo = (dependencies.validarHorario || validarHorarioPix)(data, horario, duracao);
   if (!periodo.valido) throw new ErroIsencaoPix(400, periodo.motivo, "HORARIO_INVALIDO");
@@ -339,6 +342,8 @@ export async function reagendarComBloqueio({ pool, db, uid, dados, dependencies 
     throw new ErroIsencaoPix(404, "Serviço indisponível");
   }
   const servico = servicoSnap.data();
+  const permitido = validarServicoDezembro2026(data, servico);
+  if (!permitido.valido) throw new ErroIsencaoPix(400, permitido.motivo, "SERVICO_INDISPONIVEL");
   const duracao = Number(servico.duracao ?? servico.duracaoMinutos ?? servico.tempo);
   const periodo = (dependencies.validarHorario || validarHorarioPix)(data, horario, duracao);
   if (!periodo.valido) throw new ErroIsencaoPix(400, periodo.motivo, "HORARIO_INVALIDO");
