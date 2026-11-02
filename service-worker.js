@@ -222,6 +222,7 @@ self.addEventListener("fetch", (event) => {
   const arquivoDinamico =
     requestUrl.pathname.endsWith(".css") ||
     requestUrl.pathname.endsWith(".js") ||
+    requestUrl.pathname.endsWith(".mjs") ||
     requestUrl.pathname.endsWith(".json") ||
     requestUrl.pathname.endsWith(".webmanifest");
 
