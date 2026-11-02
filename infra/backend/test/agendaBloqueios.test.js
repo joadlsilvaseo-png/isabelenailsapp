@@ -127,6 +127,7 @@ test("slots administrativos seguem expediente especial e permitem dezembro", () 
 test("Gerenciar Calendário não oferece intervalos fora do expediente", () => {
   for (const data of ["2026-11-05", "2026-11-06"]) {
     const slots = listarSlotsGerenciaveis(data, FIXO);
+    assert.equal(slots.includes(810), true); // 13h30–14h pode ser fechado manualmente
     assert.equal(slots.includes(1110), true); // 18h30–19h
     assert.equal(slots.includes(1140), false); // a partir das 19h
     assert.equal(slots.some((minuto) => minuto > 1140), false);
