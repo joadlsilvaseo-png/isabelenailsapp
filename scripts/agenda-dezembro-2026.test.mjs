@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import {
   obterExpedienteEspecialDezembro2026,
+  AGENDA_DEZEMBRO_2026_ABERTA,
   validarDataNaJanela,
   validarHorarioEspecial,
   validarServicoDezembro2026,
@@ -16,6 +17,7 @@ const dataDia = dia => `2026-12-${String(dia).padStart(2, "0")}`;
 const hora = m => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 
 test("todos os dias de dezembro permanecem fechados ao agendamento público", () => {
+  assert.equal(AGENDA_DEZEMBRO_2026_ABERTA, false);
   for (let dia = 1; dia <= 31; dia++) {
     const data = dataDia(dia);
     assert.equal(validarDataNaJanela(data, AGORA).valido, false, data);
@@ -137,6 +139,6 @@ test("backend de criação e reagendamento usa as mesmas restrições comerciais
   assert.match(reservas, /validarServicoDezembro2026\(data, servico\)/);
   assert.equal((isencao.match(/validarServicoDezembro2026\(data, servico\)/g) || []).length, 2);
   assert.match(admin, /!listarSlotsGerenciaveis\(data, agora\)\.length/);
-  assert.match(frontend, /const dezembroBloqueado = dataIso\.startsWith\("2026-12"\)/);
+  assert.match(frontend, /const dezembroBloqueado = dataIso\.startsWith\("2026-12"\) && !AGENDA_DEZEMBRO_2026_ABERTA/);
   assert.match(frontend, /validarServicoDezembro2026\(dataIso, servicoInfo\)/);
 });
