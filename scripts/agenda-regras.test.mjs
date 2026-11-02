@@ -110,6 +110,7 @@ test("terça, quarta, quinta, sexta e sábado mantêm os slots administrativos",
   assert.equal(listarSlotsGerenciaveis(dataDoDia(6), agora).includes(960), true);
   for (const dia of [4, 5]) {
     const slots = listarSlotsGerenciaveis(dataDoDia(dia), agora);
+    assert.equal(slots.includes(810), true); // A pausa será fechada pela admin, não automaticamente.
     assert.equal(slots.includes(1110), true);
     assert.equal(slots.includes(1140), false);
   }
