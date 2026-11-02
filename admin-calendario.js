@@ -1,7 +1,7 @@
 import { auth, db } from "./firebase-config.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
 import { doc, getDoc } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
-import { obterMesesGerenciaveis, listarSlotsGerenciaveis } from "./infra/backend/src/agendamentoRegras.mjs?v=2.0.2";
+import { obterMesesGerenciaveis, listarSlotsGerenciaveis, obterExpedienteEspecialDezembro2026 } from "./infra/backend/src/agendamentoRegras.mjs?v=2.0.3";
 import { obterRegraVisualDoIntervalo } from "./admin-calendario-regras.mjs";
 import {
   alternarIntervalo,
@@ -299,7 +299,9 @@ function renderizarDatas() {
   while (cursor <= fim) {
     const dia = cursor.getUTCDay();
     const data = cursor.toISOString().slice(0, 10);
-    if (dia >= 2 && dia <= 6 && listarSlotsGerenciaveis(data).length) datas.push({ data, dia, cursor: new Date(cursor) });
+    const especial = obterExpedienteEspecialDezembro2026(data);
+    if ((especial ? especial.aberto : dia >= 2 && dia <= 6)
+        && listarSlotsGerenciaveis(data).length) datas.push({ data, dia, cursor: new Date(cursor) });
     cursor.setUTCDate(cursor.getUTCDate() + 1);
   }
   if (!datas.length) {
