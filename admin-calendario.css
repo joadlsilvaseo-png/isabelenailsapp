@@ -34,8 +34,25 @@
 .calendario-legenda {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 10px 14px;
+  font-size: 12px;
+  line-height: 1.4;
 }
+.calendario-legenda .legend-dot {
+  flex: 0 0 9px;
+  width: 9px;
+  height: 9px;
+}
+.calendario-legenda-sem-inicio,
+.calendario-legenda-inicio-limitado {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: 0 0 9px;
+}
+.calendario-legenda-sem-inicio { background: #667684; }
+.calendario-legenda-inicio-limitado { background: #b77c36; }
 .calendario-legenda-fechado {
   display: inline-block;
   width: 9px;
@@ -47,6 +64,34 @@
   background: #eee6ed;
   color: #654563;
   border-color: #b9a3b9;
+}
+/* Apenas a apresentação muda: fechar/reabrir continua controlado pelas reservas e pelo banco. */
+.agendamento-time-grid .agendamento-time {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 54px;
+  padding: 6px 4px;
+  font-size: 12px;
+  line-height: 1.25;
+}
+.agendamento-time.calendario-sem-inicio {
+  background: #e9edf0;
+  border-color: #b9c4ca;
+  color: #394e5b;
+}
+.agendamento-time.calendario-inicio-limitado {
+  background: #fff2e1;
+  border-color: #dfba88;
+  color: #77501e;
+}
+.calendario-etiqueta-horario {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
 }
 .agendamento-time.calendario-selecionado {
   background: #7c334c !important;
