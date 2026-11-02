@@ -1,4 +1,4 @@
-import { validarHorarioEspecialSemanal } from "./infra/backend/src/agendamentoRegras.mjs";
+import { validarHorarioEspecial, obterExpedienteEspecialDezembro2026 } from "./infra/backend/src/agendamentoRegras.mjs";
 import { obterLimitesAtendimentoSemanal } from "./agendamentoDisponibilidade.js";
 
 /**
@@ -22,12 +22,15 @@ export function obterRegraVisualDoIntervalo(dataIso, inicioMinuto) {
   }
 
   const diaSemana = data.getUTCDay();
-  if (diaSemana === 0 || diaSemana === 1) {
+  const especial = obterExpedienteEspecialDezembro2026(dataIso);
+  if (especial && !especial.aberto || !especial && (diaSemana === 0 || diaSemana === 1)) {
     return { tipo: "sem-inicio", detalhe: "Dia sem atendimento ao público." };
   }
 
-  const { minAbertura, minUltimoInicio, minFechamento } =
-    obterLimitesAtendimentoSemanal(diaSemana);
+  const limites = obterLimitesAtendimentoSemanal(diaSemana);
+  const minAbertura = especial?.inicioMinuto ?? limites.minAbertura;
+  const minFechamento = especial?.encerramentoMinuto ?? limites.minFechamento;
+  const minUltimoInicio = especial ? minFechamento - 30 : limites.minUltimoInicio;
   const maxDuracao = Math.min(600, minFechamento - inicioMinuto);
   if (inicioMinuto < minAbertura || inicioMinuto > minUltimoInicio || maxDuracao < 1) {
     return {
@@ -40,7 +43,8 @@ export function obterRegraVisualDoIntervalo(dataIso, inicioMinuto) {
   // Por isso percorremos os minutos permitidos, em vez de presumir durações do catálogo.
   const duracoes = [];
   for (let duracao = 1; duracao <= maxDuracao; duracao++) {
-    if (validarHorarioEspecialSemanal(diaSemana, inicioMinuto, duracao)) {
+    const hora = `${String(Math.floor(inicioMinuto / 60)).padStart(2, "0")}:${String(inicioMinuto % 60).padStart(2, "0")}`;
+    if (validarHorarioEspecial(dataIso, hora, duracao)) {
       duracoes.push(duracao);
     }
   }
@@ -62,9 +66,8 @@ export function obterRegraVisualDoIntervalo(dataIso, inicioMinuto) {
   // Na terça/quarta há inícios e durações definidos especificamente.
   // No sábado, as exceções começam às 15h. No fim do expediente,
   // o início pode aceitar somente atendimentos mais curtos.
-  const inicioCondicionado = diaSemana === 2 || diaSemana === 3
-    || (diaSemana === 6 && inicioMinuto >= 900)
-    || maximo < 120;
+  const inicioCondicionado = (!especial && (diaSemana === 2 || diaSemana === 3
+    || (diaSemana === 6 && inicioMinuto >= 900))) || maximo < 120;
 
   if (inicioCondicionado) {
     return {
