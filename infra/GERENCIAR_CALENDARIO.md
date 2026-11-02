@@ -41,9 +41,12 @@ reservas existentes nunca são alteradas. O limite é 93 datas e 2.400
 intervalos por solicitação.
 
 `GET /pix/disponibilidade` continua considerando bloqueios administrativos,
-reservas PIX e agendamentos confirmados. As regras de dias/horários públicos,
-almoço, cancelamento, reagendamento e bloqueio público de dezembro não são
-alteradas por esta funcionalidade.
+reservas PIX e agendamentos confirmados. Não há mais pausa automática de almoço:
+a profissional decide quando fechar ou reabrir intervalos no Gerenciar Calendário.
+Bloqueios já cadastrados em `public.agenda_bloqueios` não são removidos e continuam
+impedindo reservas. As janelas especiais de terça e quarta, horários de abertura/
+fechamento, regras de cancelamento, reagendamento e bloqueio público de dezembro
+permanecem inalterados.
 
 ## Erros da consulta na tela
 
