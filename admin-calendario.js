@@ -1,7 +1,7 @@
 import { auth, db } from "./firebase-config.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
 import { doc, getDoc } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
-import { obterMesesGerenciaveis, listarSlotsGerenciaveis } from "./infra/backend/src/agendamentoRegras.mjs";
+import { obterMesesGerenciaveis, listarSlotsGerenciaveis } from "./infra/backend/src/agendamentoRegras.mjs?v=2.0.2";
 import {
   alternarIntervalo,
   agruparIntervalos,
