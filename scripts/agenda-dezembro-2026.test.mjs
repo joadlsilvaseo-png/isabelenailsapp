@@ -82,7 +82,7 @@ test("domingo 20, segunda 14/21/28 e quarta 16 são exceções reais", () => {
   }
   assert.equal(validarHorarioEspecial("2026-12-16", "12:30", 30), false);
   assert.equal(validarHorarioEspecial("2026-12-16", "13:00", 60), true);
-  assert.equal(obterRegraVisualDoIntervalo("2026-12-20", 420).tipo, "livre");
+  assert.equal(obterRegraVisualDoIntervalo("2026-12-20", 420).tipo, "inicio-limitado"); // Restrição de pedicure.
   assert.equal(obterRegraVisualDoIntervalo("2026-12-16", 750).tipo, "sem-inicio");
 });
 
