@@ -8,6 +8,7 @@ import { getFirestore } from "firebase-admin/firestore";
 
 import { verificarUsuario } from "./pushSubscriptions.js";
 import { validarHorarioPix } from "./pixDisponibilidade.js";
+import { validarServicoDezembro2026 } from "./agendamentoRegras.mjs";
 import { verificarConflitoFirestore } from "./pixAgendaFirestore.js";
 import { possuiBloqueio } from "./agendaBloqueios.js";
 import {
@@ -238,6 +239,8 @@ export async function criarReservaPix(req, res, pool) {
 
     const servico = servicoSnap.data();
     const duracao = Number(servico.duracao);
+    const permitido = validarServicoDezembro2026(data, servico);
+    if (!permitido.valido) throw new ErroReserva(400, permitido.motivo);
 
     const periodo = validarHorarioPix(data, horario, duracao);
 
