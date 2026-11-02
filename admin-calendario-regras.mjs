@@ -42,8 +42,8 @@ export function obterRegraVisualDoIntervalo(dataIso, inicioMinuto) {
   // O cadastro admite durações em minutos, inclusive serviços não múltiplos de 30.
   // Por isso percorremos os minutos permitidos, em vez de presumir durações do catálogo.
   const duracoes = [];
+  const hora = `${String(Math.floor(inicioMinuto / 60)).padStart(2, "0")}:${String(inicioMinuto % 60).padStart(2, "0")}`;
   for (let duracao = 1; duracao <= maxDuracao; duracao++) {
-    const hora = `${String(Math.floor(inicioMinuto / 60)).padStart(2, "0")}:${String(inicioMinuto % 60).padStart(2, "0")}`;
     if (validarHorarioEspecial(dataIso, hora, duracao)) {
       duracoes.push(duracao);
     }
@@ -66,13 +66,16 @@ export function obterRegraVisualDoIntervalo(dataIso, inicioMinuto) {
   // Na terça/quarta há inícios e durações definidos especificamente.
   // No sábado, as exceções começam às 15h. No fim do expediente,
   // o início pode aceitar somente atendimentos mais curtos.
-  const inicioCondicionado = (!especial && (diaSemana === 2 || diaSemana === 3
+  const restricaoDeServico = /^2026-12-(17|18|19|20|21|22|23|24)$/.test(dataIso);
+  const inicioCondicionado = restricaoDeServico || (!especial && (diaSemana === 2 || diaSemana === 3
     || (diaSemana === 6 && inicioMinuto >= 900))) || maximo < 120;
 
   if (inicioCondicionado) {
+    const orientacaoServico = restricaoDeServico
+      ? " Existem restrições de serviços neste dia." : "";
     return {
       tipo: "inicio-limitado",
-      detalhe: `Início permitido com regras de duração. ${descricaoDuracoes}. Bloqueios manuais continuam disponíveis.`,
+      detalhe: `Início com regras de duração. ${descricaoDuracoes}.${orientacaoServico} Bloqueios manuais continuam disponíveis.`,
       duracoesPermitidas: duracoes,
     };
   }
