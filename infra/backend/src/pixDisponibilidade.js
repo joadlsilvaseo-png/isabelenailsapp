@@ -57,10 +57,8 @@ export function validarHorarioPix(dataIso, horario, duracao, agora = new Date())
     return horarioInvalido("Fora do horario permitido");
   }
 
-  // Pausa fixa de 30 minutos nos dias úteis; sábado não tem almoço fixo.
-  if (!sabado && inicio < 14 * 60 && fim > 13 * 60 + 30) {
-    return horarioInvalido("Intervalo de almoco indisponivel");
-  }
+  // Sem pausa fixa: intervalos manuais, reservas e agendamentos são
+  // revalidados pelas rotas de disponibilidade e confirmação.
 
   if (!validarHorarioEspecial(dataIso, horario, duracao)) {
     return horarioInvalido(
