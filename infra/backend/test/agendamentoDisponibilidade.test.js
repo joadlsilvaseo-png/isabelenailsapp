@@ -88,10 +88,10 @@ test("quinta encerra atendimento às 19h e não gera horários posteriores", () 
     minUltimoInicio: 1110,
     minFechamento: 1140,
   });
-  for (const [horario, duracao] of [["11:00", 120], ["12:00", 60], ["12:30", 60], ["13:00", 30], ["14:00", 120], ["18:00", 60], ["18:30", 30]]) {
+  for (const [horario, duracao] of [["11:00", 120], ["12:00", 60], ["12:00", 120], ["12:30", 60], ["13:00", 30], ["13:00", 60], ["13:30", 30], ["13:30", 90], ["14:00", 120], ["18:00", 60], ["18:30", 30]]) {
     conferir("2026-11-05", horario, duracao, true);
   }
-  for (const [horario, duracao] of [["09:00", 60], ["10:30", 60], ["12:00", 120], ["13:00", 60], ["13:30", 30], ["18:30", 60], ["19:00", 30], ["19:30", 60]]) {
+  for (const [horario, duracao] of [["09:00", 60], ["10:30", 60], ["18:30", 60], ["19:00", 30], ["19:30", 60]]) {
     conferir("2026-11-05", horario, duracao, false);
   }
 });
@@ -103,10 +103,10 @@ test("sexta também encerra atendimento às 19h", () => {
     minUltimoInicio: 1110,
     minFechamento: 1140,
   });
-  for (const [horario, duracao] of [["09:00", 120], ["11:30", 60], ["12:00", 60], ["12:30", 60], ["13:00", 30], ["14:00", 120], ["18:00", 60], ["18:30", 30]]) {
+  for (const [horario, duracao] of [["09:00", 120], ["11:30", 60], ["12:00", 60], ["12:00", 120], ["12:30", 60], ["13:00", 30], ["13:00", 60], ["13:30", 30], ["13:30", 90], ["14:00", 120], ["18:00", 60], ["18:30", 30]]) {
     conferir("2026-11-06", horario, duracao, true);
   }
-  for (const [horario, duracao] of [["12:00", 120], ["13:00", 60], ["13:30", 30], ["18:30", 60], ["19:00", 30], ["19:30", 60]]) {
+  for (const [horario, duracao] of [["18:30", 60], ["19:00", 30], ["19:30", 60]]) {
     conferir("2026-11-06", horario, duracao, false);
   }
 });
@@ -139,21 +139,27 @@ test("sábado mantém encerramento às 18h com exceção às 16h para 150 min", 
   }
 });
 
-test("pausa de almoço continua nos dias úteis e não bloqueia o sábado", () => {
-  for (const data of ["2026-11-03", "2026-11-04", "2026-11-05", "2026-11-06"]) {
-    for (const duracao of [30, 60, 120]) {
-      conferir(data, "13:30", duracao, false);
+test("não existe pausa fixa: quinta, sexta e sábado aceitam atendimentos atravessando 13h30", () => {
+  for (const data of ["2026-11-05", "2026-11-06", "2026-11-07"]) {
+    for (const [horario, duracao] of [
+      ["12:00", 120], ["12:30", 90], ["13:00", 60], ["13:30", 30], ["13:30", 60],
+      ["13:30", 90], ["14:00", 60],
+    ]) {
+      conferir(data, horario, duracao, true);
     }
-    conferir(data, "14:00", 30, true);
   }
-  for (const data of ["2026-11-05", "2026-11-06"]) {
-    conferir(data, "12:00", 60, true);
-    conferir(data, "12:30", 60, true);
-    conferir(data, "13:00", 30, true);
-    conferir(data, "12:00", 120, false);
-    conferir(data, "13:00", 60, false);
+
+  // Terça e quarta preservam janelas especiais: não são bloqueios de almoço.
+  for (const data of ["2026-11-03", "2026-11-04"]) {
+    conferir(data, "13:30", 60, false);
+    conferir(data, "14:00", 60, true);
   }
-  conferir("2026-11-07", "12:00", 120, true);
-  conferir("2026-11-07", "13:00", 60, true);
-  conferir("2026-11-07", "13:30", 60, true);
+});
+
+test("bloqueio administrativo no almoço prevalece mesmo sem pausa automática", () => {
+  const manual = [{ inicioMinuto: 810, fimMinuto: 840 }]; // 13h30–14h
+  assert.equal(intervaloSobrepoeDisponibilidade(780, 840, manual), true); // 13h–14h
+  assert.equal(intervaloSobrepoeDisponibilidade(780, 900, manual), true); // 13h–15h
+  assert.equal(intervaloSobrepoeDisponibilidade(840, 900, manual), false); // 14h em diante
+  assert.equal(validarHorarioPix("2026-11-05", "13:30", 60, AGORA).valido, true);
 });
