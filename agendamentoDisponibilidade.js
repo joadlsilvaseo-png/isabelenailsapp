@@ -3,7 +3,7 @@
  * Terça e quarta mantêm suas regras especiais em agendamento.js.
  * Quinta e sexta encerram os atendimentos às 19h.
  * Sábado: inícios até 17h, término às 18h, salvo 16h/150 min (18h30).
- * A pausa fixa de 13h30 a 14h não se aplica aos sábados.
+ * Sem pausa fixa de almoço: intervalos são gerenciados manualmente no calendário.
  */
 export function obterLimitesAtendimentoSemanal(diaSemana) {
   const horarioEstendido = diaSemana === 4 || diaSemana === 5;
