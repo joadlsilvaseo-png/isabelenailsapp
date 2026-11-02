@@ -92,7 +92,9 @@ function validarData(data, agora) {
   }
   const validacao = validarDataGerenciavel(data, agora);
   if (!validacao.valido) throw new ErroCalendario(400, validacao.motivo);
-  if (![2, 3, 4, 5, 6].includes(validacao.diaSemana)) {
+  // Usa o expediente real da data: inclui segundas e domingos abertos
+  // excepcionalmente em dezembro, mas rejeita todos os dias fechados.
+  if (!listarSlotsGerenciaveis(data, agora).length) {
     throw new ErroCalendario(400, "Dia sem atendimento");
   }
 }
