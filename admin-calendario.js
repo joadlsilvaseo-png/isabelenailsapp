@@ -2,6 +2,7 @@ import { auth, db } from "./firebase-config.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
 import { doc, getDoc } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
 import { obterMesesGerenciaveis, listarSlotsGerenciaveis } from "./infra/backend/src/agendamentoRegras.mjs?v=2.0.2";
+import { obterRegraVisualDoIntervalo } from "./admin-calendario-regras.mjs";
 import {
   alternarIntervalo,
   agruparIntervalos,
@@ -180,13 +181,33 @@ function criarPeriodo(titulo, slots) {
     const reservado = estaOcupado(minuto);
     const fechado = estaFechado(minuto);
     const selecionado = selecionados.has(minuto);
+    // Regra visual: não confundir início de serviço com intervalo administrativo.
+    // Mesmo sem início válido, o intervalo continua fechável para proteger
+    // serviços longos e compromissos feitos fora do aplicativo.
+    const regra = obterRegraVisualDoIntervalo(estado.data, minuto);
     const elegivel = estado.modo === "fechar" ? !fechado : fechado;
     const botao = document.createElement("button");
     botao.type = "button";
     botao.className = "agendamento-time";
-    botao.textContent = formatoHora(minuto);
+    const hora = document.createElement("span");
+    hora.textContent = formatoHora(minuto);
+    botao.append(hora);
+    const estadoVisual = reservado ? "reservado" : fechado ? "fechado"
+      : regra.tipo === "sem-inicio" ? "sem início de atendimento"
+        : regra.tipo === "inicio-limitado" ? "início com duração limitada" : "disponível";
+    if (!reservado && !fechado && regra.tipo !== "livre") {
+      const etiqueta = document.createElement("span");
+      etiqueta.className = "calendario-etiqueta-horario";
+      etiqueta.textContent = regra.tipo === "sem-inicio" ? "Sem início" : "Com regra";
+      botao.append(etiqueta);
+      botao.classList.add(regra.tipo === "sem-inicio"
+        ? "calendario-sem-inicio" : "calendario-inicio-limitado");
+    }
     botao.setAttribute("aria-pressed", String(selecionado));
-    botao.setAttribute("aria-label", `${formatoHora(minuto)}, ${reservado ? "reservado" : fechado ? "fechado" : "disponível"}`);
+    botao.setAttribute("aria-label", `${formatoHora(minuto)}, ${estadoVisual}. ${regra.detalhe}`);
+    botao.title = reservado
+      ? "Horário ocupado por agendamento ou reserva PIX."
+      : fechado ? "Intervalo fechado manualmente pela profissional." : regra.detalhe;
     if (reservado) botao.classList.add("horario-ocupado");
     if (fechado) botao.classList.add("calendario-fechado");
     if (selecionado) botao.classList.add("calendario-selecionado");
@@ -235,7 +256,8 @@ function renderizarHorarios() {
   criarPeriodo("Manhã", slots.filter((m) => m < 720));
   criarPeriodo("Tarde", slots.filter((m) => m >= 720));
   const elegiveis = slots.filter((m) => !estaOcupado(m) && (estado.modo === "fechar" ? !estaFechado(m) : estaFechado(m))).length;
-  el.status.textContent = estado.modo === "fechar" ? `${elegiveis} disponíveis` : `${elegiveis} fechados`;
+  el.status.textContent = estado.modo === "fechar"
+    ? `${elegiveis} intervalos para fechar` : `${elegiveis} fechados`;
   if (!elegiveis) {
     const vazio = document.createElement("p");
     vazio.className = "agendamento-time-state";
