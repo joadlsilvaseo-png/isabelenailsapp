@@ -1,7 +1,7 @@
 import { auth, db } from "./firebase-config.js";
 import { consultarDisponibilidadePix, reagendarAgendamentoApi } from "./agendamentosApi.js";
 import { consultarIntervalosDisponibilidade, intervaloSobrepoeDisponibilidade, obterLimitesAtendimentoSemanal } from "./agendamentoDisponibilidade.js";
-import { obterJanelaAgendamento, validarDataNaJanela, validarHorarioEspecial } from "./infra/backend/src/agendamentoRegras.mjs?v=2.0.2";
+import { obterJanelaAgendamento, validarDataNaJanela, validarHorarioEspecial, obterExpedienteEspecialDezembro2026, validarServicoDezembro2026 } from "./infra/backend/src/agendamentoRegras.mjs?v=2.0.3";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
 import {
   collection,
@@ -263,12 +263,13 @@ function gerarCalendarioDias(container) {
   const limite = new Date(fimAno, fimMes - 1, fimDia, 12, 0, 0);
 
   while (cursor <= limite) {
-    const dezembroBloqueado = cursor.getFullYear() === 2026 && cursor.getMonth() === 11;
+    const dataAtual = new Date(cursor);
+    const dataIso = formatarDataIsoLocal(dataAtual);
+    const especial = obterExpedienteEspecialDezembro2026(dataIso);
+    // December stays hidden until an explicit future release.
+    const dezembroBloqueado = dataIso.startsWith("2026-12");
 
-    if (diasAtendimento.has(cursor.getDay()) && !dezembroBloqueado) {
-      const dataAtual = new Date(cursor);
-
-      const dataIso = formatarDataIsoLocal(dataAtual);
+    if (!dezembroBloqueado && (especial ? especial.aberto : diasAtendimento.has(cursor.getDay()))) {
 
       const botao = document.createElement("button");
 
@@ -436,7 +437,7 @@ function obterIntervalosBloqueadosFixos(dataIso) {
   // pela administradora no Gerenciar Calendário quando necessário.
   const intervalos = [];
 
-  if (diaSemana === 2) {
+  if (diaSemana === 2 && !obterExpedienteEspecialDezembro2026(dataIso)) {
     intervalos.push({
       start: timeToMins("09:00"),
       end: timeToMins("13:30"),
@@ -445,7 +446,7 @@ function obterIntervalosBloqueadosFixos(dataIso) {
 
   return intervalos;
 }
-async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null) {
+async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null, servicoInfo = null) {
   const requisicao = (renderizarHorarios.requisicao || 0) + 1;
   renderizarHorarios.requisicao = requisicao;
   const container = document.querySelector(".agendamento-times");
@@ -469,6 +470,12 @@ async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null) {
   }
 
   try {
+    const regraServico = validarServicoDezembro2026(dataIso, servicoInfo);
+    if (!regraServico.valido) {
+      container.textContent = regraServico.motivo;
+      if (availabilityElement) availabilityElement.textContent = "Serviço indisponível";
+      return;
+    }
     const statusValidos = ["agendado", "reagendado", "confirmado"];
     const usuario = await aguardarUsuarioFirebase();
     if (!usuario) throw new Error("Entre na sua conta para consultar os horários.");
@@ -521,8 +528,11 @@ async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null) {
       ...intervalosBloqueadosFixos,
     ];
 
-    const { minAbertura, minUltimoInicio, minFechamento } =
-      obterLimitesAtendimentoSemanal(diaSemanaSelecionado);
+    const especial = obterExpedienteEspecialDezembro2026(dataIso);
+    const limites = obterLimitesAtendimentoSemanal(diaSemanaSelecionado);
+    const minAbertura = especial?.inicioMinuto ?? limites.minAbertura;
+    const minFechamento = especial?.encerramentoMinuto ?? limites.minFechamento;
+    const minUltimoInicio = especial ? minFechamento - 30 : limites.minUltimoInicio;
 
     const horariosManha = [];
     const horariosTarde = [];
@@ -531,15 +541,15 @@ async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null) {
 
     // Quarta-feira: exibir somente os inícios aprovados pela profissional.
     // A duração de cada serviço é validada pela regra compartilhada com o backend.
-    const iniciosPossiveis = diaSemanaSelecionado === 3
+    const iniciosPossiveis = !especial && diaSemanaSelecionado === 3
       ? ["09:00", "10:00", "10:30", "11:00", "14:00", "15:00"].map(timeToMins)
       : Array.from({ length: Math.floor((minUltimoInicio - minAbertura) / 30) + 1 }, (_, indice) => minAbertura + indice * 30);
 
     for (const atual of iniciosPossiveis) {
-      if (diaSemanaSelecionado === 2 && atual === timeToMins("15:30")) continue;
+      if (!especial && diaSemanaSelecionado === 2 && atual === timeToMins("15:30")) continue;
       const fimServico = atual + duracaoServico;
 
-      if (fimServico > minFechamento && diaSemanaSelecionado !== 2 && diaSemanaSelecionado !== 3) {
+      if (fimServico > minFechamento && (especial || (diaSemanaSelecionado !== 2 && diaSemanaSelecionado !== 3))) {
         continue;
       }
 
@@ -620,10 +630,14 @@ async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null) {
       container.appendChild(periodo);
     }
 
-    criarGrupoHorario("Manhã", diaSemanaSelecionado === 4 ? "Das 11h às 12h" : "Das 9h às 12h", horariosManha);
+    criarGrupoHorario("Manhã", especial
+      ? `Expediente ${minsToTime(minAbertura)}–${minsToTime(minFechamento)}`
+      : diaSemanaSelecionado === 4 ? "Das 11h às 12h" : "Das 9h às 12h", horariosManha);
 
-    criarGrupoHorario("Tarde", [4, 5, 6].includes(diaSemanaSelecionado)
-      ? "Inícios até 19h" : "Das 12h às 18h", horariosTarde);
+    criarGrupoHorario("Tarde", especial
+      ? `Término dos serviços até ${minsToTime(minFechamento)}`
+      : [4, 5, 6].includes(diaSemanaSelecionado)
+        ? "Inícios até 19h" : "Das 12h às 18h", horariosTarde);
 
     if (availabilityElement) {
       availabilityElement.textContent =
@@ -815,7 +829,7 @@ async function inicializarAgendamento() {
       atualizarCabecalhoData(botao);
       atualizarResumoAgendamento();
 
-      renderizarHorarios(dataIso, serviceDuration, reagendarId);
+      renderizarHorarios(dataIso, serviceDuration, reagendarId, serviceInfo);
     });
   });
 
@@ -1025,7 +1039,7 @@ async function inicializarAgendamento() {
     if (dataIso) {
       localStorage.setItem("dataAgendamentoISO", dataIso);
 
-      await renderizarHorarios(dataIso, serviceDuration, reagendarId);
+      await renderizarHorarios(dataIso, serviceDuration, reagendarId, serviceInfo);
     }
   }
 
@@ -1038,7 +1052,7 @@ async function inicializarAgendamento() {
     const dataAtiva = obterDataIso(
       obterSelecionado(datas, "agendamento-date--active") || datas[0],
     );
-    if (dataAtiva) void renderizarHorarios(dataAtiva, serviceDuration, reagendarId);
+    if (dataAtiva) void renderizarHorarios(dataAtiva, serviceDuration, reagendarId, serviceInfo);
   };
   window.addEventListener("pageshow", atualizarAoRetornar);
   document.addEventListener("visibilitychange", atualizarAoRetornar);
