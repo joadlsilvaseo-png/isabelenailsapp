@@ -239,14 +239,14 @@ export async function criarReservaPix(req, res, pool) {
 
     const servico = servicoSnap.data();
     const duracao = Number(servico.duracao);
-    const permitido = validarServicoDezembro2026(data, servico);
-    if (!permitido.valido) throw new ErroReserva(400, permitido.motivo);
-
+    // A agenda pública de dezembro permanece fechada antes de qualquer
+    // validação comercial ou tentativa de reservar um horário.
     const periodo = validarHorarioPix(data, horario, duracao);
-
     if (!periodo.valido) {
       throw new ErroReserva(400, periodo.motivo);
     }
+    const permitido = validarServicoDezembro2026(data, servico);
+    if (!permitido.valido) throw new ErroReserva(400, permitido.motivo);
 
     validarDataFutura(data, horario);
 
