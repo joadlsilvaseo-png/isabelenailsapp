@@ -120,7 +120,7 @@ test("slots administrativos seguem expediente especial e permitem dezembro", () 
   assert.ok(listarSlotsGerenciaveis("2026-11-03", FIXO).includes(900));
   assert.equal(listarSlotsGerenciaveis("2026-11-03", FIXO).includes(540), false);
   assert.ok(listarSlotsGerenciaveis("2026-11-04", FIXO).includes(570)); // Fechar 09:30 afeta início 09h.
-  assert.equal(listarSlotsGerenciaveis("2026-11-04", FIXO).includes(810), false); // Almoço.
+  assert.equal(listarSlotsGerenciaveis("2026-11-04", FIXO).includes(810), false); // Entre os dois períodos autorizados de quarta.
   assert.ok(listarSlotsGerenciaveis("2026-12-03", FIXO).includes(660));
 });
 
