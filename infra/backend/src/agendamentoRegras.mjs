@@ -1,5 +1,6 @@
 const AGENDA_INICIO_ISO = "2026-11-01";
-const DATAS_DEZEMBRO_LIBERADAS = new Set();
+// Interruptor único de abertura pública. NÃO alterar sem autorização expressa.
+export const AGENDA_DEZEMBRO_2026_ABERTA = false;
 
 function partesDataISO(dataIso) {
   if (typeof dataIso !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(dataIso)) return null;
@@ -30,9 +31,14 @@ export function adicionarMesCalendario(dataIso, meses = 1) {
 
 export function obterJanelaAgendamento(agora = new Date()) {
   const hoje = obterHojeSaoPaulo(agora);
+  let fim = adicionarMesCalendario(hoje, 1);
+  // Ao abrir oficialmente dezembro, mostrar o mês inteiro a partir de novembro.
+  // Com a chave falsa, a janela atual continua absolutamente inalterada.
+  if (AGENDA_DEZEMBRO_2026_ABERTA && hoje >= "2026-11-01"
+      && hoje <= "2026-12-31" && fim < "2026-12-31") fim = "2026-12-31";
   return {
     inicio: hoje < AGENDA_INICIO_ISO ? AGENDA_INICIO_ISO : hoje,
-    fim: adicionarMesCalendario(hoje, 1),
+    fim,
   };
 }
 
@@ -77,7 +83,14 @@ export function validarDataNaJanela(dataIso, agora = new Date()) {
   if (!partes) return { valido: false, motivo: "Data inexistente" };
   const janela = obterJanelaAgendamento(agora);
   if (dataIso < janela.inicio || dataIso > janela.fim) return { valido: false, motivo: "Data fora da janela de agendamento" };
-  if (partes.ano === 2026 && partes.mes === 12 && !DATAS_DEZEMBRO_LIBERADAS.has(dataIso)) return { valido: false, motivo: "Agenda de dezembro ainda não disponível" };
+  if (partes.ano === 2026 && partes.mes === 12) {
+    if (!AGENDA_DEZEMBRO_2026_ABERTA) {
+      return { valido: false, motivo: "Agenda de dezembro ainda não disponível" };
+    }
+    if (obterExpedienteEspecialDezembro2026(dataIso)?.aberto === false) {
+      return { valido: false, motivo: "Dia sem atendimento" };
+    }
+  }
   return { valido: true, diaSemana: partes.data.getUTCDay(), janela };
 }
 
