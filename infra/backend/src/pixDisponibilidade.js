@@ -1,4 +1,4 @@
-import { validarDataNaJanela, validarHorarioEspecial } from "./agendamentoRegras.mjs";
+import { validarDataNaJanela, validarHorarioEspecial, obterExpedienteEspecialDezembro2026 } from "./agendamentoRegras.mjs";
 function horarioInvalido(motivo) {
   return { valido: false, motivo };
 }
@@ -42,17 +42,21 @@ export function validarHorarioPix(dataIso, horario, duracao, agora = new Date())
   const fim = inicio + duracao;
   const diaSemana = data.getUTCDay();
 
-  // Atendimento permitido somente de terça a sábado.
-  if (diaSemana === 0 || diaSemana === 1) {
+  const especial = obterExpedienteEspecialDezembro2026(dataIso);
+  // Datas fechadas permanecem indisponíveis, inclusive domingos e feriados.
+  if (especial && !especial.aberto) return horarioInvalido("Dia sem atendimento");
+  if (!especial && (diaSemana === 0 || diaSemana === 1)) {
     return horarioInvalido("Dia sem atendimento");
   }
 
   const horarioEstendido = diaSemana === 4 || diaSemana === 5;
   const sabado = diaSemana === 6;
-  const abertura = diaSemana === 4 ? 660 : 540;
-  const ultimoInicio = sabado ? 1020 : horarioEstendido ? 1110 : 1080;
-  // A exceção das 16h/150 min permite 18h30; demais horários encerram até 18h.
-  const fechamento = sabado ? 1110 : horarioEstendido ? 1140 : 1200;
+  const abertura = especial?.inicioMinuto ?? (diaSemana === 4 ? 660 : 540);
+  // Encerramento é a hora final do serviço, não seu último horário de início.
+  const fechamento = especial?.encerramentoMinuto
+    ?? (sabado ? 1110 : horarioEstendido ? 1140 : 1200);
+  const ultimoInicio = especial ? fechamento - 30
+    : sabado ? 1020 : horarioEstendido ? 1110 : 1080;
   if (inicio < abertura || inicio > ultimoInicio || inicio % 30 !== 0 || fim > fechamento) {
     return horarioInvalido("Fora do horario permitido");
   }
