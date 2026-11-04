@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   atenderAlteracaoServico,
   enviarAtualizacaoCalendar,
+  processarProximaAlteracaoServico,
 } from "../src/agendamentoAlteracaoServico.js";
 import {
   calcularRestanteServicoCentavos,
@@ -49,6 +50,8 @@ function criarFixture(options = {}) {
     block: false,
     failCommitOnce: false,
     failFirestoreOnce: false,
+    failCleanupOnce: Boolean(options.failCleanupOnce),
+    firestoreTxCount: 0,
     calendarPayloads: [],
   };
 
@@ -98,7 +101,12 @@ function criarFixture(options = {}) {
       };
       try {
         const result = await callback(tx);
+        state.firestoreTxCount++;
         if (state.failFirestoreOnce) { state.failFirestoreOnce = false; throw new Error("Firestore write failed"); }
+        if (state.failCleanupOnce && state.firestoreTxCount === 3) {
+          state.failCleanupOnce = false;
+          throw new Error("Firestore cleanup failure");
+        }
         writes.forEach((write) => write());
         return result;
       } finally { release(); }
@@ -138,6 +146,25 @@ function criarFixture(options = {}) {
       }
       if (normalized.startsWith("select r.id as reserva_id")) {
         return { rowCount: state.reservation ? 1 : 0, rows: state.reservation ? [clone(state.reservation)] : [] };
+      }
+      if (normalized.startsWith("with proxima as")) {
+        const entry = [...state.operations.values()].find((item) =>
+          item.estado === "solicitada" || (item.estado === "concluida" && item.ultimo_erro === params[0]));
+        return { rowCount: entry ? 1 : 0, rows: entry ? [{ operation_id: entry.operation_id, estado: entry.estado }] : [] };
+      }
+      if (normalized.startsWith("update public.agendamento_alteracoes_servico set ultimo_erro = $2")) {
+        const entry = state.operations.get(params[0]);
+        if (entry) Object.assign(entry, { ultimo_erro: params[1] });
+        return { rowCount: entry ? 1 : 0, rows: [] };
+      }
+      if (normalized.startsWith("update public.agendamento_alteracoes_servico set ultimo_erro = null")) {
+        const entry = state.operations.get(params[0]);
+        if (entry) Object.assign(entry, { ultimo_erro: null });
+        return { rowCount: entry ? 1 : 0, rows: [] };
+      }
+      if (normalized.startsWith("update public.agendamento_alteracoes_servico set bloqueado_ate = null")) {
+        const entry = state.operations.get(params[0]);
+        return { rowCount: entry ? 1 : 0, rows: [] };
       }
       if (normalized.startsWith("update public.agendamento_alteracoes_servico set cliente_uid")) {
         const op = state.operations.get(params[0]);
@@ -431,4 +458,49 @@ test("sem eventId estável, recusa a operação para não duplicar evento", asyn
   assert.equal(res.status, 409);
   assert.equal(fixture.state.reservation.reserva_fim, 780);
   assert.equal(fixture.state.docs.get(`agendamentos/${APPT}`).idServico, "old");
+});
+
+test("marcador de alteração permanece até o COMMIT e é liberado após sucesso", async () => {
+  const fixture = criarFixture();
+  const originalQuery = fixture.pool.connect.bind(fixture.pool);
+  let markerBeforeCommit;
+  fixture.pool.connect = async () => {
+    const connection = await originalQuery();
+    const oldQuery = connection.query.bind(connection);
+    connection.query = async (sql, params) => {
+      if (String(sql).toLowerCase() === "commit") {
+        markerBeforeCommit = fixture.state.docs.get(`agendamentos/${APPT}`).alteracaoServicoOperacaoPendente;
+      }
+      return oldQuery(sql, params);
+    };
+    return connection;
+  };
+  const res = await execute(fixture);
+  assert.equal(res.status, 200);
+  assert.equal(markerBeforeCommit, OP);
+  assert.equal("alteracaoServicoOperacaoPendente" in fixture.state.docs.get(`agendamentos/${APPT}`), false);
+});
+
+test("falha de limpeza após COMMIT mantém bloqueio e worker libera sem reexecutar Calendar", async () => {
+  const fixture = criarFixture({ failCleanupOnce: true });
+  const res = await execute(fixture);
+  assert.equal(res.status, 200);
+  assert.equal(fixture.state.operations.get(OP).estado, "concluida");
+  assert.equal(fixture.state.docs.get(`agendamentos/${APPT}`).alteracaoServicoOperacaoPendente, OP);
+  const before = fixture.state.calendarPayloads.length;
+  const retry = await processarProximaAlteracaoServico(fixture.pool, fixture.dependencies);
+  assert.equal(retry.marcadorLiberado, true);
+  assert.equal(fixture.state.operations.get(OP).ultimo_erro, null);
+  assert.equal("alteracaoServicoOperacaoPendente" in fixture.state.docs.get(`agendamentos/${APPT}`), false);
+  assert.equal(fixture.state.calendarPayloads.length, before);
+});
+
+test("reuso de chave idempotente incompatível não invalida operação de outro serviço", async () => {
+  const fixture = criarFixture();
+  const original = await execute(fixture);
+  assert.equal(original.status, 200);
+  const conflict = await execute(fixture, request(OP, "long"));
+  assert.equal(conflict.status, 409);
+  assert.equal(fixture.state.operations.get(OP).estado, "concluida");
+  assert.equal(fixture.state.docs.get(`agendamentos/${APPT}`).idServico, "new");
 });
