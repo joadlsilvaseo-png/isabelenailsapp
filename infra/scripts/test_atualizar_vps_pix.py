@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "infra/scripts/atualizar-vps-pix.sh"
 MIGRATION = ROOT / "infra/migrations/012_agendamento_cancelamentos.sql"
 REMINDERS_MIGRATION = ROOT / "infra/migrations/019_lembretes_agendamento.sql"
+SERVICE_CHANGE_MIGRATION = ROOT / "infra/migrations/020_agendamento_alteracoes_servico.sql"
 SOURCE = SCRIPT.read_text(encoding="utf-8")
 
 
@@ -211,6 +212,25 @@ class TestAtualizacaoVpsPix(unittest.TestCase):
         self.assertTrue(sql.rstrip().endswith("COMMIT;"))
         self.assertIn("ADD COLUMN IF NOT EXISTS agendado_para", sql)
         self.assertIn("ADD COLUMN IF NOT EXISTS agendamento_versao", sql)
+        self.assertNotRegex(sql, r"(?im)^\s*(UPDATE|DELETE|DROP|TRUNCATE)\b")
+
+    def test_migracao_020_tem_preflight_integral_antes_da_parada_e_rollback_preservado(self):
+        self.assertIn("020_agendamento_alteracoes_servico.sql", SOURCE)
+        self.assertIn("MIGRATION_020_STATE_SQL", SOURCE)
+        self.assertIn("MIGRATION_020_STATE=applied", SOURCE)
+        self.assertIn("MIGRATION_020_STATE=pending", SOURCE)
+        self.assertIn("Migracao 020 parcial/inconsistente", SOURCE)
+        self.assertIn("COUNT(*) = 26", SOURCE)
+        self.assertIn("COUNT(*) = 10", SOURCE)
+        self.assertIn("HAS_020_DEFAULTS", SOURCE)
+        self.assertLess(SOURCE.index("MIGRATION_020_ROW="), SOURCE.index('compose_snapshot stop "$API_SERVICE"'))
+        self.assertIn('if [[ "$MIGRATION_020_STATE" == pending ]]; then', SOURCE)
+        self.assertIn("MIGRATION_020_APPLIED", SOURCE)
+        sql = SERVICE_CHANGE_MIGRATION.read_text(encoding="utf-8")
+        self.assertTrue(sql.lstrip().startswith("BEGIN;"))
+        self.assertTrue(sql.rstrip().endswith("COMMIT;"))
+        self.assertIn("CREATE TABLE IF NOT EXISTS public.agendamento_alteracoes_servico", sql)
+        self.assertIn("idx_agendamento_alteracoes_servico_pendentes", sql)
         self.assertNotRegex(sql, r"(?im)^\s*(UPDATE|DELETE|DROP|TRUNCATE)\b")
 
     def test_migracao_012_rejeita_duas_variantes_da_constraint_calendar(self):

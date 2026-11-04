@@ -1,4 +1,4 @@
-import { executarAcaoAgendamento } from "./agendamentosApi.js";
+import { executarAcaoAgendamento, alterarServicoAgendamentoApi, consultarAlteracaoServicoApi } from "./agendamentosApi.js";
 import { auth, db } from "./firebase-config.js";
 import { webhookUrl } from "./config.js";
 
@@ -1371,6 +1371,161 @@ function criarBotaoModal({ label, action, variant }) {
   `;
 }
 
+let servicosAlteracaoCache = null;
+
+function minutosParaHorario(minutos) {
+  return `${String(Math.floor(minutos / 60)).padStart(2, "0")}:${String(minutos % 60).padStart(2, "0")}`;
+}
+
+function precoServicoNumero(valor) {
+  return converterValorMonetario(valor);
+}
+
+function obterServicoAtualDoCatalogo() {
+  return servicosAlteracaoCache || [];
+}
+
+function atualizarResumoAlteracaoServico(agendamento) {
+  const select = document.getElementById("admin-servico-novo");
+  const resumo = document.getElementById("admin-alterar-servico-resumo");
+  const confirmar = document.getElementById("admin-alterar-servico-confirmar");
+  if (!select || !resumo || !confirmar) return;
+  const servico = obterServicoAtualDoCatalogo().find((item) => item.id === select.value);
+  if (!servico) { resumo.replaceChildren(); confirmar.disabled = true; return; }
+  const duracaoAtual = Number(agendamento.duracao ?? agendamento.duracaoSnapshot) || 90;
+  const inicioTexto = obterHorario(agendamento).slice(0, 5);
+  const [h, m] = inicioTexto.split(":").map(Number);
+  const inicio = (h || 0) * 60 + (m || 0);
+  const duracaoNova = Number(servico.duracao ?? servico.duracaoMinutos ?? servico.tempo) || 0;
+  const preco = precoServicoNumero(servico.preco ?? servico.valor ?? servico.valorReferencia);
+  const sinalCentavos = Number(agendamento.valorSinalCentavos || 0);
+  const restante = Math.max(0, Math.round(preco * 100) - sinalCentavos) / 100;
+  const diferenca = duracaoAtual - duracaoNova;
+  const itens = [
+    ["Novo preço", formatarValorMonetario(preco)],
+    ["Duração", `${duracaoAtual} min → ${duracaoNova} min`],
+    ["Início preservado", `${formatarDataVisual(obterData(agendamento))} · ${inicioTexto}`],
+    ["Término", `${minutosParaHorario(inicio + duracaoAtual)} → ${minutosParaHorario(inicio + duracaoNova)}`],
+    [diferenca > 0 ? "Tempo liberado" : diferenca < 0 ? "Tempo adicional" : "Agenda", diferenca ? `${Math.abs(diferenca)} min` : "Sem alteração de duração"],
+    ["Sinal PIX preservado", formatarValorMonetario(sinalCentavos / 100)],
+    ["Restante estimado", formatarValorMonetario(restante)],
+  ];
+  resumo.replaceChildren(...itens.map(([rotulo, valor], index) => {
+    const bloco = document.createElement("div");
+    if (index === 2) bloco.className = "wide";
+    const titulo = document.createElement("span");
+    titulo.textContent = rotulo;
+    const conteudo = document.createElement("strong");
+    conteudo.textContent = valor;
+    bloco.append(titulo, conteudo);
+    return bloco;
+  }));
+  confirmar.disabled = false;
+}
+
+async function abrirModalAlterarServico(agendamento) {
+  const modal = document.getElementById("admin-alterar-servico-modal");
+  const select = document.getElementById("admin-servico-novo");
+  const atual = document.getElementById("admin-servico-atual");
+  const erro = document.getElementById("admin-alterar-servico-erro");
+  const confirmar = document.getElementById("admin-alterar-servico-confirmar");
+  if (!modal || !select || !atual || !erro || !confirmar) throw new Error("Modal de alteração de serviço indisponível.");
+  erro.hidden = true;
+  erro.textContent = "";
+  atual.textContent = obterServico(agendamento);
+  confirmar.disabled = true;
+  select.replaceChildren(new Option("Selecione um serviço", ""));
+  if (!servicosAlteracaoCache) {
+    const snapshot = await getDocs(collection(db, "servicos"));
+    servicosAlteracaoCache = snapshot.docs
+      .map((documento) => ({ id: documento.id, ...documento.data() }))
+      .filter((servico) => servico.ativo !== false)
+      .sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"));
+  }
+  for (const servico of servicosAlteracaoCache) {
+    const option = new Option(`${servico.nome || servico.nomeServico || "Serviço"} · ${formatarValorMonetario(precoServicoNumero(servico.preco ?? servico.valor ?? servico.valorReferencia))} · ${Number(servico.duracao ?? servico.duracaoMinutos ?? servico.tempo) || 0} min`, servico.id);
+    select.add(option);
+  }
+  select.value = "";
+  select.onchange = () => atualizarResumoAlteracaoServico(agendamento);
+  modal.hidden = false;
+  document.body.style.overflow = "hidden";
+  document.getElementById("admin-alterar-servico-painel")?.focus();
+}
+
+function fecharModalAlterarServico() {
+  const modal = document.getElementById("admin-alterar-servico-modal");
+  if (modal) modal.hidden = true;
+  document.body.style.overflow = elements.modal?.hidden === false ? "hidden" : "";
+}
+
+const aguardar = (ms) => new Promise((resolver) => setTimeout(resolver, ms));
+
+async function confirmarAlteracaoServico(agendamento) {
+  const select = document.getElementById("admin-servico-novo");
+  const confirmar = document.getElementById("admin-alterar-servico-confirmar");
+  const erro = document.getElementById("admin-alterar-servico-erro");
+  const servico = obterServicoAtualDoCatalogo().find((item) => item.id === select?.value);
+  if (!servico || !confirmar) return;
+  confirmar.disabled = true;
+  confirmar.textContent = "Validando disponibilidade…";
+  if (erro) { erro.hidden = true; erro.textContent = ""; }
+  let manterDesabilitado = false;
+  const storageKey = `admin-alteracao-servico:${agendamento.id}:${servico.id}`;
+  let operationId = null;
+  try { operationId = sessionStorage.getItem(storageKey); } catch {}
+  if (!operationId) {
+    operationId = crypto.randomUUID();
+    try { sessionStorage.setItem(storageKey, operationId); } catch {}
+  }
+  try {
+    const resultado = await alterarServicoAgendamentoApi(auth, {
+      agendamentoId: agendamento.id,
+      servicoId: servico.id,
+      operationId,
+    });
+    let estado = resultado.estado;
+    for (let tentativa = 0; estado !== "concluida" && estado !== "falha_permanente" && tentativa < 30; tentativa += 1) {
+      confirmar.textContent = "Aguardando confirmação do Google Calendar…";
+      await aguardar(2000);
+      const status = await consultarAlteracaoServicoApi(auth, operationId);
+      estado = status.estado;
+      if (estado === "concluida") Object.assign(resultado, {
+        estado, servico: status.servico_novo_nome, duracao: status.duracao_nova,
+        precoCentavos: status.preco_novo_centavos,
+        restanteCentavos: status.restante_novo_centavos,
+      });
+      if (estado === "falha_permanente") throw new Error(status.ultimo_erro || "Não foi possível confirmar a alteração no Google Calendar.");
+    }
+    if (estado !== "concluida") {
+      manterDesabilitado = true;
+      confirmar.textContent = "Alteração em processamento";
+      throw new Error("A alteração continua pendente de confirmação. Ela será retomada automaticamente; feche este modal e consulte novamente em alguns instantes.");
+    }
+    try { sessionStorage.removeItem(storageKey); } catch {}
+    const indice = todosAgendamentos.findIndex((item) => item.id === agendamento.id);
+    if (indice >= 0) todosAgendamentos[indice] = {
+      ...todosAgendamentos[indice],
+      servico: resultado.servico || servico.nome || servico.nomeServico,
+      idServico: servico.id,
+      duracao: Number(resultado.duracao ?? servico.duracao ?? servico.duracaoMinutos),
+      duracaoSnapshot: Number(resultado.duracao ?? servico.duracao ?? servico.duracaoMinutos),
+      precoSnapshot: Number(resultado.precoCentavos ?? Math.round(precoServicoNumero(servico.preco) * 100)) / 100,
+      valorRestanteCentavos: Number(resultado.restanteCentavos || 0),
+    };
+    fecharModalAlterarServico();
+    ordenarAgendamentos(); atualizarResumo(); atualizarContadoresFiltros(); aplicarFiltros();
+    abrirModal(agendamento.id);
+    window.alert("Serviço alterado e Google Calendar atualizado.");
+  } catch (falha) {
+    if (!manterDesabilitado) { try { sessionStorage.removeItem(storageKey); } catch {} }
+    if (erro) { erro.textContent = falha.message; erro.hidden = false; }
+  } finally {
+    confirmar.disabled = manterDesabilitado;
+    if (!manterDesabilitado) confirmar.textContent = "Confirmar alteração";
+  }
+}
+
 function renderizarAcoesModal(agendamento) {
   const status = normalizarStatus(agendamento.status);
 
@@ -1409,6 +1564,11 @@ function renderizarAcoesModal(agendamento) {
   }
 
   if (!finalizado) {
+    if (["confirmado", "reagendado"].includes(status)) {
+      acoes.push(
+        criarBotaoModal({ label: "Alterar Serviço", action: "alterar-servico", variant: "primary" }),
+      );
+    }
     acoes.push(
       criarBotaoModal({
         label: "Reagendar atendimento",
@@ -2140,9 +2300,24 @@ function configurarEventos() {
       if (action === "cancelar") {
         await cancelarAgendamento(agendamento);
       }
+
+      if (action === "alterar-servico") {
+        await abrirModalAlterarServico(agendamento);
+      }
     } finally {
       button.disabled = false;
     }
+  });
+
+  document.getElementById("admin-alterar-servico-modal")?.addEventListener("click", (event) => {
+    if (event.target.closest("[data-service-close]")) fecharModalAlterarServico();
+  });
+  document.getElementById("admin-alterar-servico-confirmar")?.addEventListener("click", () => {
+    const agendamento = encontrarAgendamento(agendamentoSelecionadoId);
+    if (agendamento) void confirmarAlteracaoServico(agendamento);
+  });
+  document.getElementById("admin-alterar-servico-modal")?.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") { event.preventDefault(); fecharModalAlterarServico(); }
   });
 
   document.addEventListener("keydown", (event) => {

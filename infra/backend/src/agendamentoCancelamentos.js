@@ -135,6 +135,9 @@ async function aplicarCancelamentoFirestore(db, solicitacao, dependencies = {}) 
     if (!STATUS_ATIVOS.has(texto(dados.status))) {
       throw new ErroCancelamento(409, "O agendamento mudou de estado antes do cancelamento", true);
     }
+    if (dados.alteracaoServicoOperacaoPendente) {
+      throw new ErroCancelamento(409, "Uma alteração de serviço está em andamento; o cancelamento será retomado depois", false);
+    }
 
     transacao.update(reference, {
       status: statusAlvo,

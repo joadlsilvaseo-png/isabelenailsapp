@@ -66,3 +66,32 @@ export async function consultarDisponibilidadePix(auth, data, agendamentoId = nu
   }
   return resultado.intervalos;
 }
+
+export async function alterarServicoAgendamentoApi(auth, dados) {
+  const usuario = auth?.currentUser;
+  if (!usuario) throw new Error("Faça login para continuar.");
+  const token = await usuario.getIdToken();
+  const resposta = await fetch("/api/admin/agendamentos/servico", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify(dados),
+    cache: "no-store",
+  });
+  const resultado = await resposta.json().catch(() => ({}));
+  if (!resposta.ok) throw new Error(resultado.erro || "Não foi possível alterar o serviço.");
+  return resultado;
+}
+
+export async function consultarAlteracaoServicoApi(auth, operationId) {
+  const usuario = auth?.currentUser;
+  if (!usuario) throw new Error("Faça login para continuar.");
+  const token = await usuario.getIdToken();
+  const parametros = new URLSearchParams({ operationId });
+  const resposta = await fetch(`/api/admin/agendamentos/servico?${parametros}`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+  });
+  const resultado = await resposta.json().catch(() => ({}));
+  if (!resposta.ok) throw new Error(resultado.erro || "Não foi possível consultar a alteração.");
+  return resultado;
+}

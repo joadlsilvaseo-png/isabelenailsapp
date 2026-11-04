@@ -34,7 +34,7 @@
 
   <link rel="stylesheet" href="base.css?v=1.0.4">
 
-  <link rel="stylesheet" href="admin-agendamentos.css?v=1.0.4">
+  <link rel="stylesheet" href="admin-agendamentos.css?v=1.0.5">
   <link rel="stylesheet" href="admin-bottom-nav.css?v=1">
 </head>
 
@@ -486,6 +486,28 @@
 
   </div>
 
+  <div id="admin-alterar-servico-modal" class="admin-alterar-servico-modal" hidden>
+    <button type="button" class="admin-alterar-servico-overlay" data-service-close aria-label="Fechar alteração de serviço"></button>
+    <section id="admin-alterar-servico-painel" class="admin-alterar-servico-painel" role="dialog" aria-modal="true" aria-labelledby="admin-alterar-servico-titulo" aria-describedby="admin-alterar-servico-descricao" tabindex="-1">
+      <header>
+        <span class="admin-modal-eyebrow">Atendimento</span>
+        <h2 id="admin-alterar-servico-titulo">Alterar Serviço</h2>
+      </header>
+      <p id="admin-alterar-servico-descricao">A data e o horário de início serão preservados. O novo período precisa estar disponível.</p>
+      <div class="admin-alterar-servico-atual"><span>Serviço atual</span><strong id="admin-servico-atual"></strong></div>
+      <label for="admin-servico-novo">Novo serviço ativo</label>
+      <select id="admin-servico-novo" required>
+        <option value="">Selecione um serviço</option>
+      </select>
+      <div class="admin-alterar-servico-resumo" id="admin-alterar-servico-resumo" aria-live="polite"></div>
+      <p id="admin-alterar-servico-erro" class="admin-conclusao-erro" role="alert" hidden></p>
+      <div class="admin-alterar-servico-acoes">
+        <button type="button" data-service-close>Cancelar</button>
+        <button type="button" id="admin-alterar-servico-confirmar" disabled>Confirmar alteração</button>
+      </div>
+    </section>
+  </div>
+
   <!-- Modal de conclusão: mantém a identidade do modal de cancelamento. -->
   <div id="admin-conclusao-modal" class="admin-cancelamento-modal admin-conclusao-modal" hidden>
     <button type="button" class="admin-cancelamento-overlay" id="admin-conclusao-overlay" aria-label="Voltar sem concluir atendimento"></button>
@@ -518,7 +540,7 @@
 
   <script type="module" src="analytics.js?v=1.0.1"></script>
 
-  <script type="module" src="admin-agendamentos.js?v=1.0.2"></script>
+  <script type="module" src="admin-agendamentos.js?v=1.0.3"></script>
 
   <script src="app.js?v=2.0.0" defer></script>
 

@@ -1,6 +1,6 @@
 # Atualização controlada da VPS (PIX)
 
-Este roteiro é para uma execução única, iniciada manualmente pelo responsável. O script não foi executado nesta revisão e a VPS não foi acessada. As migrações suportadas pelo procedimento, incluindo 010, 011, 012, 014, 015, 016, 018 e 019, são verificadas pelo catálogo PostgreSQL; o script pula cada migração já aplicada e aborta se encontrar estado parcial. Não cria cobranças.
+Este roteiro é para uma execução única, iniciada manualmente pelo responsável. O script não foi executado nesta revisão e a VPS não foi acessada. As migrações suportadas pelo procedimento, incluindo 010, 011, 012, 014, 015, 016, 018, 019 e 020, são verificadas pelo catálogo PostgreSQL; o script pula cada migração já aplicada e aborta se encontrar estado parcial. Não cria cobranças.
 
 ## Testes locais do procedimento
 
@@ -107,6 +107,12 @@ O worker seleciona apenas Orders pendentes com `mp_order_id`, ambiente habilitad
 O horizonte de 72 horas evita polling infinito e não libera reservas com pagamento inconclusivo. Um pagamento aprovado depois de a reserva perder validade é creditado de modo idempotente e encaminhado à análise financeira existente; a rotina não cria um novo horário. Depois do horizonte, uma cobrança ainda pendente deixa de ser consultada automaticamente e exige reconciliação operacional; cobranças antigas não entram retroativamente na primeira ativação. A tabela de quota e os leases são locais ao PostgreSQL e se recuperam após reinício/expiração do lease.
 
 O script não cria Orders, não realiza pagamentos, não solicita estornos/reembolsos, não chama Google Apps Script e não publica o frontend. Com o PR aberto, valide a interface pelo preview já disponível. Se a configuração efetiva for produção, não inicie uma Order de validação; confirme somente healthcheck, commit, logs e preservação de configuração.
+
+## Alteração do serviço de um agendamento
+
+A migração 020 cria somente a fila idempotente de auditoria/sincronização da troca de serviço. O preflight verifica a tabela, as 26 colunas, a chave primária, os índices e as 10 constraints; estado parcial interrompe antes da parada da API. O procedimento aplica a migração 020 somente depois do backup e preserva os dados dela no rollback de código. A migração ainda não foi executada em nenhum banco.
+
+Antes de ativar a funcionalidade, a versão publicada do Google Apps Script precisa aceitar `ATUALIZAR`, localizar o evento existente pelo mesmo `eventId`, alterar serviço/duração no evento, responder com `{"ok":true,"eventId":"...","updated":true}` e tratar `operationId` repetido de forma idempotente. A ação não está disponível para validação neste repositório. Sem esse contrato e teste integrado, a API recusa a operação sem alterar Firestore ou `pix_reservas`.
 
 ## Rollback
 

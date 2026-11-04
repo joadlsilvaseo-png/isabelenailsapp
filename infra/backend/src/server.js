@@ -21,6 +21,7 @@ import { consultarDisponibilidadePix } from "./pixDisponibilidadeApi.js";
 import { atenderGerenciarCalendario } from "./agendaBloqueios.js";
 import { atenderGestaoClientes } from "./gestaoClientes.js";
 import { atenderFotosPerfil } from "./fotosPerfil.js";
+import { atenderAlteracaoServico, iniciarWorkerAlteracaoServico } from "./agendamentoAlteracaoServico.js";
 
 const { Pool } = pg;
 
@@ -74,6 +75,11 @@ const server = http.createServer(async (req, res) => {
   // Acoes protegidas de agendamentos
   if (req.method === "POST" && req.url === "/agendamentos/acao") {
     await atenderAcaoAgendamento(req, res, pool);
+    return;
+  }
+
+  if (new URL(req.url, "http://localhost").pathname === "/admin/agendamentos/servico") {
+    await atenderAlteracaoServico(req, res, pool);
     return;
   }
 
@@ -210,6 +216,8 @@ server.listen(PORT, "0.0.0.0", () => {
   if (process.env.PIX_CALENDAR_WORKER_ENABLED === "true") {
     iniciarWorkerPixCalendar(pool);
   }
+
+  iniciarWorkerAlteracaoServico(pool);
 
   iniciarMonitorAgendamentos(pool).catch((erro) => {
     console.error("Falha ao iniciar monitor de agendamentos:", erro);
