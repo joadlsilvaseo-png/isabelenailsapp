@@ -559,6 +559,8 @@ MIGRATION_018="$RELEASE_DIR/infra/migrations/018_agenda_bloqueios.sql"
 [[ -f "$MIGRATION_018" ]] || die "Migracao 018 nao encontrada no commit alvo."
 MIGRATION_019="$RELEASE_DIR/infra/migrations/019_lembretes_agendamento.sql"
 [[ -f "$MIGRATION_019" ]] || die "Migracao 019 nao encontrada no commit alvo."
+MIGRATION_021="$RELEASE_DIR/infra/migrations/021_pix_reagendamentos_pagos.sql"
+[[ -f "$MIGRATION_021" ]] || die "Migracao 021 nao encontrada no commit alvo."
 
 UPDATE_OVERRIDE="$BACKUP_DIR/update-compose.yaml"
 TARGET_IMAGE_TAG="isabele-nails-api:release-${TARGET_COMMIT}"
@@ -1081,6 +1083,51 @@ case "$MIGRATION_019_STATE" in
   *) die "Preflight da migracao 019 falhou." ;;
 esac
 
+# Preflight 021: journal durável de reagendamentos PIX pagos.
+# Não iniciar o deploy se houver objeto parcial ou índice incompatível.
+MIGRATION_021_STATE_SQL="$BACKUP_DIR/migration-021-state.sql"
+cat >"$MIGRATION_021_STATE_SQL" <<'SQL'
+SELECT CASE
+ WHEN to_regclass('public.pix_reagendamentos_pagos') IS NULL THEN 'pending'
+ WHEN (
+  (SELECT COUNT(*) = 27
+   FROM information_schema.columns
+   WHERE table_schema = 'public' AND table_name = 'pix_reagendamentos_pagos'
+     AND column_name IN (
+       'operation_id','agendamento_id','solicitante_uid','cliente_uid',
+       'servico_id','reserva_id','cobranca_id','calendar_event_id',
+       'nome_cliente','servico_nome','observacoes','origem_data',
+       'origem_inicio','origem_fim','destino_data','destino_inicio',
+       'destino_fim','hold_reserva_id','estado','tentativas',
+       'proxima_tentativa_em','bloqueado_ate','limpeza_pendente',
+       'ultimo_erro','criado_em','atualizado_em','concluido_em'
+     ))
+  AND EXISTS (SELECT 1 FROM pg_constraint
+    WHERE conrelid = to_regclass('public.pix_reagendamentos_pagos')
+      AND contype = 'p')
+  AND EXISTS (SELECT 1 FROM pg_index i
+    JOIN pg_class c ON c.oid = i.indexrelid
+    WHERE i.indrelid = to_regclass('public.pix_reagendamentos_pagos')
+      AND c.relname = 'ux_pix_reagendamento_pago_pendente'
+      AND i.indisvalid AND i.indisready)
+  AND EXISTS (SELECT 1 FROM pg_index i
+    JOIN pg_class c ON c.oid = i.indexrelid
+    WHERE i.indrelid = to_regclass('public.pix_reagendamentos_pagos')
+      AND c.relname = 'ix_pix_reagendamento_pago_worker'
+      AND i.indisvalid AND i.indisready)
+ ) THEN 'applied'
+ ELSE 'partial'
+END;
+SQL
+chmod 600 "$MIGRATION_021_STATE_SQL"
+MIGRATION_021_STATE="$(compose_snapshot exec -T "$DB_SERVICE" sh -lc 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At' <"$MIGRATION_021_STATE_SQL" | tr -d '\r\n')"
+case "$MIGRATION_021_STATE" in
+  pending) echo "Migracao 021 pendente: sera aplicada apos backup." ;;
+  applied) echo "Migracao 021 ja aplicada: preservando reagendamentos." ;;
+  partial) die "Migracao 021 parcial: API e dados preservados." ;;
+  *) die "Preflight da migracao 021 falhou." ;;
+esac
+
 printf '%s\n' "$DB_CONTAINER" >"$BACKUP_DIR/db-container-id"
 compose_snapshot exec -T "$DB_SERVICE" sh -lc 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' >"$BACKUP_DIR/postgres-before.dump"
 [[ -s "$BACKUP_DIR/postgres-before.dump" ]] || die "Backup PostgreSQL vazio; atualizacao cancelada."
@@ -1101,6 +1148,7 @@ MIGRATION_014_APPLIED=false
 MIGRATION_016_APPLIED=false
 MIGRATION_018_APPLIED=false
 MIGRATION_019_APPLIED=false
+MIGRATION_021_APPLIED=false
 NEW_API_STARTED=false
 restore_old_api_on_error() {
   local rc=$?
@@ -1123,7 +1171,7 @@ EOF
     elif [[ "$API_STOPPED" == true ]]; then
       docker start "$API_CONTAINER" >/dev/null || true
     fi
-    if [[ "$MIGRATION_APPLIED" == true || "$MIGRATION_STATE" == applied || "$MIGRATION_011_APPLIED" == true || "$MIGRATION_011_STATE" == applied || "$MIGRATION_012_APPLIED" == true || "$MIGRATION_012_STATE" == applied || "$MIGRATION_016_APPLIED" == true || "$MIGRATION_016_STATE" == applied || "$MIGRATION_018_APPLIED" == true || "$MIGRATION_018_STATE" == applied || "$MIGRATION_019_APPLIED" == true || "$MIGRATION_019_STATE" == applied ]]; then
+    if [[ "$MIGRATION_APPLIED" == true || "$MIGRATION_STATE" == applied || "$MIGRATION_011_APPLIED" == true || "$MIGRATION_011_STATE" == applied || "$MIGRATION_012_APPLIED" == true || "$MIGRATION_012_STATE" == applied || "$MIGRATION_016_APPLIED" == true || "$MIGRATION_016_STATE" == applied || "$MIGRATION_018_APPLIED" == true || "$MIGRATION_018_STATE" == applied || "$MIGRATION_019_APPLIED" == true || "$MIGRATION_019_STATE" == applied || "$MIGRATION_021_APPLIED" == true || "$MIGRATION_021_STATE" == applied ]]; then
       echo "Migracoes aplicadas (incluindo 016, 018 e 019, se executadas) permanecem preservadas; nenhum dado foi removido."
     fi
     echo "Backup e configuracao efetiva anterior: $BACKUP_DIR"
@@ -1182,6 +1230,13 @@ if [[ "$MIGRATION_019_STATE" == pending ]]; then
   echo "Migracao 019 aplicada com sucesso."
 else
   echo "Pulando migracao 019 ja aplicada; lembretes existentes serao mantidos."
+fi
+if [[ "$MIGRATION_021_STATE" == pending ]]; then
+  compose_snapshot exec -T "$DB_SERVICE" sh -lc 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <"$MIGRATION_021"
+  MIGRATION_021_APPLIED=true
+  echo "Migracao 021 aplicada com sucesso; PIX e reservas existentes preservados."
+else
+  echo "Pulando migracao 021 ja aplicada; operacoes existentes serao mantidas."
 fi
 NEW_API_STARTED=true
 compose_snapshot up -d --no-deps "$API_SERVICE"
