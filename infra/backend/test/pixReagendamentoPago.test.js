@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+import { atenderAgendamentoIsencao } from "../src/agendamentosIsencaoPix.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -103,4 +105,20 @@ test("sem URL validada, nem tenta conexão externa com Calendar", async () => {
   });
   await assert.rejects(enviarReagendamentoPix(payload, async () => { chamado = true; }, ""));
   assert.equal(chamado, false);
+});
+
+test("configuração de reagendamento PIX nunca habilita a operação sem saga completa", async () => {
+  const resp = { status: null, body: null, writeHead(status) { this.status = status; }, end(body) { this.body = JSON.parse(body); } };
+  const pool = { query: async () => { throw new Error("Não deveria consultar PostgreSQL"); } };
+  await atenderAgendamentoIsencao(
+    { method: "GET", url: "/agendamentos/reagendar/config" }, resp, pool,
+    { firestore: {}, verificarUsuario: async () => uid },
+  );
+  assert.equal(resp.status, 200);
+  assert.deepEqual(resp.body, { pixPagoHabilitado: false });
+});
+
+test("servidor encaminha consulta do estado de reagendamento à rota correta", async () => {
+  const server = await readFile(new URL("../src/server.js", import.meta.url), "utf8");
+  assert.match(server, /"\/agendamentos\/reagendar\/config"/);
 });
