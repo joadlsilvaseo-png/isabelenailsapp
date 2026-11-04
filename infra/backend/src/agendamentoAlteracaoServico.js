@@ -533,6 +533,13 @@ export async function atenderAlteracaoServico(req, res, pool, dependencies = {})
   if (!(await verificarAdmin(db, uid))) { responder(res, 403, { erro: "Acesso administrativo negado." }); return; }
   const url = new URL(req.url, "http://localhost");
 
+  // Consulta somente leitura: permite à interface esconder a ação não liberada.
+  // Exige autenticação e autorização admin, mas não consulta PostgreSQL/PIX.
+  if (req.method === "GET" && url.searchParams.get("config") === "1") {
+    responder(res, 200, { habilitado: alterarServicoHabilitado(dependencies) });
+    return;
+  }
+
   if (req.method === "GET") {
     const operationId = url.searchParams.get("operationId");
     if (!UUID.test(operationId || "")) { responder(res, 400, { erro: "Operação inválida." }); return; }
