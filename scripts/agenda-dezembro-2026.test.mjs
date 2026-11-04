@@ -16,12 +16,14 @@ const AGORA = new Date("2026-11-02T15:00:00-03:00");
 const dataDia = dia => `2026-12-${String(dia).padStart(2, "0")}`;
 const hora = m => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 
-test("todos os dias de dezembro permanecem fechados ao agendamento público", () => {
-  assert.equal(AGENDA_DEZEMBRO_2026_ABERTA, false);
+test("dezembro está aberto ao agendamento público exceto nos dias de fechamento", () => {
+  assert.equal(AGENDA_DEZEMBRO_2026_ABERTA, true);
+  const fechados = new Set([6, 7, 13, 15, 25, 26, 27, 31]);
   for (let dia = 1; dia <= 31; dia++) {
     const data = dataDia(dia);
-    assert.equal(validarDataNaJanela(data, AGORA).valido, false, data);
-    assert.equal(validarHorarioPix(data, "14:00", 60, AGORA).valido, false, data);
+    const disponivel = !fechados.has(dia);
+    assert.equal(validarDataNaJanela(data, AGORA).valido, disponivel, data);
+    assert.equal(validarHorarioPix(data, "14:00", 60, AGORA).valido, disponivel, data);
   }
 });
 

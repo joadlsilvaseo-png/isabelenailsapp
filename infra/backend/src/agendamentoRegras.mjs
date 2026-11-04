@@ -1,6 +1,6 @@
 const AGENDA_INICIO_ISO = "2026-11-01";
-// Interruptor único de abertura pública. NÃO alterar sem autorização expressa.
-export const AGENDA_DEZEMBRO_2026_ABERTA = false;
+// Abertura pública de dezembro autorizada em 04/11/2026; compartilha a regra com frontend e API.
+export const AGENDA_DEZEMBRO_2026_ABERTA = true;
 
 function partesDataISO(dataIso) {
   if (typeof dataIso !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(dataIso)) return null;

@@ -6,6 +6,11 @@ on:
   pull_request:
     paths:
       - "infra/backend/**"
+      - "scripts/**"
+      - "agendamento.js"
+      - "agendamento.html"
+      - "admin-calendario-regras.mjs"
+      - "service-worker.js"
       - "infra/migrations/**"
       - "infra/scripts/**"
       - ".github/workflows/validar-backend.yml"

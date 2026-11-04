@@ -1,7 +1,7 @@
 import { auth, db } from "./firebase-config.js";
 import { consultarDisponibilidadePix, reagendarAgendamentoApi } from "./agendamentosApi.js";
 import { consultarIntervalosDisponibilidade, intervaloSobrepoeDisponibilidade, obterLimitesAtendimentoSemanal } from "./agendamentoDisponibilidade.js";
-import { obterJanelaAgendamento, validarDataNaJanela, validarHorarioEspecial, obterExpedienteEspecialDezembro2026, validarServicoDezembro2026, AGENDA_DEZEMBRO_2026_ABERTA } from "./infra/backend/src/agendamentoRegras.mjs?v=2.0.3";
+import { obterJanelaAgendamento, validarDataNaJanela, validarHorarioEspecial, obterExpedienteEspecialDezembro2026, validarServicoDezembro2026, AGENDA_DEZEMBRO_2026_ABERTA } from "./infra/backend/src/agendamentoRegras.mjs?v=2.0.4";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
 import {
   collection,
