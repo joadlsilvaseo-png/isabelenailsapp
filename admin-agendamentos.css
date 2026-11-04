@@ -2265,3 +2265,28 @@ body[data-access-state="denied"] #admin-refresh-button {
   background: var(--admin-success);
   box-shadow: 0 6px 14px rgba(47, 122, 80, 0.18);
 }
+
+
+/* Avatar do modal: neutraliza os estilos genéricos de span do contato.
+   Assim as duas iniciais ficam centradas e a foto ocupa todo o círculo. */
+.admin-modal-client .admin-modal-client-avatar {
+  display: grid;
+  place-items: center;
+  flex: 0 0 48px;
+  margin-top: 0;
+  font-size: 15px;
+  line-height: 1;
+  font-weight: 700;
+  white-space: normal;
+  text-overflow: clip;
+  color: var(--admin-primary);
+}
+
+.admin-modal-client .admin-modal-client-avatar img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: center;
+}

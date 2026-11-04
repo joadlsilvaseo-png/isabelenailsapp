@@ -21,6 +21,8 @@ import {
 let todosAgendamentos = [];
 let agendamentosFiltrados = [];
 let agendamentoSelecionadoId = null;
+let versaoFotoModalAgendamento = 0;
+let fotoModalAgendamentoUrl = null;
 
 let filtroResumoAtivo = "hoje";
 let filtroStatusAtivo = "todos";
@@ -59,8 +61,6 @@ function carregarElementos() {
   elements.summaryGrid = document.querySelector(".admin-summary-grid");
 
   elements.totalHoje = document.getElementById("admin-total-hoje");
-
-  elements.totalPendentes = document.getElementById("admin-total-pendentes");
 
   elements.totalConfirmados = document.getElementById(
     "admin-total-confirmados",
@@ -270,7 +270,7 @@ function obterRotuloStatus(status) {
 
   const rotulos = {
     agendado: "Agendado",
-    confirmado: "Confirmado",
+    confirmado: "Agendado",
     reagendado: "Reagendado",
     concluido: "Concluído",
     realizado: "Realizado",
@@ -687,10 +687,6 @@ function atualizarResumo() {
       obterGrupoStatus(agendamento.status) !== "cancelados",
   ).length;
 
-  const totalPendentes = todosAgendamentos.filter(
-    (agendamento) => obterGrupoStatus(agendamento.status) === "agendados",
-  ).length;
-
   const totalConfirmados = todosAgendamentos.filter(
     (agendamento) => obterGrupoStatus(agendamento.status) === "confirmados",
   ).length;
@@ -700,8 +696,6 @@ function atualizarResumo() {
   ).length;
 
   elements.totalHoje.textContent = totalHoje;
-
-  elements.totalPendentes.textContent = totalPendentes;
 
   elements.totalConfirmados.textContent = totalConfirmados;
 
@@ -1128,6 +1122,93 @@ function encontrarAgendamento(id) {
   return todosAgendamentos.find((agendamento) => agendamento.id === id);
 }
 
+function liberarFotoModalAgendamento() {
+  if (fotoModalAgendamentoUrl) {
+    URL.revokeObjectURL(fotoModalAgendamentoUrl);
+    fotoModalAgendamentoUrl = null;
+  }
+}
+
+/**
+ * Busca a foto personalizada pelo endpoint autenticado já usado em Clientes.
+ * Usa a foto HTTPS do cadastro como alternativa e, sem fotos, as iniciais.
+ */
+async function carregarFotoDoPerfilNoModal(agendamento, avatar, versao) {
+  const uid = obterClienteId(agendamento);
+  if (!uid || !avatar) return;
+
+  const identificadorAgendamento = agendamento.id;
+  const atual = () =>
+    versao === versaoFotoModalAgendamento &&
+    agendamentoSelecionadoId === identificadorAgendamento &&
+    elements.modal?.hidden === false &&
+    avatar.isConnected;
+
+  let urlTemporaria = null;
+  try {
+    const usuario = auth.currentUser;
+    if (!usuario) return;
+    const token = await usuario.getIdToken();
+    if (!atual()) return;
+
+    const resposta = await fetch(
+      "/api/admin/clientes/" + encodeURIComponent(uid) + "/foto",
+      { headers: { Authorization: "Bearer " + token }, cache: "no-store" },
+    );
+    if (resposta.status === 404) return;
+    if (!resposta.ok) throw new Error("HTTP " + resposta.status);
+
+    const formato = resposta.headers.get("Content-Type")
+      ?.split(";")[0].trim().toLowerCase();
+    if (formato !== "image/webp") throw new Error("Formato de imagem inesperado.");
+
+    urlTemporaria = URL.createObjectURL(await resposta.blob());
+    const imagem = new Image();
+    imagem.alt = "";
+    imagem.src = urlTemporaria;
+    await imagem.decode();
+    if (!atual()) return;
+
+    liberarFotoModalAgendamento();
+    avatar.replaceChildren(imagem);
+    fotoModalAgendamentoUrl = urlTemporaria;
+    urlTemporaria = null;
+  } catch (erro) {
+    console.warn("Foto da cliente indisponível no detalhe do agendamento:", erro.message);
+  } finally {
+    if (urlTemporaria) URL.revokeObjectURL(urlTemporaria);
+  }
+}
+
+function exibirAvatarClienteNoModal(agendamento, avatar, versao) {
+  if (!avatar) return;
+
+  // As iniciais permanecem visíveis se não existir imagem ou ela falhar.
+  avatar.textContent = obterIniciais(obterNomeCliente(agendamento));
+
+  const fotoExterna = obterFotoCliente(agendamento);
+  if (/^https:\/\//i.test(fotoExterna)) {
+    const imagemExterna = new Image();
+    imagemExterna.alt = "";
+    imagemExterna.referrerPolicy = "no-referrer";
+    imagemExterna.onload = () => {
+      if (
+        versao === versaoFotoModalAgendamento &&
+        agendamentoSelecionadoId === agendamento.id &&
+        elements.modal?.hidden === false &&
+        avatar.isConnected &&
+        !fotoModalAgendamentoUrl
+      ) {
+        avatar.replaceChildren(imagemExterna);
+      }
+    };
+    imagemExterna.onerror = () => {};
+    imagemExterna.src = fotoExterna;
+  }
+
+  void carregarFotoDoPerfilNoModal(agendamento, avatar, versao);
+}
+
 function abrirModal(id) {
   const agendamento = encontrarAgendamento(id);
 
@@ -1136,14 +1217,14 @@ function abrirModal(id) {
   }
 
   agendamentoSelecionadoId = id;
+  const versaoAvatar = ++versaoFotoModalAgendamento;
+  liberarFotoModalAgendamento();
 
   const nomeCliente = obterNomeCliente(agendamento);
 
   const telefoneCliente = obterTelefoneCliente(agendamento);
 
   const emailCliente = obterEmailCliente(agendamento);
-
-  const fotoCliente = obterFotoCliente(agendamento);
 
   const servico = obterServico(agendamento);
 
@@ -1166,22 +1247,7 @@ function abrirModal(id) {
   elements.modalContent.innerHTML = `
     <div class="admin-modal-client">
 
-      <span
-  class="admin-modal-client-avatar"
-  aria-hidden="true"
->
-  ${
-    fotoCliente
-      ? `
-        <img
-          src="${escaparHTML(fotoCliente)}"
-          alt=""
-          loading="lazy"
-        >
-      `
-      : escaparHTML(obterIniciais(nomeCliente))
-  }
-</span>
+      <span class="admin-modal-client-avatar" aria-hidden="true">${escaparHTML(obterIniciais(nomeCliente))}</span>
 
       <div>
         <strong>
@@ -1271,11 +1337,18 @@ function abrirModal(id) {
   renderizarAcoesModal(agendamento);
 
   elements.modal.hidden = false;
+  exibirAvatarClienteNoModal(
+    agendamento,
+    elements.modalContent.querySelector(".admin-modal-client-avatar"),
+    versaoAvatar,
+  );
 
   document.body.style.overflow = "hidden";
 }
 
 function fecharModal() {
+  ++versaoFotoModalAgendamento;
+  liberarFotoModalAgendamento();
   elements.modal.hidden = true;
 
   elements.modalContent.innerHTML = "";

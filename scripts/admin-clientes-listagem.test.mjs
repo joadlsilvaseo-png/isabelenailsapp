@@ -32,7 +32,7 @@ test("lista combina páginas de API antes de ordenar e preserva fluxo do perfil"
   assert.match(js, /new URLSearchParams\(\{ limit: "50" \}\)/);
   assert.match(js, /while \(true\)/);
   assert.match(js, /if \(!resultado\.hasMore\) break/);
-  assert.match(js, /organizarClientes\(clientesCarregadas, isencoesAtivas/);
+  assert.match(js, /organizarClientes\(\s*clientesCarregadas,\s*isencoesAtivas/);
   assert.match(js, /salvarIsencaoComReversao\(/);
   assert.match(js, /apiFetch\("\/api\/admin\/isencoes-sinal-pix"/);
   assert.match(html, /data-pix-filter="isentas"/);
