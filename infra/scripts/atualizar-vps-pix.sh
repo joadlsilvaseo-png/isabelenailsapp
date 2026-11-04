@@ -577,6 +577,17 @@ services:
     labels:
       org.opencontainers.image.revision: "$TARGET_COMMIT"
 EOF
+# Exceção explícita e única à regra de preservar o snapshot efetivo.
+# Somente libera o reagendamento pago após a migração 021 ter passado no
+# preflight e a API nova poder ser iniciada com o worker. Não muda o PIX,
+# Mercado Pago, Calendar existente ou outras variáveis.
+if [[ "${ENABLE_PIX_PAID_RESCHEDULE:-false}" == "true" ]]; then
+  cat >>"$UPDATE_OVERRIDE" <<'YAML'
+    environment:
+      PIX_REAGENDAMENTO_PAGO_ENABLED: "true"
+YAML
+  echo "Reagendamento PIX pago será habilitado na API nova após validações."
+fi
 chmod 600 "$UPDATE_OVERRIDE"
 
 compose_snapshot() {
