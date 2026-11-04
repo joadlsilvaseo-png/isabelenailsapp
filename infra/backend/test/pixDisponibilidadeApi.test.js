@@ -194,3 +194,24 @@ test("falha de consulta retorna erro sem alterar o banco", async () => {
   assert.equal(pool.chamadas.length, 1);
   assert.equal(pool.chamadas[0].trim().toLowerCase().startsWith("select"), true);
 });
+
+test("consulta autenticada libera dezembro aberto e rejeita dia fechado sem consultar PostgreSQL", async () => {
+  const pool = criarPool([]);
+  const now = new Date("2026-11-04T15:00:00-03:00");
+  const ativo = criarResposta();
+  await consultarDisponibilidadePix(
+    { method: "GET", url: "/pix/disponibilidade?data=2026-12-14", headers: {} },
+    ativo, pool, { verificarUsuario: async () => "cliente-1", now },
+  );
+  assert.equal(ativo.status, 200);
+  assert.deepEqual(ativo.body, { intervalos: [] });
+  assert.equal(pool.chamadas.length, 1);
+  const fechado = criarResposta();
+  await consultarDisponibilidadePix(
+    { method: "GET", url: "/pix/disponibilidade?data=2026-12-15", headers: {} },
+    fechado, pool, { verificarUsuario: async () => "cliente-1", now },
+  );
+  assert.equal(fechado.status, 400);
+  assert.equal(fechado.body.erro, "Dia sem atendimento");
+  assert.equal(pool.chamadas.length, 1);
+});
