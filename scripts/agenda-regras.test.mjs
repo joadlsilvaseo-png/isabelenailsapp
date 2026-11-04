@@ -24,9 +24,13 @@ test("cálculo mensal trata final de mês, fevereiro bissexto e virada do ano", 
   assert.equal(adicionarMesCalendario("2026-12-31"), "2027-01-31");
 });
 
-test("dezembro de 2026 permanece fechado, mesmo dentro da janela móvel", () => {
+test("abertura de dezembro amplia a janela até 31/12, preservando datas fechadas", () => {
   const now = new Date("2026-11-15T12:00:00Z");
-  assert.equal(validarDataNaJanela("2026-12-10", now).valido, false);
+  assert.deepEqual(obterJanelaAgendamento(now), { inicio: "2026-11-15", fim: "2026-12-31" });
+  assert.equal(validarDataNaJanela("2026-12-10", now).valido, true);
+  assert.equal(validarDataNaJanela("2026-12-14", now).valido, true);
+  assert.equal(validarDataNaJanela("2026-12-15", now).valido, false);
+  assert.equal(validarDataNaJanela("2026-12-31", now).valido, false);
 });
 
 test("admin pode gerenciar mês atual e dois seguintes sem abrir dezembro às clientes", () => {
