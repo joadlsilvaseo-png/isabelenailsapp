@@ -54,6 +54,20 @@ test("1 a 13/12 preservam expedientes e regras dos dias habituais", () => {
   assert.equal(validarHorarioEspecial("2027-01-06", "10:00", 120), true);
 });
 
+test("quinta e sexta comuns terminam às 21h, mas exceções 17 e 18/12 continuam às 20h", () => {
+  for (const data of ["2026-12-03", "2026-12-04", "2026-12-10", "2026-12-11"]) {
+    assert.equal(obterExpedienteEspecialDezembro2026(data), null);
+    assert.equal(validarHorarioPix(data, "20:30", 30, AGORA).valido, true, data);
+    assert.equal(validarHorarioPix(data, "21:00", 30, AGORA).valido, false, data);
+  }
+  for (const data of ["2026-12-17", "2026-12-18"]) {
+    assert.equal(obterExpedienteEspecialDezembro2026(data).encerramentoMinuto, 1200);
+    assert.equal(validarHorarioPix(data, "19:30", 30, AGORA).valido, true, data);
+    assert.equal(validarHorarioPix(data, "19:30", 60, AGORA).valido, false, data);
+    assert.equal(validarHorarioPix(data, "20:00", 30, AGORA).valido, false, data);
+  }
+});
+
 test("14 e 16 a 24 e 28 a 30 seguem abertura/encerramento excepcionais exatos", () => {
   const faixas = new Map([
     [14, [540, 1200]], [16, [780, 1200]], [17, [540, 1200]],
