@@ -44,15 +44,22 @@ test("quarta distingue inícios e intervalos intermediários", () => {
     [60, 90]);
 });
 
-test("quinta e sexta mantêm expediente sem almoço e sinalizam fim do dia", () => {
+test("quinta e sexta têm início até 20h30, limite de 21h e não possuem pausa fixa", () => {
   for (const [data, abertura] of [["2026-11-05", "11:00"], ["2026-11-06", "09:00"]]) {
     assert.equal(tipo(data, inicio(abertura)), "livre");
     assert.equal(tipo(data, inicio("13:30")), "livre"); // almoço é manual
-    assert.equal(tipo(data, inicio("17:30")), "inicio-limitado");
-    assert.equal(tipo(data, inicio("18:00")), "inicio-limitado");
-    assert.equal(tipo(data, inicio("18:30")), "inicio-limitado");
-    assert.equal(tipo(data, inicio("19:00")), "sem-inicio");
-    assert.deepEqual(obterRegraVisualDoIntervalo(data, inicio("18:30")).duracoesPermitidas.length, 30);
+    for (const horario of ["17:30", "18:00", "18:30", "19:00"]) {
+      assert.equal(tipo(data, inicio(horario)), "livre", horario);
+    }
+    for (const [horario, duracaoMaxima] of [["19:30", 90], ["20:00", 60], ["20:30", 30]]) {
+      const regra = obterRegraVisualDoIntervalo(data, inicio(horario));
+      assert.equal(regra.tipo, "inicio-limitado", horario);
+      assert.equal(regra.duracoesPermitidas.length, duracaoMaxima, horario);
+    }
+    assert.equal(tipo(data, inicio("21:00")), "sem-inicio");
+    const slots = listarSlotsGerenciaveis(data, AGORA);
+    assert.ok(slots.includes(inicio("20:30")));
+    assert.ok(!slots.includes(inicio("21:00")));
   }
 });
 
@@ -83,7 +90,7 @@ test("a regra visual não altera fechamento nem abertura de intervalos", async (
 
 test("entradas inválidas e horários sem expediente são tratados como sem início", () => {
   assert.equal(tipo("2026-11-05", inicio("10:30")), "sem-inicio");
-  assert.equal(tipo("2026-11-05", inicio("19:00")), "sem-inicio");
+  assert.equal(tipo("2026-11-05", inicio("21:00")), "sem-inicio");
   assert.equal(tipo("2026-11-31", inicio("11:00")), "sem-inicio");
   assert.equal(tipo("2026-11-05", 665), "sem-inicio");
 });

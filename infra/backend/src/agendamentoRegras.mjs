@@ -214,8 +214,8 @@ export function listarSlotsGerenciaveis(dataIso, agora = new Date()) {
   const limites = {
     2: [[840, 1050]],                   // Terça: 14:00–17:30.
     3: [[540, 750], [840, 1050]],      // Quarta: manhã e tarde.
-    4: [[660, 1140]],                  // Quinta: 11:00–19:00.
-    5: [[540, 1140]],                  // Sexta: 09:00–19:00.
+    4: [[660, 1260]],                  // Quinta: 11:00–21:00.
+    5: [[540, 1260]],                  // Sexta: 09:00–21:00.
     6: [[540, 1110]],                  // Sábado: grade de bloqueios cobre a exceção até 18h30.
   };
   const slots = [];
