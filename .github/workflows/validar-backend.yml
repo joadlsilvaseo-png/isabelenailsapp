@@ -26,6 +26,50 @@ on:
       - "infra/scripts/**"
       - ".github/workflows/validar-backend.yml"
 jobs:
+  migracao-021:
+    name: Migração 021 e reagendamento pago — PostgreSQL 17 temporário
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: isabele_ci
+          POSTGRES_PASSWORD: teste_isolado
+          POSTGRES_DB: isabele_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U isabele_ci -d isabele_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 15
+    env:
+      PGPASSWORD: teste_isolado
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: isabele_ci
+      PGDATABASE: isabele_ci
+      DATABASE_URL: postgresql://isabele_ci:teste_isolado@localhost:5432/isabele_ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Dependências da API
+        working-directory: infra/backend
+        run: npm install --no-package-lock --ignore-scripts
+      - name: Migrar esquema sintético com exclusão de horários
+        run: |
+          psql -v ON_ERROR_STOP=1 -f infra/backend/test/sql/fixture_reagendamento_pago_pg17.sql
+          psql -v ON_ERROR_STOP=1 -f infra/migrations/007_pix_reservas_horarios.sql
+          psql -v ON_ERROR_STOP=1 -f infra/migrations/021_pix_reagendamentos_pagos.sql
+      - name: Confirmar preflight e índices de segurança
+        run: |
+          psql -v ON_ERROR_STOP=1 -Atc "SELECT COUNT(*) FROM information_schema.columns WHERE table_name='pix_reagendamentos_pagos';" | grep -qx 27
+          psql -v ON_ERROR_STOP=1 -Atc "SELECT COUNT(*) FROM pg_indexes WHERE tablename='pix_reagendamentos_pagos' AND indexname IN ('ux_pix_reagendamento_pago_pendente','ix_pix_reagendamento_pago_worker');" | grep -qx 2
+      - name: Testes integrados de pagamento, agendamento, Calendar simulado e recuperação
+        run: node --test infra/backend/test/pixReagendamentoPagoPostgres.test.js
+
   validar:
     runs-on: ubuntu-latest
     defaults:
@@ -41,6 +85,9 @@ jobs:
       - name: Verificar sintaxe
         run: |
           node --check src/pixCalendarWorker.js
+          node --check src/pixReagendamentoPago.js
+          node --check src/pixReagendamentoPagoOperacao.js
+          node --check src/agendamentosIsencaoPix.js
           node --check src/agendaBloqueios.js
           node --check ../../admin-calendario.js
           node --check ../../admin-agendamentos.js
