@@ -19,7 +19,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
   <link rel="stylesheet" href="base.css?v=1.0.4">
-  <link rel="stylesheet" href="agendamento.css?v=2.0.0">
+  <link rel="stylesheet" href="agendamento.css?v=2.0.1">
   <link rel="stylesheet" href="pixCheckout.css?v=1.0.3">
 </head>
 
@@ -118,9 +118,11 @@
               </h3>
             </div>
 
-            <span id="calendar-month-label" class="agendamento-month-label">
-              Mês
-            </span>
+            <div class="agendamento-month-picker">
+              <select id="calendar-month-label" class="agendamento-month-label agendamento-month-select" aria-label="Selecionar mês do agendamento">
+                <option value="">Mês</option>
+              </select>
+            </div>
           </div>
 
           <div class="agendamento-calendar" role="group" aria-label="Selecionar data">
@@ -269,7 +271,7 @@
     </main>
   </div>
 
-  <script type="module" src="agendamento.js?v=2.0.4"></script>
+  <script type="module" src="agendamento.js?v=2.0.5"></script>
   <script type="module" src="pixCheckout.js?v=1.0.2"></script>
 
   <script src="app.js?v=2.0.0" defer></script>
