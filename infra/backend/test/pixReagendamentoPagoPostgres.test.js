@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import pg from "pg";
+import { reagendarComBloqueio } from "../src/agendamentosIsencaoPix.js";
 import {
   iniciarReagendamentoPixPago,
   processarProximoReagendamentoPixPago,
@@ -266,6 +267,42 @@ test("PostgreSQL 17: saga PIX protege os intervalos, preserva pagamento e recupe
   assert.equal(chamadasCalendar, antesFalhaPg + 1, "não duplica chamadas após atualização Calendar confirmada");
   assert.equal((await pool.query("SELECT TO_CHAR(data_servico,'YYYY-MM-DD') AS data_iso FROM public.pix_reservas WHERE id=$1", [quinto.reserva])).rows[0].data_iso, "2027-03-25");
 
+  // Exercitar a rota de negócio completa, além do worker.
+  const sexto = await criarAgendamento(pool, db, {
+    id: "pago06", dataOrigem: "2027-03-28", horarioOrigem: "10:00",
+  });
+  db.documentos.set("servicos/" + SERVICO, {
+    ativo: true, nome: "Manicure", preco: 80, duracao: 60,
+  });
+  db.documentos.set("usuarios/" + ADMIN, { role: "admin", ativo: true });
+  const op6 = randomUUID();
+  const antigaFlag = process.env.PIX_REAGENDAMENTO_PAGO_ENABLED;
+  process.env.PIX_REAGENDAMENTO_PAGO_ENABLED = "true";
+  try {
+    const resposta = await reagendarComBloqueio({
+      pool, db, uid: ADMIN,
+      dados: {
+        agendamentoId: "pago06", servicoId: SERVICO,
+        data: "2027-03-29", horario: "14:00", operationId: op6,
+      },
+      dependencies: {
+        ...deps,
+        validarHorario: () => ({ valido: true, inicioMinuto: 840, fimMinuto: 900 }),
+        possuiBloqueio: async () => false,
+      },
+    });
+    assert.equal(resposta.operationId, op6);
+    assert.equal(resposta.estado, "solicitada");
+    assert.equal(db.documentos.get("agendamentos/pago06").data, "2027-03-28");
+    const completo = await processarProximoReagendamentoPixPago(pool, deps);
+    assert.equal(completo.estado, "concluida");
+    assert.equal(db.documentos.get("agendamentos/pago06").data, "2027-03-29");
+    assert.equal(db.documentos.get("agendamentos/pago06").pixCobrancaId, sexto.charge);
+  } finally {
+    if (antigaFlag === undefined) delete process.env.PIX_REAGENDAMENTO_PAGO_ENABLED;
+    else process.env.PIX_REAGENDAMENTO_PAGO_ENABLED = antigaFlag;
+  }
+
   const cobrancas = await pool.query("SELECT COUNT(*)::int AS n FROM public.pix_cobrancas");
-  assert.equal(cobrancas.rows[0].n, 5, "nenhuma nova cobrança foi criada pelo reagendamento");
+  assert.equal(cobrancas.rows[0].n, 6, "nenhuma nova cobrança foi criada pelo reagendamento");
 });
