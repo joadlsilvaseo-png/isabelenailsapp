@@ -5,11 +5,26 @@ import { converterPrecoServicoCentavos } from "./pixSinalServico.js";
 import { possuiBloqueio } from "./agendaBloqueios.js";
 import { STATUS_ALTERAVEIS_SERVICO, calcularRestanteServicoCentavos, validarNovoPeriodoServico } from "./agendamentoAlteracaoServicoRegras.mjs";
 
-const URL_APPS_SCRIPT = "https://script.google.com/macros/s/AKfycbzOxH8NT960XH0HSmuq5MPDzXkijMVVymGAWD_8_eFcNzfTKfadnnoy-plj_GCtPCnFcw/exec";
+// A URL usada por AGENDAR/CANCELAR permanece exclusiva em pixCalendarWorker.js.
+// A integração ATUALIZAR é separada e DESABILITADA por padrão.
+const URL_ATUALIZAR_ENV = "ISABELE_ALTERAR_SERVICO_APPS_SCRIPT_URL";
+const FLAG_ATUALIZAR_ENV = "ISABELE_ALTERAR_SERVICO_ENABLED";
+const PADRAO_URL_ATUALIZAR = /^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ID = /^[A-Za-z0-9_-]{1,160}$/;
 const ATIVOS = STATUS_ALTERAVEIS_SERVICO;
 const ERRO_LIMPEZA_MARCADOR = "LIMPEZA_MARCADOR_FIRESTORE_PENDENTE";
+
+function urlAppsScriptAtualizar(dependencies = {}) {
+  return String(dependencies.appsScriptAtualizarUrl ?? process.env[URL_ATUALIZAR_ENV] ?? "").trim();
+}
+
+function alterarServicoHabilitado(dependencies = {}) {
+  // Override restrito às dependências injetadas de testes; nunca vem do request.
+  if (dependencies.alteracaoServicoHabilitada === true) return true;
+  return process.env[FLAG_ATUALIZAR_ENV] === "true" &&
+    PADRAO_URL_ATUALIZAR.test(urlAppsScriptAtualizar());
+}
 
 export class ErroAlteracaoServico extends Error {
   constructor(status, message, permanente = status >= 400 && status < 500) {
@@ -100,9 +115,13 @@ function montarPayloadAtualizacaoCalendar(operacao) {
   };
 }
 
-export async function enviarAtualizacaoCalendar(operacao, fetcher = fetch) {
+export async function enviarAtualizacaoCalendar(operacao, fetcher = fetch, url = process.env[URL_ATUALIZAR_ENV]) {
+  const destino = String(url || "").trim();
+  if (!PADRAO_URL_ATUALIZAR.test(destino)) {
+    throw new ErroAlteracaoServico(503, "Integração ATUALIZAR indisponível; nenhuma alteração foi enviada ao Google Calendar.", false);
+  }
   const payload = montarPayloadAtualizacaoCalendar(operacao);
-  const resposta = await fetcher(URL_APPS_SCRIPT, {
+  const resposta = await fetcher(destino, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -375,7 +394,10 @@ async function processarOperacao(pool, operationId, dependencies = {}) {
         snapshot.inicio, snapshot.inicio + snapshot.duracaoNova, operacao.agendamento_id]);
     }
 
-    const confirmarCalendar = dependencies.enviarCalendar || enviarAtualizacaoCalendar;
+    const confirmarCalendar = dependencies.enviarCalendar ||
+      ((operacaoAtualizar, enviar) => enviarAtualizacaoCalendar(
+        operacaoAtualizar, enviar, urlAppsScriptAtualizar(dependencies),
+      ));
     await confirmarCalendar({
       ...operacao,
       data_servico: snapshot.data,
@@ -532,6 +554,10 @@ export async function atenderAlteracaoServico(req, res, pool, dependencies = {})
   }
 
   if (req.method !== "PATCH") { responder(res, 405, { erro: "Método não permitido." }); return; }
+  if (!alterarServicoHabilitado(dependencies)) {
+    responder(res, 503, { erro: "Alteração de serviço ainda não habilitada: é necessário validar o vínculo com o Google Calendar." });
+    return;
+  }
   let operationIdFalha = null;
   try {
     const dados = await lerJson(req);
@@ -583,6 +609,8 @@ export async function atenderAlteracaoServico(req, res, pool, dependencies = {})
 }
 
 export async function processarProximaAlteracaoServico(pool, dependencies = {}) {
+  // Sem configuração validada, não toca sequer na fila PostgreSQL.
+  if (!alterarServicoHabilitado(dependencies)) return { processado: false, desabilitado: true };
   const claimed = await pool.query(`
     WITH proxima AS (
       SELECT operation_id FROM public.agendamento_alteracoes_servico
