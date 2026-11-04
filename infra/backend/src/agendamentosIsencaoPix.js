@@ -3,6 +3,7 @@ import { validarHorarioPix } from "./pixDisponibilidade.js";
 import { validarServicoDezembro2026 } from "./agendamentoRegras.mjs";
 import { possuiBloqueio } from "./agendaBloqueios.js";
 import { encontrarConflitoAgendamentoPix } from "./pixDocumentoAgendamento.js";
+import { pixPagoReagendamentoHabilitado } from "./pixReagendamentoPago.js";
 
 const ID_UID = /^[A-Za-z0-9_-]{1,128}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -358,7 +359,10 @@ export async function reagendarComBloqueio({ pool, db, uid, dados, dependencies 
   const admin = await conferirAdmin(firestore, uid);
   if (!admin && dadosAtuais.clienteId !== uid) throw new ErroIsencaoPix(403, "Este agendamento não pertence à sua conta");
   if (dadosAtuais.pixCobrancaId || dadosAtuais.pixPagamentoId) {
-    throw new ErroIsencaoPix(409, "Agendamento com PIX exige conciliação financeira pelo salão", "PIX_REQUER_CONCILIACAO");
+    if (!pixPagoReagendamentoHabilitado(dependencies)) {
+      throw new ErroIsencaoPix(409, "Reagendamento de sinal PIX pago aguardando integração segura com o Google Calendar.", "PIX_REAGENDAMENTO_INDISPONIVEL");
+    }
+    throw new ErroIsencaoPix(503, "Reagendamento PIX pago ainda não validado para operação em produção.", "PIX_REAGENDAMENTO_EM_HOMOLOGACAO");
   }
   if (!["agendado", "reagendado", "confirmado"].includes(dadosAtuais.status)) {
     throw new ErroIsencaoPix(409, "Este agendamento não pode ser reagendado", "AGENDAMENTO_INATIVO");
@@ -506,6 +510,11 @@ export async function atenderAgendamentoIsencao(req, res, pool, dependencies = {
   const db = dependencies.firestore || await bancoPadrao();
   const caminho = new URL(req.url, "http://localhost").pathname;
   try {
+    // Somente leitura: o cliente só tenta reagendar PIX quando a integração validada estiver ativa.
+    if (req.method === "GET" && caminho === "/agendamentos/reagendar/config") {
+      responder(res, 200, { pixPagoHabilitado: pixPagoReagendamentoHabilitado(dependencies) });
+      return;
+    }
     if (req.method === "GET" && caminho === "/agendamentos/isencao") {
       responder(res, 200, { isentaSinalPix: await consultarIsencaoPix({ pool, uid }) });
       return;
