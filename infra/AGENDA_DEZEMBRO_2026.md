@@ -2,12 +2,9 @@
 
 ## Estado de produção e regra de segurança
 
-A agenda pública de dezembro **permanece fechada**.
-A constante `AGENDA_DEZEMBRO_2026_ABERTA`, em
-`infra/backend/src/agendamentoRegras.mjs`, deve continuar **false**
-até autorização expressa do responsável. É importada pelo frontend e usada
-na validação da API. A grade pública também oculta dezembro enquanto a chave
-estiver desligada.
+Em 04/11/2026, o responsável autorizou abrir dezembro para as clientes cadastradas no aplicativo, consideradas fixas pela profissional. A constante `AGENDA_DEZEMBRO_2026_ABERTA`, em `infra/backend/src/agendamentoRegras.mjs`, passa a ser **true** nesta release. A mesma regra é importada pelo frontend e validada na API.
+
+**Atenção à publicação:** modificar a branch no GitHub não significa que a agenda já esteja aberta em produção. Primeiro publicar e validar a API na VPS; depois publicar o frontend na Vercel e validar cliente e admin. Durante a transição, deixar o frontend antigo fechado evita mostrar horários antes de a API estar pronta. O cadastro de novas clientes continua habilitado; não existe validação de cliente fixa no backend.
 
 Não executar reservas PIX reais, não criar agendamentos de teste e não manipular
 registros de `agenda_bloqueios` para validar estes ajustes.
@@ -56,7 +53,7 @@ avance além do horário final.
 - `infra/backend/src/agendamentoRegras.mjs`: configuração por dia,
   permissões de serviços e chave de abertura pública.
 - `infra/backend/src/pixDisponibilidade.js`: abertura, encerramento e
-  restrição por data, sem mudar o bloqueio de dezembro.
+  restrição por data, respeitando a configuração de abertura e os dias fechados.
 - `infra/backend/src/pixReservas.js` e
   `infra/backend/src/agendamentosIsencaoPix.js`: validação de serviços
   antes de criar reserva PIX, agendamento sem sinal ou reagendamento.
@@ -79,21 +76,16 @@ node --test infra/backend/test/agendamentoDisponibilidade.test.js
 node --test infra/backend/test/agendaBloqueios.test.js
 ```
 
-Com a chave ainda desativada, devem ser testadas as 31 datas
-de dezembro; todas as datas continuam indisponíveis ao público.
-As regras excepcionais são validadas de modo isolado, sem abrir a agenda.
+Com a chave habilitada, validar as 31 datas: os oito dias fechados permanecem indisponíveis, e os demais seguem horários por dia e duração do serviço. Testar restrições de pedicure e serviços permitidos em 24/12, mais disponibilidade, PIX, isenção e reagendamento com simulações isoladas. Não criar pagamentos ou agendamentos reais para validar.
 
-## Publicação segura
+## Publicação segura — abertura autorizada em 04/11
 
-1. Manter a chave **false**. Revisar o catálogo real de serviços e testar
-   os fluxos de PIX, isenção e reagendamento em ambiente de testes isolado.
-2. Publicar o backend na VPS com o script oficial, backup e rollback, e
-   validar a API e o banco. A chave desligada evita criar reservas em dezembro.
-3. Confirmar que o frontend administrativo e backend têm o mesmo commit,
-   especialmente para segundas e domingos excepcionais.
-4. **Somente após nova autorização explícita**, mudar a chave de abertura
-   para **true** e planejar implantação sincronizada no frontend e backend;
-   a janela pública será ampliada até 31/12 para permitir o mês inteiro
-   em novembro. Validar que os dias marcados como fechados continuam fechados.
-5. Nunca habilitar PIX em dezembro só com o frontend nem remover bloqueios
-   administrativos para forçar a abertura.
+1. Validar os testes automatizados, inclusive os cenários com a chave ativa, sem alterar reservas reais.
+2. Auditar os **nomes e categorias reais no Firestore**, sobretudo serviços com nomes como "Esmaltação em Gel", e verificar a configuração do sinal PIX por serviço; confirmar os intervalos manuais já bloqueados.
+3. Publicar **primeiro o backend** versionado na VPS pelo script oficial (backup, preflight de migrações, rollback), sem resetar o checkout local nem alterar a configuração de pagamento.
+4. Com o frontend ainda fechado, testar a API autenticada para 14/12 (200) e 15/12 (400: Dia sem atendimento); verificar integridade dos containers e o commit de produção.
+5. Publicar **depois o frontend** na Vercel, com cache PWA renovado e a mesma revisão das regras. Conferir dezembro visível a clientes, dias sem expediente ocultos, slots e restrições de serviço.
+6. Verificar PIX, isenção e reagendamento sem executar cobranças reais ou criar reservas de teste em produção. Caso haja problemas, interromper a abertura pública e restaurar a imagem/API com o mecanismo de rollback, observando que isso não reverte migrações.
+7. Este release não implementa filtro de clientes fixas: a profissional declarou que quem usa atualmente o app é cliente fixa. Contas novas que se cadastrarem também poderão ver a agenda aberta; se isso não for desejado, implantar uma regra de elegibilidade específica.
+
+**Atenção:** não basta implantar apenas a tela ou apenas a API. O histórico de agendamentos, os bloqueios administrativos e as configurações financeiras devem permanecer intactos.
