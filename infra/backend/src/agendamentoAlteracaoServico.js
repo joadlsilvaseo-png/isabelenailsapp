@@ -9,6 +9,7 @@ const URL_APPS_SCRIPT = "https://script.google.com/macros/s/AKfycbzOxH8NT960XH0H
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ID = /^[A-Za-z0-9_-]{1,160}$/;
 const ATIVOS = STATUS_ALTERAVEIS_SERVICO;
+const ERRO_LIMPEZA_MARCADOR = "LIMPEZA_MARCADOR_FIRESTORE_PENDENTE";
 
 export class ErroAlteracaoServico extends Error {
   constructor(status, message, permanente = status >= 400 && status < 500) {
@@ -420,7 +421,7 @@ async function processarOperacao(pool, operationId, dependencies = {}) {
           precoSnapshot: snapshot.precoNovoCentavos / 100,
           valorRestanteCentavos: snapshot.restanteNovoCentavos,
           alteracaoServicoOperacaoId: operationId,
-          alteracaoServicoOperacaoPendente: FieldValue.delete(),
+          // O marcador só sai após o COMMIT PostgreSQL ter sido confirmado.
           alteracaoServicoAtualizadaEm: FieldValue.serverTimestamp(),
           alteracaoServicoAtualizadaPor: operacao.admin_uid,
           atualizadoEm: FieldValue.serverTimestamp(),
@@ -454,6 +455,22 @@ async function processarOperacao(pool, operationId, dependencies = {}) {
       WHERE operation_id = $1
     `, [operationId]);
     await conexao.query("COMMIT");
+    // PostgreSQL é a barreira de publicação do período. Até o commit, o marcador
+    // Firestore mantém bloqueados reagendamentos, conclusões e cancelamentos.
+    // A limpeza pós-commit é idempotente e reprocessada pelo worker se falhar.
+    try {
+      await limparMarcadorPendente(db, operacao, operationId, FieldValue);
+    } catch (erroLimpeza) {
+      console.error("[Alteração serviço] Marcador pós-commit pendente:", erroLimpeza.message);
+      await pool.query(`
+        UPDATE public.agendamento_alteracoes_servico
+        SET ultimo_erro = $2, proxima_tentativa_em = NOW() + INTERVAL '30 seconds',
+            bloqueado_ate = NULL, atualizado_em = NOW()
+        WHERE operation_id = $1 AND estado = 'concluida'
+      `, [operationId, ERRO_LIMPEZA_MARCADOR]).catch((erroDb) => {
+        console.error("[Alteração serviço] Agendamento concluído requer limpeza manual do marcador:", erroDb.message);
+      });
+    }
     return { estado: "concluida", operationId, servico: snapshot.servicoNovoNome,
       duracao: snapshot.duracaoNova, precoCentavos: snapshot.precoNovoCentavos,
       sinalPagoCentavos: snapshot.sinalPagoCentavos, restanteCentavos: snapshot.restanteNovoCentavos };
@@ -569,21 +586,50 @@ export async function processarProximaAlteracaoServico(pool, dependencies = {}) 
   const claimed = await pool.query(`
     WITH proxima AS (
       SELECT operation_id FROM public.agendamento_alteracoes_servico
-      WHERE estado = 'solicitada' AND proxima_tentativa_em <= NOW()
+      WHERE (estado = 'solicitada' OR (estado = 'concluida' AND ultimo_erro = $1))
+        AND proxima_tentativa_em <= NOW()
         AND (bloqueado_ate IS NULL OR bloqueado_ate <= NOW())
       ORDER BY criado_em FOR UPDATE SKIP LOCKED LIMIT 1
     )
     UPDATE public.agendamento_alteracoes_servico AS fila
     SET bloqueado_ate = NOW() + INTERVAL '2 minutes', atualizado_em = NOW()
     FROM proxima WHERE fila.operation_id = proxima.operation_id
-    RETURNING fila.operation_id
-  `);
+    RETURNING fila.operation_id, fila.estado
+  `, [ERRO_LIMPEZA_MARCADOR]);
   const operationId = claimed.rows[0]?.operation_id;
   if (!operationId) return { processado: false };
+  const limpezaConcluidaPendente = claimed.rows[0].estado === "concluida";
   try {
+    if (limpezaConcluidaPendente) {
+      const result = await pool.query(
+        "SELECT * FROM public.agendamento_alteracoes_servico WHERE operation_id = $1",
+        [operationId],
+      );
+      const operacao = result.rows[0];
+      if (!operacao) throw new Error("Operação de limpeza não encontrada");
+      const db = dependencies.firestore || await firestorePadrao();
+      const FieldValue = dependencies.FieldValue || await fieldValuePadrao();
+      await limparMarcadorPendente(db, operacao, operationId, FieldValue);
+      await pool.query(`
+        UPDATE public.agendamento_alteracoes_servico
+        SET ultimo_erro = NULL, bloqueado_ate = NULL, atualizado_em = NOW()
+        WHERE operation_id = $1 AND estado = 'concluida' AND ultimo_erro = $2
+      `, [operationId, ERRO_LIMPEZA_MARCADOR]);
+      return { processado: true, estado: "concluida", marcadorLiberado: true };
+    }
     const resultado = await processarOperacao(pool, operationId, dependencies);
     return { processado: true, ...resultado };
   } catch (erro) {
+    if (limpezaConcluidaPendente) {
+      console.error("[Alteração serviço] Falha ao liberar marcador pós-commit:", erro.message);
+      await pool.query(`
+        UPDATE public.agendamento_alteracoes_servico
+        SET bloqueado_ate = NULL, proxima_tentativa_em = NOW() + INTERVAL '60 seconds',
+            atualizado_em = NOW()
+        WHERE operation_id = $1 AND estado = 'concluida'
+      `, [operationId]);
+      return { processado: true, estado: "concluida", marcadorLiberado: false };
+    }
     const retry = !(erro instanceof ErroAlteracaoServico && erro.permanente);
     await pool.query(`
       UPDATE public.agendamento_alteracoes_servico
