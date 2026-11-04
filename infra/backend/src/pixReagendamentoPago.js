@@ -6,10 +6,9 @@ const FLAG_ENV = "PIX_REAGENDAMENTO_PAGO_ENABLED";
 const URL_GAS = /^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/;
 
 export function pixPagoReagendamentoHabilitado() {
-  // A sincronização transacional entre Firestore, PostgreSQL e Calendar
-  // ainda NÃO foi implementada. Não permitir habilitação por variável de
-  // ambiente ou configuração no navegador enquanto a operação é parcial.
-  return false;
+  // A flag de produção só pode ser habilitada após a migração 021 e o worker
+  // durável estarem instalados. Sem a flag, o comportamento antigo é preservado.
+  return process.env[FLAG_ENV] === "true";
 }
 
 export function validarPagamentoPixReagendamento({
