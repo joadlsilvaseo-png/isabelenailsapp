@@ -60,3 +60,35 @@ body { background: radial-gradient(circle at top right, rgba(168, 97, 123, .12),
 @media (min-width: 700px) { .modal-overlay { align-items: center; padding: 20px; }.client-modal { margin-bottom: 0; border-radius: 26px; } }
 @media (max-width: 600px) { .top-bar { grid-template-columns: 40px minmax(0,1fr) auto; gap: 8px; }.brand-text strong { font-size: 12px; }.client-modal { border-radius: 24px 24px 0 0; padding: 10px 16px max(24px, env(safe-area-inset-bottom)); }.client-pix-exemption { padding: 14px; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+
+/* Filtro de isenção PIX — visual consistente com a gestão administrativa. */
+body[data-page="admin-clientes"] .clients-pix-filters {
+  margin-top: 12px;
+  padding-bottom: 4px;
+  gap: 9px;
+}
+
+body[data-page="admin-clientes"] .clients-pix-filters .filter-button {
+  min-height: 42px;
+  padding: 0 15px;
+  border: 1px solid #eadde2;
+  border-radius: 999px;
+  font-family: "Poppins", sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  background: #fffafb;
+  color: #591c31;
+}
+
+body[data-page="admin-clientes"] .clients-pix-filters .filter-button--active {
+  border-color: #7c334c;
+  color: #fffafb;
+  background: #7c334c;
+  box-shadow: 0 4px 14px rgba(89, 28, 49, 0.16);
+}
+
+body[data-page="admin-clientes"] .client-tag--pix {
+  color: #24613e;
+  background: #e8f1eb;
+  border-color: rgba(36, 97, 62, 0.14);
+}
