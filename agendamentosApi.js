@@ -49,6 +49,40 @@ export async function reagendarAgendamentoApi(auth, dados) {
   return resultado;
 }
 
+// Estado da saga de reagendamento PIX pago. Sem endpoint disponível, não libera a tela.
+export async function consultarReagendamentoPixConfigApi(auth) {
+  const usuario = auth?.currentUser;
+  if (!usuario) return false;
+  try {
+    const token = await usuario.getIdToken();
+    const resposta = await fetch("/api/agendamentos/reagendar/config", {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!resposta.ok) return false;
+    const dados = await resposta.json();
+    return dados?.pixPagoHabilitado === true;
+  } catch {
+    return false;
+  }
+}
+
+export async function consultarReagendamentoPixPagoApi(auth, operationId) {
+  const usuario = auth?.currentUser;
+  if (!usuario) throw new Error("Entre na sua conta para consultar o reagendamento.");
+  const token = await usuario.getIdToken();
+  const resposta = await fetch(
+    `/api/agendamentos/reagendar?operationId=${encodeURIComponent(operationId)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+      signal: AbortSignal.timeout(10000),
+    });
+  const dados = await resposta.json().catch(() => ({}));
+  if (!resposta.ok) throw new Error(dados.erro || "Não foi possível consultar o reagendamento.");
+  return dados;
+}
+
 export async function consultarDisponibilidadePix(auth, data, agendamentoId = null) {
   const usuario = auth?.currentUser;
   if (!usuario) throw new Error("Entre na sua conta para consultar os horários.");
