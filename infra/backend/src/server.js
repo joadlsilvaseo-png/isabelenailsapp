@@ -82,6 +82,7 @@ const server = http.createServer(async (req, res) => {
       "/agendamentos/isencao",
       "/agendamentos/sem-pix",
       "/agendamentos/reagendar",
+      "/agendamentos/reagendar/config",
       "/admin/isencoes-sinal-pix",
       "/admin/clientes/isencao-sinal-pix",
     ].includes(new URL(req.url, "http://localhost").pathname)
