@@ -8,6 +8,7 @@ import {
   getDoc,
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
 import { salvarIsencaoComReversao } from "./admin-clientes-state.js";
+import { organizarClientes } from "./admin-clientes-listagem.mjs?v=1.0.0";
 
 const $ = (id) => document.getElementById(id);
 const list = $("clients-list");
@@ -19,13 +20,14 @@ const moreButton = $("load-more");
 const modal = $("client-modal");
 const modalPanel = modal.querySelector(".client-modal");
 const exemption = $("client-pix-exemption");
-let cursor = null;
-let hasMore = false;
 let query = "";
-let loading = false;
-let pendingReload = false;
 let debounce;
 let queryVersion = 0;
+let controladorCarregamento = null;
+let clientesCarregadas = [];
+let isencoesAtivas = new Set();
+let filtroPix = "todos";
+let limiteExibicao = 20;
 let profileVersion = 0;
 let activeUid = null;
 let fotoModalUrl = null;
@@ -262,7 +264,9 @@ function clientCard(client) {
   side.className = "client-card-side";
   const label = document.createElement("span");
   label.className = "client-tag";
-  label.textContent = "Perfil";
+  label.textContent = isencoesAtivas.has(client.id) ? "Isenta de PIX" : "Perfil";
+  if (isencoesAtivas.has(client.id)) label.classList.add("client-tag--pix");
+  button.dataset.clientId = client.id;
   side.append(label);
   button.append(avatar, content, side);
   if (client.hasCustomPhoto === true) {
@@ -274,58 +278,109 @@ function clientCard(client) {
   return button;
 }
 
-async function loadClients({ reset = false } = {}) {
-  if (loading) {
-    pendingReload ||= reset;
-    return;
-  }
-  const version = queryVersion;
-  const requestedQuery = query;
-  if (reset) {
+function renderizarClientes({ recriar = false } = {}) {
+  if (recriar) {
     limparFotosCartoes();
-  }
-  if (reset) {
-    cursor = null;
-    hasMore = false;
     list.replaceChildren();
   }
-  loading = true;
-  list.setAttribute("aria-busy", "true");
+
+  const organizadas = organizarClientes(
+    clientesCarregadas, isencoesAtivas, filtroPix === "isentas",
+  );
+  const quantidade = Math.min(limiteExibicao, organizadas.length);
+
+  for (let indice = list.children.length; indice < quantidade; indice += 1) {
+    list.append(clientCard(organizadas[indice]));
+  }
+
+  const rotulo = filtroPix === "isentas"
+    ? "clientes isentas" : query ? "resultados" : "clientes";
+  count.textContent = quantidade === organizadas.length
+    ? `${organizadas.length} ${rotulo}`
+    : `${quantidade} de ${organizadas.length} ${rotulo}`;
+
+  empty.hidden = organizadas.length > 0;
+  $("empty-state-message").textContent = filtroPix === "isentas"
+    ? query
+      ? "Nenhuma cliente isenta corresponde à pesquisa."
+      : "Nenhuma cliente com isenção de sinal PIX encontrada."
+    : "Tente outro termo de busca.";
+
+  moreButton.hidden = quantidade >= organizadas.length;
+}
+
+async function loadClients({ reset = true } = {}) {
+  // Busca todas as páginas antes de ordenar: a API pagina por UID, não por nome.
+  const version = ++queryVersion;
+  controladorCarregamento?.abort();
+  const controlador = new AbortController();
+  controladorCarregamento = controlador;
+  const requestedQuery = query;
+
+  if (reset) {
+    limparFotosCartoes();
+    list.replaceChildren();
+    clientesCarregadas = [];
+    limiteExibicao = 20;
+  }
+
+  count.textContent = "Organizando clientes…";
+  empty.hidden = true;
+  moreButton.hidden = true;
   moreButton.disabled = true;
+  list.setAttribute("aria-busy", "true");
   showError();
+
   try {
-    const params = new URLSearchParams({ limit: "20" });
-    if (requestedQuery) params.set("q", requestedQuery);
-    if (cursor) params.set("cursor", cursor);
-    const result = await apiFetch(`/api/admin/clientes?${params}`);
-    if (version !== queryVersion) return;
-    result.items.forEach((item) => list.append(clientCard(item)));
-    cursor = result.nextCursor;
-    hasMore = Boolean(result.hasMore);
-    const rendered = list.children.length;
-    count.textContent = requestedQuery
-      ? `${rendered} resultado${rendered === 1 ? "" : "s"}`
-      : `${rendered} cliente${rendered === 1 ? "" : "s"}`;
-    empty.hidden = rendered > 0;
-    moreButton.hidden = !hasMore;
-    if (result.scanLimitReached)
-      showError(
-        "A busca atingiu o limite de segurança. Refine o termo ou continue pela paginação.",
-      );
-  } catch (error) {
-    if (version === queryVersion) {
-      showError(
-        error.message || "Não foi possível carregar a lista de clientes.",
-      );
-      if (reset) empty.hidden = true;
+    const isencoes = await apiFetch("/api/admin/isencoes-sinal-pix", {
+      signal: controlador.signal,
+    });
+    if (!Array.isArray(isencoes.clientes)) {
+      throw new Error("Não foi possível identificar as isenções de sinal PIX.");
     }
+
+    const clientes = [];
+    let cursorPagina = "";
+    const cursoresVisitados = new Set();
+
+    while (true) {
+      if (version !== queryVersion) return;
+      const params = new URLSearchParams({ limit: "50" });
+      if (requestedQuery) params.set("q", requestedQuery);
+      if (cursorPagina) params.set("cursor", cursorPagina);
+
+      const resultado = await apiFetch(`/api/admin/clientes?${params}`, {
+        signal: controlador.signal,
+      });
+      if (!Array.isArray(resultado.items)) {
+        throw new Error("A resposta da listagem de clientes está incompleta.");
+      }
+      clientes.push(...resultado.items);
+      if (!resultado.hasMore) break;
+
+      const proximoCursor = resultado.nextCursor;
+      if (!proximoCursor || proximoCursor === cursorPagina ||
+          cursoresVisitados.has(proximoCursor)) {
+        throw new Error("A paginação de clientes não avançou. Tente novamente.");
+      }
+      cursoresVisitados.add(proximoCursor);
+      cursorPagina = proximoCursor;
+    }
+
+    if (version !== queryVersion) return;
+    isencoesAtivas = new Set(isencoes.clientes);
+    clientesCarregadas = clientes;
+    renderizarClientes({ recriar: true });
+  } catch (error) {
+    if (version !== queryVersion || controlador.signal.aborted) return;
+    showError(error.message || "Não foi possível carregar a lista de clientes.");
+    count.textContent = "Não foi possível carregar";
+    empty.hidden = true;
   } finally {
-    loading = false;
-    list.setAttribute("aria-busy", "false");
-    moreButton.disabled = false;
-    if (pendingReload) {
-      pendingReload = false;
-      void loadClients({ reset: true });
+    if (version === queryVersion) {
+      controladorCarregamento = null;
+      list.setAttribute("aria-busy", "false");
+      moreButton.disabled = false;
     }
   }
 }
@@ -437,7 +492,8 @@ function closeModal() {
   modal.hidden = true;
   document.body.style.overflow = "";
   activeUid = null;
-  modalReturnFocus?.focus();
+  if (modalReturnFocus?.isConnected) modalReturnFocus.focus();
+  else search.focus();
 }
 
 function trapFocus(event) {
@@ -470,6 +526,7 @@ $("search-form").addEventListener("submit", (event) => event.preventDefault());
 search.addEventListener("input", () => {
   query = search.value.trim();
   queryVersion += 1;
+  controladorCarregamento?.abort();
   $("clear-search-button").hidden = !query;
   clearTimeout(debounce);
   debounce = setTimeout(() => void loadClients({ reset: true }), 300);
@@ -478,11 +535,32 @@ $("clear-search-button").addEventListener("click", () => {
   search.value = "";
   query = "";
   queryVersion += 1;
+  controladorCarregamento?.abort();
+  clearTimeout(debounce);
   $("clear-search-button").hidden = true;
   void loadClients({ reset: true });
   search.focus();
 });
-moreButton.addEventListener("click", () => void loadClients());
+moreButton.addEventListener("click", () => {
+  limiteExibicao += 20;
+  renderizarClientes();
+});
+
+$("client-pix-filters").addEventListener("click", (event) => {
+  const botao = event.target.closest("[data-pix-filter]");
+  if (!botao || !event.currentTarget.contains(botao)) return;
+  const filtro = botao.dataset.pixFilter;
+  if (filtro !== "todos" && filtro !== "isentas") return;
+
+  filtroPix = filtro;
+  limiteExibicao = 20;
+  event.currentTarget.querySelectorAll("[data-pix-filter]").forEach((item) => {
+    const ativo = item.dataset.pixFilter === filtro;
+    item.classList.toggle("filter-button--active", ativo);
+    item.setAttribute("aria-pressed", String(ativo));
+  });
+  renderizarClientes({ recriar: true });
+});
 $("clients-retry").addEventListener(
   "click",
   () => void loadClients({ reset: true }),
@@ -532,7 +610,7 @@ exemption.addEventListener("change", async () => {
   const desired = exemption.checked;
   exemption.disabled = true;
   setExemptionStatus("Salvando autorização…");
-  await salvarIsencaoComReversao({
+  const salvo = await salvarIsencaoComReversao({
     uid,
     ativa: desired,
     salvar: (clienteUid, ativa) =>
@@ -547,6 +625,16 @@ exemption.addEventListener("change", async () => {
       if (activeUid === uid) setExemptionStatus(message, state);
     },
   });
+  if (salvo) {
+    if (desired) isencoesAtivas.add(uid);
+    else isencoesAtivas.delete(uid);
+    renderizarClientes({ recriar: true });
+    if (activeUid === uid) {
+      modalReturnFocus = Array.from(list.children)
+        .find((card) => card.dataset.clientId === uid)
+        || document.querySelector('[data-pix-filter="isentas"]');
+    }
+  }
   if (activeUid === uid) exemption.disabled = false;
 });
 
