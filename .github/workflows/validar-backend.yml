@@ -48,6 +48,8 @@ jobs:
         run: node --test ../../scripts/admin-conclusao-modal.test.mjs
       - name: Testar ordenação e filtro PIX de clientes
         run: node --test ../../scripts/admin-clientes-listagem.test.mjs
+      - name: Testar filtros e avatar da agenda administrativa
+        run: node --test ../../scripts/admin-agenda-filtros-foto.test.mjs
       - name: Validar script de deploy
         working-directory: .
         run: bash -n infra/scripts/atualizar-vps-pix.sh
