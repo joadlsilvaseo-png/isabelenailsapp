@@ -1735,7 +1735,10 @@ function solicitarValorConclusaoAdmin(agendamento) {
 
 async function concluirAgendamento(agendamento) {
   if (agendamento.reagendamentoPixOperacaoPendente) {
-    window.alert("Reagendamento PIX em sincronização. Aguarde a conclusão para finalizar o atendimento.");
+    await exibirModalCancelamentoAdmin({
+      titulo: "Aguarde a sincronização",
+      mensagem: "Há um reagendamento PIX em andamento. Conclua o atendimento somente após a atualização da agenda.",
+    });
     return;
   }
   const valorFinal = await solicitarValorConclusaoAdmin(agendamento);
