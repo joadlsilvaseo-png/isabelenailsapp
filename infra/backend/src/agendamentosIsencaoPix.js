@@ -363,6 +363,9 @@ export async function reagendarComBloqueio({ pool, db, uid, dados, dependencies 
   const dadosAtuais = inicial.data();
   const admin = await conferirAdmin(firestore, uid);
   if (!admin && dadosAtuais.clienteId !== uid) throw new ErroIsencaoPix(403, "Este agendamento não pertence à sua conta");
+  if (dadosAtuais.alteracaoServicoOperacaoPendente) {
+    throw new ErroIsencaoPix(409, "Uma alteração de serviço está em andamento; aguarde a conclusão.", "ALTERACAO_SERVICO_EM_ANDAMENTO");
+  }
   if (dadosAtuais.pixCobrancaId || dadosAtuais.pixPagamentoId) {
     if (!pixPagoReagendamentoHabilitado()) {
       throw new ErroIsencaoPix(409, "Reagendamento de sinal PIX pago ainda não habilitado.", "PIX_REAGENDAMENTO_INDISPONIVEL");
@@ -376,6 +379,9 @@ export async function reagendarComBloqueio({ pool, db, uid, dados, dependencies 
   }
   if (!["agendado", "reagendado", "confirmado"].includes(dadosAtuais.status)) {
     throw new ErroIsencaoPix(409, "Este agendamento não pode ser reagendado", "AGENDAMENTO_INATIVO");
+  }
+  if (dadosAtuais.alteracaoServicoOperacaoPendente) {
+    throw new ErroIsencaoPix(409, "Uma alteração de serviço está em andamento; aguarde a conclusão.", "ALTERACAO_SERVICO_EM_ANDAMENTO");
   }
 
   const dataAnterior = String(dadosAtuais.data || dadosAtuais.dataAgendamento || "");
@@ -450,6 +456,9 @@ export async function reagendarComBloqueio({ pool, db, uid, dados, dependencies 
       }
       if (!["agendado", "reagendado", "confirmado"].includes(atual.status)) {
         throw new ErroIsencaoPix(409, "Este agendamento não pode ser reagendado", "AGENDAMENTO_INATIVO");
+      }
+      if (atual.alteracaoServicoOperacaoPendente) {
+        throw new ErroIsencaoPix(409, "Uma alteração de serviço está em andamento; aguarde a conclusão.", "ALTERACAO_SERVICO_EM_ANDAMENTO");
       }
       if (atual.data === data && atual.horario === horario && atual.idServico === servicoId) {
         documentoAnterior = atual;

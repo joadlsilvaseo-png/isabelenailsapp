@@ -559,6 +559,8 @@ MIGRATION_018="$RELEASE_DIR/infra/migrations/018_agenda_bloqueios.sql"
 [[ -f "$MIGRATION_018" ]] || die "Migracao 018 nao encontrada no commit alvo."
 MIGRATION_019="$RELEASE_DIR/infra/migrations/019_lembretes_agendamento.sql"
 [[ -f "$MIGRATION_019" ]] || die "Migracao 019 nao encontrada no commit alvo."
+MIGRATION_020="$RELEASE_DIR/infra/migrations/020_agendamento_alteracoes_servico.sql"
+[[ -f "$MIGRATION_020" ]] || die "Migracao 020 nao encontrada no commit alvo."
 MIGRATION_021="$RELEASE_DIR/infra/migrations/021_pix_reagendamentos_pagos.sql"
 [[ -f "$MIGRATION_021" ]] || die "Migracao 021 nao encontrada no commit alvo."
 
@@ -587,6 +589,20 @@ if [[ "${ENABLE_PIX_PAID_RESCHEDULE:-false}" == "true" ]]; then
       PIX_REAGENDAMENTO_PAGO_ENABLED: "true"
 YAML
   echo "Reagendamento PIX pago será habilitado na API nova após validações."
+fi
+if [[ "${ENABLE_ALTERAR_SERVICO:-false}" == "true" ]]; then
+  # PIX usa a URL da API já conhecida; sem PIX usa ATUALIZAR na URL frontend.
+  # Habilitar somente após teste fictício confirmando nome e duração.
+  if [[ "${ENABLE_PIX_PAID_RESCHEDULE:-false}" != "true" ]]; then
+    cat >>"$UPDATE_OVERRIDE" <<'YAML'
+    environment:
+YAML
+  fi
+  cat >>"$UPDATE_OVERRIDE" <<'YAML'
+      ISABELE_ALTERAR_SERVICO_ENABLED: "true"
+      ISABELE_ALTERAR_SERVICO_APPS_SCRIPT_URL: "https://script.google.com/macros/s/AKfycbwUwXunAdMAroSPAeMHH2ZQxCOuQage7lmAHH7-llgmeVXug6-Z9KGq6R7NVgQ70XYy/exec"
+YAML
+  echo "Alteração de serviço: opt-in no novo container."
 fi
 chmod 600 "$UPDATE_OVERRIDE"
 
@@ -1094,6 +1110,101 @@ case "$MIGRATION_019_STATE" in
   *) die "Preflight da migracao 019 falhou." ;;
 esac
 
+# Preflight da auditoria/outbox de alteração de serviço. Ausência total é
+# pendente; qualquer estrutura incompleta interrompe antes de parar a API.
+MIGRATION_020_STATE_SQL="$BACKUP_DIR/migration-020-state.sql"
+cat >"$MIGRATION_020_STATE_SQL" <<'SQL'
+WITH estado AS (
+  SELECT
+    to_regclass('public.agendamento_alteracoes_servico') IS NOT NULL AS has_table,
+    (SELECT COUNT(*) = 27 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'agendamento_alteracoes_servico'
+        AND column_name IN (
+          'operation_id','agendamento_id','admin_uid','cliente_uid','nome_cliente',
+          'servico_anterior_id','servico_anterior_nome','servico_novo_id',
+          'servico_novo_nome','data_servico','inicio_minuto','calendar_event_id',
+          'duracao_anterior','duracao_nova','preco_anterior_centavos',
+          'preco_novo_centavos','sinal_pago_centavos','restante_novo_centavos',
+          'estado','calendar_estado','tentativas','proxima_tentativa_em',
+          'bloqueado_ate','ultimo_erro','criado_em','atualizado_em','concluido_em'
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM (VALUES
+            ('operation_id','uuid','NO'), ('agendamento_id','text','NO'),
+            ('admin_uid','text','NO'), ('cliente_uid','text','YES'),
+            ('nome_cliente','text','YES'), ('servico_anterior_id','text','YES'), ('servico_anterior_nome','text','YES'),
+            ('servico_novo_id','text','NO'), ('servico_novo_nome','text','YES'),
+            ('data_servico','date','YES'), ('inicio_minuto','smallint','YES'),
+            ('calendar_event_id','text','YES'), ('duracao_anterior','smallint','YES'),
+            ('duracao_nova','smallint','YES'), ('preco_anterior_centavos','bigint','YES'),
+            ('preco_novo_centavos','bigint','YES'), ('sinal_pago_centavos','bigint','NO'),
+            ('restante_novo_centavos','bigint','YES'), ('estado','text','NO'),
+            ('calendar_estado','text','NO'), ('tentativas','integer','NO'),
+            ('proxima_tentativa_em','timestamp with time zone','NO'),
+            ('bloqueado_ate','timestamp with time zone','YES'), ('ultimo_erro','text','YES'),
+            ('criado_em','timestamp with time zone','NO'),
+            ('atualizado_em','timestamp with time zone','NO'),
+            ('concluido_em','timestamp with time zone','YES')
+          ) AS esperado(nome, tipo, nullable)
+          LEFT JOIN information_schema.columns c
+            ON c.table_schema = 'public' AND c.table_name = 'agendamento_alteracoes_servico'
+           AND c.column_name = esperado.nome
+          WHERE c.column_name IS NULL OR c.data_type <> esperado.tipo OR c.is_nullable <> esperado.nullable
+        )) AS has_columns,
+    EXISTS (SELECT 1 FROM pg_constraint
+      WHERE conrelid = to_regclass('public.agendamento_alteracoes_servico')
+        AND conname = 'agendamento_alteracoes_servico_pkey' AND contype = 'p') AS has_primary_key,
+    (SELECT COUNT(*) = 2 FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid
+      WHERE i.indrelid = to_regclass('public.agendamento_alteracoes_servico')
+        AND c.relname IN ('idx_agendamento_alteracoes_servico_pendentes',
+                          'idx_agendamento_alteracoes_servico_agendamento')
+        AND i.indisvalid AND i.indisready
+        AND ((c.relname = 'idx_agendamento_alteracoes_servico_pendentes'
+              AND pg_get_indexdef(i.indexrelid) LIKE '%(proxima_tentativa_em, criado_em)%'
+              AND pg_get_expr(i.indpred, i.indrelid) LIKE '%solicitada%')
+          OR (c.relname = 'idx_agendamento_alteracoes_servico_agendamento'
+              AND pg_get_indexdef(i.indexrelid) LIKE '%(agendamento_id, criado_em DESC)%'))) AS has_indexes,
+    (SELECT COUNT(*) = 10 FROM pg_constraint
+      WHERE conrelid = to_regclass('public.agendamento_alteracoes_servico')
+        AND contype = 'c'
+        AND conname IN (
+          'agendamento_alteracoes_servico_estado_check',
+          'agendamento_alteracoes_servico_calendar_estado_check',
+          'agendamento_alteracoes_servico_tentativas_check',
+          'agendamento_alteracoes_servico_inicio_check',
+          'agendamento_alteracoes_servico_duracao_anterior_check',
+          'agendamento_alteracoes_servico_duracao_nova_check',
+          'agendamento_alteracoes_servico_preco_anterior_check',
+          'agendamento_alteracoes_servico_preco_novo_check',
+          'agendamento_alteracoes_servico_sinal_pago_check',
+          'agendamento_alteracoes_servico_restante_novo_check'
+        )) AS has_checks
+)
+SELECT has_table, has_columns, has_primary_key, has_indexes, has_checks,
+  (SELECT COUNT(*) = 7 FROM (VALUES
+    ('sinal_pago_centavos','0'), ('estado','solicitada'),
+    ('calendar_estado','pendente'), ('tentativas','0'),
+    ('proxima_tentativa_em','now()'), ('criado_em','now()'),
+    ('atualizado_em','now()')
+  ) AS padrao(nome, trecho)
+  JOIN information_schema.columns c
+    ON c.table_schema = 'public' AND c.table_name = 'agendamento_alteracoes_servico'
+   AND c.column_name = padrao.nome
+  WHERE lower(COALESCE(c.column_default, '')) LIKE '%' || padrao.trecho || '%') AS has_defaults
+FROM estado;
+SQL
+chmod 600 "$MIGRATION_020_STATE_SQL"
+MIGRATION_020_ROW="$(compose_snapshot exec -T "$DB_SERVICE" sh -lc 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At -F "|"' <"$MIGRATION_020_STATE_SQL" | tr -d '\r\n')"
+IFS='|' read -r HAS_020_TABLE HAS_020_COLUMNS HAS_020_PK HAS_020_INDEXES HAS_020_CHECKS HAS_020_DEFAULTS <<<"$MIGRATION_020_ROW"
+if [[ "$HAS_020_TABLE" == t && "$HAS_020_COLUMNS" == t && "$HAS_020_PK" == t && "$HAS_020_INDEXES" == t && "$HAS_020_CHECKS" == t && "$HAS_020_DEFAULTS" == t ]]; then
+  MIGRATION_020_STATE=applied
+elif [[ "$HAS_020_TABLE" == f && "$HAS_020_COLUMNS" == f && "$HAS_020_PK" == f && "$HAS_020_INDEXES" == f && "$HAS_020_CHECKS" == f && "$HAS_020_DEFAULTS" == f ]]; then
+  MIGRATION_020_STATE=pending
+else
+  die "Migracao 020 parcial/inconsistente: tabela=$HAS_020_TABLE colunas=$HAS_020_COLUMNS chave=$HAS_020_PK indices=$HAS_020_INDEXES checks=$HAS_020_CHECKS defaults=$HAS_020_DEFAULTS. API e dados preservados."
+fi
+echo "Estado da migracao 020: $MIGRATION_020_STATE"
+
 # Preflight 021: journal durável de reagendamentos PIX pagos.
 # Não iniciar o deploy se houver objeto parcial ou índice incompatível.
 MIGRATION_021_STATE_SQL="$BACKUP_DIR/migration-021-state.sql"
@@ -1159,6 +1270,7 @@ MIGRATION_014_APPLIED=false
 MIGRATION_016_APPLIED=false
 MIGRATION_018_APPLIED=false
 MIGRATION_019_APPLIED=false
+MIGRATION_020_APPLIED=false
 MIGRATION_021_APPLIED=false
 NEW_API_STARTED=false
 restore_old_api_on_error() {
@@ -1182,7 +1294,7 @@ EOF
     elif [[ "$API_STOPPED" == true ]]; then
       docker start "$API_CONTAINER" >/dev/null || true
     fi
-    if [[ "$MIGRATION_APPLIED" == true || "$MIGRATION_STATE" == applied || "$MIGRATION_011_APPLIED" == true || "$MIGRATION_011_STATE" == applied || "$MIGRATION_012_APPLIED" == true || "$MIGRATION_012_STATE" == applied || "$MIGRATION_016_APPLIED" == true || "$MIGRATION_016_STATE" == applied || "$MIGRATION_018_APPLIED" == true || "$MIGRATION_018_STATE" == applied || "$MIGRATION_019_APPLIED" == true || "$MIGRATION_019_STATE" == applied || "$MIGRATION_021_APPLIED" == true || "$MIGRATION_021_STATE" == applied ]]; then
+    if [[ "$MIGRATION_APPLIED" == true || "$MIGRATION_STATE" == applied || "$MIGRATION_011_APPLIED" == true || "$MIGRATION_011_STATE" == applied || "$MIGRATION_012_APPLIED" == true || "$MIGRATION_012_STATE" == applied || "$MIGRATION_016_APPLIED" == true || "$MIGRATION_016_STATE" == applied || "$MIGRATION_018_APPLIED" == true || "$MIGRATION_018_STATE" == applied || "$MIGRATION_019_APPLIED" == true || "$MIGRATION_019_STATE" == applied || "$MIGRATION_020_APPLIED" == true || "$MIGRATION_020_STATE" == applied || "$MIGRATION_021_APPLIED" == true || "$MIGRATION_021_STATE" == applied ]]; then
       echo "Migracoes aplicadas (incluindo 016, 018 e 019, se executadas) permanecem preservadas; nenhum dado foi removido."
     fi
     echo "Backup e configuracao efetiva anterior: $BACKUP_DIR"
@@ -1241,6 +1353,13 @@ if [[ "$MIGRATION_019_STATE" == pending ]]; then
   echo "Migracao 019 aplicada com sucesso."
 else
   echo "Pulando migracao 019 ja aplicada; lembretes existentes serao mantidos."
+fi
+if [[ "$MIGRATION_020_STATE" == pending ]]; then
+  compose_snapshot exec -T "$DB_SERVICE" sh -lc 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <"$MIGRATION_020"
+  MIGRATION_020_APPLIED=true
+  echo "Migracao 020 aplicada com sucesso."
+else
+  echo "Pulando migracao 020 ja aplicada; alteracoes anteriores serao mantidas."
 fi
 if [[ "$MIGRATION_021_STATE" == pending ]]; then
   compose_snapshot exec -T "$DB_SERVICE" sh -lc 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <"$MIGRATION_021"

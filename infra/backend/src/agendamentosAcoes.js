@@ -166,6 +166,10 @@ export async function atenderAcaoAgendamento(req, res, pool) {
       const agendamento = snap.data();
       const statusAtual = agendamento.status;
 
+      if (acao === "concluir_admin" && agendamento.alteracaoServicoOperacaoPendente) {
+        throw new ErroAcao(409, "Uma alteração de serviço está em andamento; tente concluir o atendimento novamente depois.");
+      }
+
       if (!acaoAdmin && agendamento.clienteId !== uid) {
         throw new ErroAcao(403, "Agendamento nao pertence ao usuario");
       }

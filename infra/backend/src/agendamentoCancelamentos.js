@@ -150,6 +150,9 @@ async function aplicarCancelamentoFirestore(db, solicitacao, dependencies = {}) 
     if (dados.reagendamentoPixOperacaoPendente) {
       throw new ErroCancelamento(409, "Reagendamento PIX ainda em processamento", true);
     }
+    if (dados.alteracaoServicoOperacaoPendente) {
+      throw new ErroCancelamento(409, "Alteração de serviço em andamento; cancelamento será retomado depois", false);
+    }
 
     transacao.update(reference, {
       status: statusAlvo,

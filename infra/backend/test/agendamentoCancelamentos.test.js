@@ -553,6 +553,26 @@ test("cancelamento de agendamento sem PIX libera a reserva persistida sem altera
   assert.equal(f.state.charge, null);
 });
 
+test("cancelamento espera a troca de serviço e retoma depois sem duplicar a solicitação", async () => {
+  const f = fixture();
+  const doc = f.state.docs.get(`agendamentos:${AGENDAMENTO_ID}`);
+  doc.alteracaoServicoOperacaoPendente = "op-servico-1";
+  f.state.docs.set(`agendamentos:${AGENDAMENTO_ID}`, doc);
+  const pedido = await solicitarCancelamentoAgendamento({
+    pool: f.pool, firestore: f.firestore, uid: f.uid,
+    agendamentoId: AGENDAMENTO_ID, acao: f.action, dependencies: f.dependencies
+  });
+  assert.equal(pedido.cancelamentoPendente, true);
+  assert.equal(pedido.firestoreCancelado, false);
+  assert.equal(f.state.docs.get(`agendamentos:${AGENDAMENTO_ID}`).status, "confirmado");
+  assert.equal(f.state.cancellation.estado, "solicitada");
+
+  delete doc.alteracaoServicoOperacaoPendente;
+  const retomado = await processarProximoCancelamentoAgendamento(f.pool, f.dependencies);
+  assert.equal(retomado.concluido, true);
+  assert.equal(f.state.docs.get(`agendamentos:${AGENDAMENTO_ID}`).status, "cancelado_cliente");
+});
+
 test("polling de cobrança paga não tenta confirmar novamente uma reserva cancelada", async () => {
   assert.equal(deveEfetivarAgendamentoAposCredito(
     { estado_reserva: "cancelada" },
