@@ -1476,3 +1476,183 @@ button {
   opacity: 0.65;
   cursor: wait;
 }
+
+
+/* ===========================================================
+   MEU PERFIL — NOVO AGENDAMENTO E SUGESTÃO DE MANUTENÇÃO
+   =========================================================== */
+
+.perfil-novo-agendamento,
+.perfil-manutencao-acao {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 49px;
+  padding: 12px 18px;
+  border-radius: 15px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.3;
+  text-align: center;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.perfil-novo-agendamento svg,
+.perfil-manutencao-acao svg {
+  width: 19px;
+  height: 19px;
+  flex-shrink: 0;
+}
+
+.perfil-novo-agendamento {
+  width: 100%;
+  margin-bottom: 16px;
+  color: var(--perfil-white);
+  background: var(--perfil-primary);
+  box-shadow: 0 7px 17px rgba(89, 28, 49, 0.17);
+}
+
+.perfil-novo-agendamento:hover,
+.perfil-novo-agendamento:focus-visible {
+  background: var(--perfil-dark);
+  transform: translateY(-1px);
+}
+
+.perfil-novo-agendamento:focus-visible,
+.perfil-manutencao-acao:focus-visible {
+  outline: 3px solid var(--perfil-soft);
+  outline-offset: 3px;
+}
+
+.perfil-manutencao {
+  width: 100%;
+  min-width: 0;
+  padding: 19px;
+  display: grid;
+  gap: 15px;
+  overflow: hidden;
+  border-radius: 23px;
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  background:
+    radial-gradient(circle at 100% 0%, rgba(240, 193, 209, 0.33), transparent 48%),
+    linear-gradient(135deg, #fffafb, #fff0f5);
+  box-shadow: 0 12px 27px rgba(66, 18, 35, 0.14);
+}
+
+.perfil-manutencao[hidden] {
+  display: none !important;
+}
+
+.perfil-manutencao-topo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.perfil-manutencao-icone {
+  width: 45px;
+  height: 45px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  color: var(--perfil-dark);
+  background: #f6dce5;
+}
+
+.perfil-manutencao-icone svg {
+  width: 24px;
+  height: 24px;
+}
+
+.perfil-manutencao-etiqueta {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--perfil-secondary);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.perfil-manutencao-topo h2 {
+  margin: 0;
+  color: var(--perfil-dark);
+  font-size: 18px;
+  line-height: 1.3;
+  font-weight: 700;
+}
+
+.perfil-manutencao-descricao {
+  margin: 0;
+  color: var(--perfil-text-muted);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.perfil-manutencao-descricao strong {
+  color: var(--perfil-dark);
+  font-weight: 600;
+}
+
+.perfil-manutencao-data-bloco {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 14px 12px;
+  border: 1px solid #edd0da;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.83);
+}
+
+.perfil-manutencao-data {
+  color: var(--perfil-dark);
+  font-size: clamp(22px, 6vw, 28px);
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.025em;
+  font-variant-numeric: tabular-nums;
+}
+
+.perfil-manutencao-prazo {
+  color: var(--perfil-secondary);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.perfil-manutencao-nota {
+  margin: -3px 0 0;
+  color: var(--perfil-text-muted);
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+.perfil-manutencao-acao {
+  width: 100%;
+  color: var(--perfil-white);
+  background: var(--perfil-primary);
+}
+
+.perfil-manutencao-acao:hover,
+.perfil-manutencao-acao:focus-visible {
+  background: var(--perfil-dark);
+  transform: translateY(-1px);
+}
+
+@media (max-width: 380px) {
+  .perfil-manutencao {
+    padding: 16px;
+    gap: 13px;
+  }
+
+  .perfil-manutencao-topo h2 {
+    font-size: 16px;
+  }
+
+  .perfil-manutencao-descricao {
+    font-size: 11px;
+  }
+}
