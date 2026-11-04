@@ -61,11 +61,11 @@ function destinoIgual(op, agendamentoId, uid, servicoId, data, inicio) {
 
 async function buscarOperacao(pool, id, uid) {
   const result = await pool.query(
-    \`SELECT operation_id, agendamento_id, solicitante_uid, cliente_uid,
+    `SELECT operation_id, agendamento_id, solicitante_uid, cliente_uid,
         estado, ultimo_erro, criado_em, concluido_em,
         TO_CHAR(destino_data, 'YYYY-MM-DD') AS destino_data_iso
       FROM public.pix_reagendamentos_pagos
-      WHERE operation_id = $1 AND (solicitante_uid = $2 OR cliente_uid = $2)\`,
+      WHERE operation_id = $1 AND (solicitante_uid = $2 OR cliente_uid = $2)`,
     [id, uid],
   );
   return result.rows[0] || null;
@@ -118,10 +118,10 @@ export async function iniciarReagendamentoPixPago({
     await conexao.query("BEGIN");
     await bloquearDatas(conexao, [origemData, data]);
 
-    const existente = await conexao.query(\`
+    const existente = await conexao.query(`
       SELECT *, TO_CHAR(destino_data, 'YYYY-MM-DD') AS destino_data_iso
       FROM public.pix_reagendamentos_pagos WHERE operation_id = $1 FOR UPDATE
-    \`, [operationId]);
+    `, [operationId]);
     if (existente.rowCount) {
       const op = existente.rows[0];
       if (!destinoIgual(op, agendamentoId, uid, servicoId, data, inicio)) {
@@ -131,24 +131,24 @@ export async function iniciarReagendamentoPixPago({
       return { agendamentoId, operationId, estado: op.estado, reagendado: op.estado === "concluida" };
     }
 
-    const pendente = await conexao.query(\`
+    const pendente = await conexao.query(`
       SELECT operation_id FROM public.pix_reagendamentos_pagos
       WHERE agendamento_id = $1 AND estado <> 'concluida'
       LIMIT 1 FOR UPDATE
-    \`, [agendamentoId]);
+    `, [agendamentoId]);
     if (pendente.rowCount) {
       throw new ErroReagendamentoPago(409, "Há um reagendamento em processamento para este atendimento");
     }
-    const cancelando = await conexao.query(\`
+    const cancelando = await conexao.query(`
       SELECT 1 FROM public.agendamento_cancelamentos
       WHERE agendamento_id = $1 AND estado IN ('solicitada','concluida')
       LIMIT 1
-    \`, [agendamentoId]);
+    `, [agendamentoId]);
     if (cancelando.rowCount) {
       throw new ErroReagendamentoPago(409, "Cancelamento em andamento para este atendimento");
     }
 
-    const registro = await conexao.query(\`
+    const registro = await conexao.query(`
       SELECT r.id, r.cliente_uid, r.servico_id, r.cobranca_id, r.agendamento_id,
              r.estado, r.inicio_minuto, r.fim_minuto,
              TO_CHAR(r.data_servico, 'YYYY-MM-DD') AS data_iso,
@@ -161,7 +161,7 @@ export async function iniciarReagendamentoPixPago({
       LEFT JOIN public.pix_calendar_outbox o ON o.agendamento_id = r.agendamento_id
       WHERE r.agendamento_id = $1
       FOR UPDATE OF r, c
-    \`, [agendamentoId]);
+    `, [agendamentoId]);
     const reserva = registro.rows[0];
     const validacao = validarPagamentoPixReagendamento({
       agendamento, reserva, agendamentoId, servicoId,
@@ -181,7 +181,7 @@ export async function iniciarReagendamentoPixPago({
       throw new ErroReagendamentoPago(409, "Agenda fechada pela profissional no novo horário");
     }
 
-    const sobrepostos = await conexao.query(\`
+    const sobrepostos = await conexao.query(`
       SELECT 1 FROM public.pix_reservas
       WHERE data_servico = $1
         AND estado IN ('reservada', 'confirmada')
@@ -189,7 +189,7 @@ export async function iniciarReagendamentoPixPago({
         AND int4range(inicio_minuto, fim_minuto, '[)') &&
             int4range($2, $3, '[)')
       LIMIT 1
-    \`, [data, inicio, inicio + origemDuracao, agendamentoId]);
+    `, [data, inicio, inicio + origemDuracao, agendamentoId]);
     if (sobrepostos.rowCount) {
       throw new ErroReagendamentoPago(409, "Novo horário reservado por outra cliente");
     }
@@ -211,27 +211,27 @@ export async function iniciarReagendamentoPixPago({
       // reserva e impede outro agendamento de ocupar a parte adicional.
       const inicioUniao = Math.min(origemInicio, inicio);
       const fimUniao = Math.max(origemFim, destinoFim);
-      const ajuste = await conexao.query(\`
+      const ajuste = await conexao.query(`
         UPDATE public.pix_reservas
         SET inicio_minuto = $2, fim_minuto = $3, atualizado_em = NOW()
         WHERE id = $1 AND cobranca_id = $4 AND estado = 'confirmada'
         RETURNING id
-      \`, [reserva.id, inicioUniao, fimUniao, reserva.cobranca_id]);
+      `, [reserva.id, inicioUniao, fimUniao, reserva.cobranca_id]);
       if (!ajuste.rowCount) throw new ErroReagendamentoPago(409, "Reserva alterada por outra operação");
     } else {
       // Proteger o destino e preservar integralmente a origem.
       holdId = randomUUID();
-      await conexao.query(\`
+      await conexao.query(`
         INSERT INTO public.pix_reservas (
           id, cliente_uid, servico_id, data_servico, inicio_minuto, fim_minuto,
           estado, vence_em, cobranca_id, agendamento_id
         ) VALUES ($1, $2, $3, $4, $5, $6,
                   'confirmada', NOW() + INTERVAL '365 days', NULL, $7)
-      \`, [holdId, agendamento.clienteId, servicoId, data, inicio, destinoFim,
+      `, [holdId, agendamento.clienteId, servicoId, data, inicio, destinoFim,
         "pix_reag_hold_" + operationId]);
     }
 
-    await conexao.query(\`
+    await conexao.query(`
       INSERT INTO public.pix_reagendamentos_pagos (
         operation_id, agendamento_id, solicitante_uid, cliente_uid,
         servico_id, reserva_id, cobranca_id, calendar_event_id,
@@ -243,7 +243,7 @@ export async function iniciarReagendamentoPixPago({
         $9, $10, $11,
         $12, $13, $14, $15, $16, $17, $18
       )
-    \`, [operationId, agendamentoId, uid, agendamento.clienteId,
+    `, [operationId, agendamentoId, uid, agendamento.clienteId,
       servicoId, reserva.id, reserva.cobranca_id, eventId, nomeCliente,
       servicoNome, String(observacoes || "").slice(0, 1000),
       origemData, origemInicio, origemFim, data, inicio, destinoFim, holdId]);
@@ -313,13 +313,13 @@ async function concluirBanco(op, pool) {
   try {
     await con.query("BEGIN");
     await bloquearDatas(con, [op.origem_data_iso, op.destino_data_iso]);
-    const reserva = await con.query(\`
+    const reserva = await con.query(`
       SELECT r.id, r.cobranca_id, r.agendamento_id, r.estado,
              c.estado AS cobranca_estado
       FROM public.pix_reservas r
       JOIN public.pix_cobrancas c ON c.id = r.cobranca_id
       WHERE r.id = $1 FOR UPDATE OF r, c
-    \`, [op.reserva_id]);
+    `, [op.reserva_id]);
     const atual = reserva.rows[0];
     if (!atual || atual.cobranca_id !== op.cobranca_id ||
         atual.agendamento_id !== op.agendamento_id ||
@@ -327,34 +327,34 @@ async function concluirBanco(op, pool) {
       throw new ErroReagendamentoPago(409, "Pagamento ou reserva divergente após Calendar");
     }
     if (op.hold_reserva_id) {
-      await con.query(\`
+      await con.query(`
         UPDATE public.pix_reagendamentos_pagos
         SET hold_reserva_id = NULL, atualizado_em = NOW()
         WHERE operation_id = $1 AND estado = 'calendar_enviado'
-      \`, [op.operation_id]);
-      const limpeza = await con.query(\`
+      `, [op.operation_id]);
+      const limpeza = await con.query(`
         DELETE FROM public.pix_reservas
         WHERE id = $1 AND agendamento_id = $2 AND cobranca_id IS NULL
         RETURNING id
-      \`, [op.hold_reserva_id, "pix_reag_hold_" + op.operation_id]);
+      `, [op.hold_reserva_id, "pix_reag_hold_" + op.operation_id]);
       if (!limpeza.rowCount) throw new ErroReagendamentoPago(409, "Proteção do novo horário ausente");
     }
-    const mudanca = await con.query(\`
+    const mudanca = await con.query(`
       UPDATE public.pix_reservas SET
         data_servico = $2, inicio_minuto = $3, fim_minuto = $4,
         atualizado_em = NOW()
       WHERE id = $1 AND cobranca_id = $5 AND estado = 'confirmada'
       RETURNING id
-    \`, [op.reserva_id, op.destino_data_iso, op.destino_inicio,
+    `, [op.reserva_id, op.destino_data_iso, op.destino_inicio,
       op.destino_fim, op.cobranca_id]);
     if (!mudanca.rowCount) throw new ErroReagendamentoPago(409, "Reserva paga não pôde ser movida");
 
-    await con.query(\`
+    await con.query(`
       UPDATE public.pix_reagendamentos_pagos
       SET estado = 'concluida', bloqueado_ate = NULL, ultimo_erro = NULL,
           concluido_em = NOW(), atualizado_em = NOW()
       WHERE operation_id = $1 AND estado = 'calendar_enviado'
-    \`, [op.operation_id]);
+    `, [op.operation_id]);
     await con.query("COMMIT");
   } catch (erro) {
     await con.query("ROLLBACK").catch(() => {});
@@ -373,12 +373,12 @@ async function limparMarcador(op, pool, db, dependencies) {
       tx.update(ref, { reagendamentoPixOperacaoPendente: FieldValue.delete() });
     }
   });
-  await pool.query(\`
+  await pool.query(`
     UPDATE public.pix_reagendamentos_pagos
     SET limpeza_pendente = FALSE, ultimo_erro = NULL, bloqueado_ate = NULL,
         atualizado_em = NOW()
     WHERE operation_id = $1 AND estado = 'concluida'
-  \`, [op.operation_id]);
+  `, [op.operation_id]);
 }
 
 async function processarOperacao(op, pool, dependencies = {}) {
@@ -392,11 +392,11 @@ async function processarOperacao(op, pool, dependencies = {}) {
     });
     await (dependencies.enviarCalendar ||
       ((dados) => enviarReagendamentoPix(dados, fetch, URL_APPS_SCRIPT)))(payload);
-    await pool.query(\`
+    await pool.query(`
       UPDATE public.pix_reagendamentos_pagos
       SET estado = 'calendar_enviado', atualizado_em = NOW()
       WHERE operation_id = $1 AND estado = 'solicitada'
-    \`, [op.operation_id]);
+    `, [op.operation_id]);
     op.estado = "calendar_enviado";
   }
   if (op.estado === "calendar_enviado") {
@@ -411,7 +411,7 @@ async function processarOperacao(op, pool, dependencies = {}) {
 }
 
 export async function processarProximoReagendamentoPixPago(pool, dependencies = {}) {
-  const claimed = await pool.query(\`
+  const claimed = await pool.query(`
     WITH proxima AS (
       SELECT operation_id FROM public.pix_reagendamentos_pagos
       WHERE (
@@ -427,7 +427,7 @@ export async function processarProximoReagendamentoPixPago(pool, dependencies = 
     WHERE fila.operation_id = proxima.operation_id
     RETURNING fila.*, TO_CHAR(fila.origem_data, 'YYYY-MM-DD') AS origem_data_iso,
                       TO_CHAR(fila.destino_data, 'YYYY-MM-DD') AS destino_data_iso
-  \`);
+  `);
   const op = claimed.rows[0];
   if (!op) return { processado: false };
   try {
@@ -435,13 +435,13 @@ export async function processarProximoReagendamentoPixPago(pool, dependencies = 
     return { processado: true, ...result };
   } catch (erro) {
     console.error("[PIX Reagendamento] Pendente de reconciliação:", op.operation_id, erro.message);
-    await pool.query(\`
+    await pool.query(`
       UPDATE public.pix_reagendamentos_pagos
       SET bloqueado_ate = NULL,
           proxima_tentativa_em = NOW() + INTERVAL '60 seconds',
           ultimo_erro = $2, atualizado_em = NOW()
       WHERE operation_id = $1
-    \`, [op.operation_id, String(erro?.message || "Erro de sincronização").slice(0, 300)]);
+    `, [op.operation_id, String(erro?.message || "Erro de sincronização").slice(0, 300)]);
     return { processado: true, estado: "pendente", operationId: op.operation_id };
   }
 }
