@@ -67,6 +67,25 @@ export async function consultarDisponibilidadePix(auth, data, agendamentoId = nu
   return resultado.intervalos;
 }
 
+// Retorna apenas o status de liberação; falhas mantêm a função indisponível.
+export async function consultarLiberacaoAlterarServicoApi(auth) {
+  const usuario = auth?.currentUser;
+  if (!usuario) return false;
+  try {
+    const token = await usuario.getIdToken();
+    const resposta = await fetch("/api/admin/agendamentos/servico?config=1", {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!resposta.ok) return false;
+    const dados = await resposta.json();
+    return dados?.habilitado === true;
+  } catch {
+    return false;
+  }
+}
+
 export async function alterarServicoAgendamentoApi(auth, dados) {
   const usuario = auth?.currentUser;
   if (!usuario) throw new Error("Faça login para continuar.");
