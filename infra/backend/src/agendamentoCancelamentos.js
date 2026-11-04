@@ -58,6 +58,10 @@ async function validarSolicitacaoFirestore(db, { uid, agendamentoId, acao }) {
       throw new ErroCancelamento(409, "Cancelamento não permitido", true);
     }
 
+    if (dados.reagendamentoPixOperacaoPendente) {
+      throw new ErroCancelamento(409, "Reagendamento PIX ainda em processamento", true);
+    }
+
     const cobrancaId = texto(dados.pixCobrancaId);
     if (cobrancaId && !/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(cobrancaId)) {
       throw new ErroCancelamento(409, "Vínculo da cobrança PIX inválido", true);
@@ -73,6 +77,14 @@ async function validarSolicitacaoFirestore(db, { uid, agendamentoId, acao }) {
 }
 
 async function registrarSolicitacao(pool, dados) {
+  const operacaoPendente = await pool.query(`
+    SELECT 1 FROM public.pix_reagendamentos_pagos
+    WHERE agendamento_id = $1 AND estado <> 'concluida'
+    LIMIT 1
+  `, [dados.agendamentoId]);
+  if (operacaoPendente.rowCount) {
+    throw new ErroCancelamento(409, "Reagendamento PIX em processamento; tente cancelar após concluir", true);
+  }
   await pool.query(`
     INSERT INTO public.agendamento_cancelamentos (
       agendamento_id, cobranca_id, cliente_uid, solicitante_uid,
@@ -135,6 +147,9 @@ async function aplicarCancelamentoFirestore(db, solicitacao, dependencies = {}) 
     if (!STATUS_ATIVOS.has(texto(dados.status))) {
       throw new ErroCancelamento(409, "O agendamento mudou de estado antes do cancelamento", true);
     }
+    if (dados.reagendamentoPixOperacaoPendente) {
+      throw new ErroCancelamento(409, "Reagendamento PIX ainda em processamento", true);
+    }
 
     transacao.update(reference, {
       status: statusAlvo,
@@ -188,6 +203,16 @@ export async function processarCancelamentoAgendamento(pool, agendamentoId, depe
       const registro = vinculo.rows[0];
       if (!registro) {
         throw new ErroCancelamento(409, "Vínculo entre cobrança, reserva e agendamento divergente", true);
+      }
+      // A mesma reserva está bloqueada pela saga enquanto protege origem e destino.
+      // Conferir novamente DEPOIS do FOR UPDATE evita cancelamentos simultâneos.
+      const ativo = await conexao.query(`
+        SELECT 1 FROM public.pix_reagendamentos_pagos
+        WHERE agendamento_id = $1 AND estado <> 'concluida'
+        LIMIT 1
+      `, [agendamentoId]);
+      if (ativo.rowCount) {
+        throw new ErroCancelamento(409, "Reagendamento PIX em processamento; cancelamento adiado", false);
       }
       pagamentoPaga = registro.cobranca_estado === "paga";
       if (registro.reserva_estado !== "cancelada") {
