@@ -521,7 +521,6 @@ export async function atenderAlteracaoServico(req, res, pool, dependencies = {})
     if (!ID.test(dados.agendamentoId || "") || !ID.test(dados.servicoId || "") || !UUID.test(dados.operationId || "")) {
       throw new ErroAlteracaoServico(400, "Dados da alteração inválidos.");
     }
-    operationIdFalha = dados.operationId;
     await pool.query(`
       INSERT INTO public.agendamento_alteracoes_servico (
         operation_id, agendamento_id, admin_uid, servico_novo_id
@@ -536,6 +535,9 @@ export async function atenderAlteracaoServico(req, res, pool, dependencies = {})
     if (operacao.agendamento_id !== dados.agendamentoId || operacao.admin_uid !== uid || operacao.servico_novo_id !== dados.servicoId) {
       throw new ErroAlteracaoServico(409, "Esta chave de operação já foi usada para outra alteração.");
     }
+    // Somente a operação já validada pode mudar para falha permanente.
+    // Uma chave UUID reutilizada indevidamente nunca pode invalidar a operação original.
+    operationIdFalha = dados.operationId;
     if (operacao.estado === "concluida") { responder(res, 200, { operationId: dados.operationId, estado: "concluida" }); return; }
     if (operacao.estado === "falha_permanente") { throw new ErroAlteracaoServico(409, operacao.ultimo_erro || "A alteração requer revisão."); }
     try {
