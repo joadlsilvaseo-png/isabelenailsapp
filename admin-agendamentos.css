@@ -2175,3 +2175,93 @@ body[data-access-state="denied"] #admin-refresh-button {
   color: #2f7a50;
   background: #e9f7ef;
 }
+
+
+/* ============================================================
+   MODAL DE CONCLUSÃO — REAPROVEITA A IDENTIDADE DO CANCELAMENTO
+   ============================================================ */
+
+.admin-conclusao-modal {
+  z-index: 1400;
+}
+
+#admin-conclusao-form {
+  margin-top: 20px;
+  text-align: left;
+}
+
+.admin-conclusao-rotulo {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--admin-dark);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.admin-conclusao-campo {
+  display: flex;
+  align-items: center;
+  min-height: 52px;
+  border: 1px solid var(--admin-border);
+  border-radius: 14px;
+  background: var(--admin-surface-soft);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.admin-conclusao-campo:focus-within {
+  border-color: var(--admin-secondary);
+  box-shadow: 0 0 0 3px rgba(168, 97, 123, 0.15);
+}
+
+.admin-conclusao-campo > span {
+  padding-left: 15px;
+  color: var(--admin-primary);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+#admin-conclusao-valor {
+  width: 100%;
+  min-width: 0;
+  min-height: 50px;
+  padding: 12px 14px 12px 8px;
+  border: 0;
+  border-radius: 14px;
+  outline: 0;
+  background: transparent;
+  color: var(--admin-dark);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+#admin-conclusao-valor::placeholder {
+  color: var(--admin-text-muted);
+  opacity: 0.75;
+}
+
+.admin-conclusao-ajuda {
+  margin: 8px 0 0;
+  color: var(--admin-text-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.admin-conclusao-erro {
+  margin: 9px 0 0;
+  color: var(--admin-danger);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+#admin-conclusao-voltar {
+  border-color: var(--admin-border);
+  color: var(--admin-primary);
+  background: var(--admin-surface-soft);
+}
+
+#admin-conclusao-confirmar {
+  color: var(--admin-white);
+  background: var(--admin-success);
+  box-shadow: 0 6px 14px rgba(47, 122, 80, 0.18);
+}
