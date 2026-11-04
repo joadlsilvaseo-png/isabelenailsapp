@@ -1,4 +1,4 @@
-const URL_APPS_SCRIPT = "https://script.google.com/macros/s/AKfycbzOxH8NT960XH0HSmuq5MPDzXkijMVVymGAWD_8_eFcNzfTKfadnnoy-plj_GCtPCnFcw/exec";
+export const URL_APPS_SCRIPT = "https://script.google.com/macros/s/AKfycbzOxH8NT960XH0HSmuq5MPDzXkijMVVymGAWD_8_eFcNzfTKfadnnoy-plj_GCtPCnFcw/exec";
 
 function obterDataIso(evento) {
   // Na fila real, o SELECT entrega um alias formatado pelo PostgreSQL.

@@ -1,6 +1,6 @@
 import { auth, db } from "./firebase-config.js";
 import { obterMesPredominante } from "./agendamentoMes.mjs?v=1.0.0";
-import { consultarDisponibilidadePix, reagendarAgendamentoApi } from "./agendamentosApi.js";
+import { consultarDisponibilidadePix, reagendarAgendamentoApi, consultarReagendamentoPixConfigApi, consultarReagendamentoPixPagoApi } from "./agendamentosApi.js";
 import { consultarIntervalosDisponibilidade, intervaloSobrepoeDisponibilidade, obterLimitesAtendimentoSemanal } from "./agendamentoDisponibilidade.js";
 import { obterJanelaAgendamento, validarDataNaJanela, validarHorarioEspecial, obterExpedienteEspecialDezembro2026, validarServicoDezembro2026, AGENDA_DEZEMBRO_2026_ABERTA } from "./infra/backend/src/agendamentoRegras.mjs?v=2.0.5";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
@@ -829,15 +829,15 @@ async function inicializarAgendamento() {
 
     agendamentoOriginal = agendamentoOriginalSnap.data();
 
-    if (
-      agendamentoOriginal.pixCobrancaId ||
-      agendamentoOriginal.pixPagamentoId
-    ) {
-      window.alert(
-        "Este atendimento tem sinal PIX. O reagendamento precisa de conciliação financeira pelo salão para evitar cobranças duplicadas. Entre em contato com a Isabele.",
-      );
-      botaoAgendar.disabled = true;
-      return;
+    if (agendamentoOriginal.pixCobrancaId || agendamentoOriginal.pixPagamentoId) {
+      // Não abrir horários até o backend confirmar que o worker conciliado
+      // e a migração PIX foram publicados. Nunca iniciar outro PIX.
+      await aguardarUsuarioFirebase();
+      if (!(await consultarReagendamentoPixConfigApi(auth))) {
+        window.alert("O reagendamento de sinal PIX pago ainda está indisponível. Entre em contato com a Isabele.");
+        botaoAgendar.disabled = true;
+        return;
+      }
     }
 
     const observacoesOriginais = String(
@@ -1000,6 +1000,7 @@ async function inicializarAgendamento() {
       }
 
       let idEvento = "evt_" + Math.random().toString(36).substr(2, 9);
+      let origemPixPaga = false;
 
       if (reagendarId) {
         const agendamentoAnteriorRef = doc(db, "agendamentos", reagendarId);
@@ -1016,14 +1017,12 @@ async function inicializarAgendamento() {
           agendamentoAnteriorSnap.data().calendarEventId || "",
         ).trim();
 
-        if (
+        origemPixPaga = Boolean(
           agendamentoAnteriorSnap.data().pixCobrancaId ||
           agendamentoAnteriorSnap.data().pixPagamentoId
-        ) {
-          throw new Error(
-            "Atendimento com PIX exige conciliacao financeira antes do reagendamento.",
-          );
-        }
+        );
+        // O backend revalida pagamento pago, serviço, destino e vínculo do
+        // evento; esta variável apenas controla o comportamento da interface.
 
         if (!calendarEventIdOriginal) {
           throw new Error("Agendamento original sem calendarEventId.");
@@ -1043,15 +1042,53 @@ async function inicializarAgendamento() {
 
       try {
         if (reagendarId) {
+          const operacaoKey = `pix-reagendamento:${reagendarId}:${data}:${horario}`;
+          let operationId = null;
+          if (origemPixPaga) {
+            operationId = sessionStorage.getItem(operacaoKey);
+            if (!operationId) {
+              operationId = crypto.randomUUID();
+              sessionStorage.setItem(operacaoKey, operationId);
+            }
+          }
           const resultadoReagendamento = await reagendarAgendamentoApi(auth, {
             agendamentoId: reagendarId,
             servicoId: serviceId,
             data,
             horario,
             observacoes,
+            ...(operationId ? { operationId } : {}),
           });
           idEvento = resultadoReagendamento.calendarEventId || idEvento;
           payloadWebhook.eventId = idEvento;
+
+          if (origemPixPaga && resultadoReagendamento.operationId) {
+            // O worker é o ÚNICO responsável por atualizar o Calendar PIX.
+            // O frontend não dispara REAGENDAR em no-cors neste caminho.
+            let estado = resultadoReagendamento;
+            for (let tentativa = 0; tentativa < 20 && estado.estado !== "concluida"; tentativa++) {
+              botaoAgendar.textContent = "Sincronizando com a agenda...";
+              await new Promise((resolve) => setTimeout(resolve, 1500));
+              estado = await consultarReagendamentoPixPagoApi(auth, operationId);
+            }
+            if (estado.estado !== "concluida") {
+              window.alert("Seu pedido de reagendamento está registrado e em sincronização. O sinal PIX permanece pago. Confira o agendamento antes de tentar novamente.");
+              botaoAgendar.textContent = "Reagendamento em processamento";
+              botaoAgendar.disabled = true;
+              return;
+            }
+            sessionStorage.removeItem(operacaoKey);
+          }
+          if (origemPixPaga) {
+            // O backend só conclui após Calendar, Firestore e PostgreSQL.
+            localStorage.setItem("dataAgendamento", data);
+            localStorage.setItem("horaAgendamento", horario);
+            localStorage.setItem("nomeCliente", payloadWebhook.nomeCliente);
+            window.location.href = origemAdmin
+              ? "admin-agendamentos.html"
+              : "confirmacao.html";
+            return;
+          }
         } else {
           throw new Error("Confirme o novo agendamento pelo fluxo seguro da agenda.");
         }
