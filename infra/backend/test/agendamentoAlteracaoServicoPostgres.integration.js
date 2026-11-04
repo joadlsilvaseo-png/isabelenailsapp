@@ -47,7 +47,7 @@ try {
         duracao_anterior = $9, preco_anterior_centavos = $10,
         servico_novo_nome = $11, duracao_nova = $12,
         preco_novo_centavos = $13, sinal_pago_centavos = $14,
-        restante_novo_centavos = GREATEST(0, $13 - $14),
+        restante_novo_centavos = GREATEST(0::bigint, $13::bigint - $14::bigint),
         atualizado_em = NOW()
     WHERE operation_id = $1 AND estado IN ('solicitada', 'processando')
     RETURNING nome_cliente, restante_novo_centavos, estado, calendar_estado
