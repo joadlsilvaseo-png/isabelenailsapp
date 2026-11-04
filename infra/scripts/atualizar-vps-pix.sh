@@ -1090,10 +1090,10 @@ cat >"$MIGRATION_020_STATE_SQL" <<'SQL'
 WITH estado AS (
   SELECT
     to_regclass('public.agendamento_alteracoes_servico') IS NOT NULL AS has_table,
-    (SELECT COUNT(*) = 26 FROM information_schema.columns
+    (SELECT COUNT(*) = 27 FROM information_schema.columns
       WHERE table_schema = 'public' AND table_name = 'agendamento_alteracoes_servico'
         AND column_name IN (
-          'operation_id','agendamento_id','admin_uid','cliente_uid',
+          'operation_id','agendamento_id','admin_uid','cliente_uid','nome_cliente',
           'servico_anterior_id','servico_anterior_nome','servico_novo_id',
           'servico_novo_nome','data_servico','inicio_minuto','calendar_event_id',
           'duracao_anterior','duracao_nova','preco_anterior_centavos',
@@ -1105,7 +1105,7 @@ WITH estado AS (
           SELECT 1 FROM (VALUES
             ('operation_id','uuid','NO'), ('agendamento_id','text','NO'),
             ('admin_uid','text','NO'), ('cliente_uid','text','YES'),
-            ('servico_anterior_id','text','YES'), ('servico_anterior_nome','text','YES'),
+            ('nome_cliente','text','YES'), ('servico_anterior_id','text','YES'), ('servico_anterior_nome','text','YES'),
             ('servico_novo_id','text','NO'), ('servico_novo_nome','text','YES'),
             ('data_servico','date','YES'), ('inicio_minuto','smallint','YES'),
             ('calendar_event_id','text','YES'), ('duracao_anterior','smallint','YES'),
