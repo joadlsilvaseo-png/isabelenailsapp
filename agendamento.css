@@ -344,6 +344,47 @@ button {
   background: rgba(240, 193, 209, 0.34);
 }
 
+/* Seletor compacto de mês da cliente, alinhado ao indicador existente. */
+.agendamento-month-picker {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.agendamento-month-picker::after {
+  content: "";
+  position: absolute;
+  right: 11px;
+  top: calc(50% - 4px);
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid var(--booking-primary);
+  border-bottom: 1.5px solid var(--booking-primary);
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+
+.agendamento-month-select {
+  appearance: none;
+  -webkit-appearance: none;
+  display: block;
+  max-width: 176px;
+  min-height: 36px;
+  margin: 0;
+  padding: 8px 27px 8px 11px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  font: 600 11px/1.2 "Poppins", sans-serif;
+  text-align: left;
+  cursor: pointer;
+  background: rgba(240, 193, 209, 0.34);
+  color: var(--booking-primary);
+}
+
+.agendamento-month-select:focus-visible {
+  outline: 2px solid var(--booking-primary);
+  outline-offset: 2px;
+}
+
 .agendamento-divider {
   width: 100%;
   height: 1px;
