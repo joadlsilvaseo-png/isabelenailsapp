@@ -243,13 +243,13 @@ test("PostgreSQL 17: saga PIX protege os intervalos, preserva pagamento e recupe
   const op5 = randomUUID();
   await iniciar(pool, db, "pago05", quinto.documento, op5, "2027-03-25", "14:00");
   await pool.query(`CREATE OR REPLACE FUNCTION impedir_commit_pix_teste()
-    RETURNS trigger AS $ BEGIN
+    RETURNS trigger AS $func$ BEGIN
       IF OLD.cobranca_id IS NOT NULL AND NEW.data_servico = DATE '2027-03-25'
          AND OLD.data_servico <> NEW.data_servico THEN
         RAISE EXCEPTION 'simulated pg move failure';
       END IF;
       RETURN NEW;
-    END $ LANGUAGE plpgsql`);
+    END $func$ LANGUAGE plpgsql`);
   await pool.query("CREATE TRIGGER teste_falha_pix BEFORE UPDATE ON public.pix_reservas FOR EACH ROW EXECUTE FUNCTION impedir_commit_pix_teste()");
   const antesFalhaPg = chamadasCalendar;
   const falhaPg = await processarProximoReagendamentoPixPago(pool, deps);
