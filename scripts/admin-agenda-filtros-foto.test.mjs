@@ -38,6 +38,13 @@ test("foto personalizada autenticada precede foto HTTPS, com iniciais como fallb
   assert.match(css, /font-size: 15px/);
 });
 
+test("Alterar Serviço só é exibido com liberação explícita da API", () => {
+  assert.match(js, /let alterarServicoDisponivel = false/);
+  assert.match(js, /alterarServicoDisponivel = await consultarLiberacaoAlterarServicoApi\(auth\)/);
+  assert.match(js, /alterarServicoDisponivel && \["confirmado", "reagendado"\]\.includes\(status\)/);
+  assert.match(js, /if \(!alterarServicoDisponivel\) throw new Error/);
+});
+
 test("cache PWA e JS/CSS foram atualizados", () => {
   assert.match(html, /admin-agendamentos\.js\?v=1\.0\.3/);
   assert.match(html, /admin-agendamentos\.css\?v=1\.0\.5/);
