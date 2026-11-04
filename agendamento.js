@@ -1,4 +1,5 @@
 import { auth, db } from "./firebase-config.js";
+import { obterMesPredominante } from "./agendamentoMes.mjs?v=1.0.0";
 import { consultarDisponibilidadePix, reagendarAgendamentoApi } from "./agendamentosApi.js";
 import { consultarIntervalosDisponibilidade, intervaloSobrepoeDisponibilidade, obterLimitesAtendimentoSemanal } from "./agendamentoDisponibilidade.js";
 import { obterJanelaAgendamento, validarDataNaJanela, validarHorarioEspecial, obterExpedienteEspecialDezembro2026, validarServicoDezembro2026, AGENDA_DEZEMBRO_2026_ABERTA } from "./infra/backend/src/agendamentoRegras.mjs?v=2.0.4";
@@ -175,7 +176,7 @@ function atualizarCabecalhoData(botaoData) {
   const selectedDateElement = document.getElementById("selected-date-text");
 
   if (monthElement) {
-    monthElement.textContent = botaoData.dataset.monthLabel || "Data";
+    monthElement.value = botaoData.dataset.monthKey || "";
   }
 
   if (selectedDateElement) {
@@ -229,6 +230,64 @@ function obterHojeSaoPauloParaTela() {
   return `${valores.year}-${valores.month}-${valores.day}`;
 }
 
+function configurarNavegacaoMes(container, dias) {
+  const seletor = document.getElementById("calendar-month-label");
+  if (!container || !seletor || !dias.length) return;
+
+  const meses = new Map();
+  dias.forEach((dia) => {
+    const chave = dia.dataset.monthKey;
+    if (chave && !meses.has(chave)) meses.set(chave, dia.dataset.monthLabel);
+  });
+
+  seletor.replaceChildren();
+  for (const [chave, rotulo] of meses) {
+    const opcao = document.createElement("option");
+    opcao.value = chave;
+    opcao.textContent = rotulo;
+    seletor.appendChild(opcao);
+  }
+
+  const atualizarMesVisivel = () => {
+    const viewport = container.getBoundingClientRect();
+    const cartoes = dias.map((dia) => {
+      const retangulo = dia.getBoundingClientRect();
+      return {
+        mes: dia.dataset.monthKey,
+        inicio: retangulo.left,
+        fim: retangulo.right,
+      };
+    });
+    const mes = obterMesPredominante(cartoes, viewport.left, viewport.right);
+    if (mes && seletor.value !== mes) seletor.value = mes;
+  };
+
+  let scrollPendente = false;
+  container.addEventListener("scroll", () => {
+    if (scrollPendente) return;
+    scrollPendente = true;
+    requestAnimationFrame(() => {
+      scrollPendente = false;
+      atualizarMesVisivel();
+    });
+  }, { passive: true });
+
+  seletor.addEventListener("change", () => {
+    const primeiraDataDoMes = dias.find((dia) => dia.dataset.monthKey === seletor.value);
+    if (!primeiraDataDoMes) return;
+    const viewport = container.getBoundingClientRect();
+    const destino = primeiraDataDoMes.getBoundingClientRect();
+    container.scrollTo({
+      left: Math.max(0, container.scrollLeft + destino.left - viewport.left),
+      behavior: "auto",
+    });
+    requestAnimationFrame(atualizarMesVisivel);
+    // Navegar entre meses não modifica o dia/horário escolhido.
+  });
+
+  atualizarMesVisivel();
+}
+
 function gerarCalendarioDias(container) {
   if (!container) return;
 
@@ -280,6 +339,7 @@ function gerarCalendarioDias(container) {
       botao.dataset.dateLabel = formatarDataLonga(dataAtual);
 
       botao.dataset.monthLabel = formatarMesAno(dataAtual);
+      botao.dataset.monthKey = dataIso.slice(0, 7);
 
       botao.setAttribute("aria-pressed", "false");
 
@@ -312,6 +372,8 @@ function gerarCalendarioDias(container) {
 
     cursor.setDate(cursor.getDate() + 1);
   }
+
+  configurarNavegacaoMes(container, dias);
 
   const primeiraData = dias[0];
 
