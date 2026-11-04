@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS public.agendamento_alteracoes_servico (
   agendamento_id TEXT NOT NULL,
   admin_uid TEXT NOT NULL,
   cliente_uid TEXT,
+  nome_cliente TEXT,
   servico_anterior_id TEXT,
   servico_anterior_nome TEXT,
   servico_novo_id TEXT NOT NULL,
