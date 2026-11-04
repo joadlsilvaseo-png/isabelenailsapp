@@ -4,6 +4,11 @@ import { validarServicoDezembro2026 } from "./agendamentoRegras.mjs";
 import { possuiBloqueio } from "./agendaBloqueios.js";
 import { encontrarConflitoAgendamentoPix } from "./pixDocumentoAgendamento.js";
 import { pixPagoReagendamentoHabilitado } from "./pixReagendamentoPago.js";
+import {
+  iniciarReagendamentoPixPago,
+  consultarReagendamentoPixPago,
+  ErroReagendamentoPago,
+} from "./pixReagendamentoPagoOperacao.js";
 
 const ID_UID = /^[A-Za-z0-9_-]{1,128}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -359,10 +364,15 @@ export async function reagendarComBloqueio({ pool, db, uid, dados, dependencies 
   const admin = await conferirAdmin(firestore, uid);
   if (!admin && dadosAtuais.clienteId !== uid) throw new ErroIsencaoPix(403, "Este agendamento não pertence à sua conta");
   if (dadosAtuais.pixCobrancaId || dadosAtuais.pixPagamentoId) {
-    if (!pixPagoReagendamentoHabilitado(dependencies)) {
-      throw new ErroIsencaoPix(409, "Reagendamento de sinal PIX pago aguardando integração segura com o Google Calendar.", "PIX_REAGENDAMENTO_INDISPONIVEL");
+    if (!pixPagoReagendamentoHabilitado()) {
+      throw new ErroIsencaoPix(409, "Reagendamento de sinal PIX pago ainda não habilitado.", "PIX_REAGENDAMENTO_INDISPONIVEL");
     }
-    throw new ErroIsencaoPix(503, "Reagendamento PIX pago ainda não validado para operação em produção.", "PIX_REAGENDAMENTO_EM_HOMOLOGACAO");
+    return iniciarReagendamentoPixPago({
+      pool, firestore, uid, agendamentoId, servicoId, data, horario,
+      duracao, servico, agendamento: dadosAtuais,
+      operationId: dados.operationId, observacoes: dados.observacoes,
+      dependencies,
+    });
   }
   if (!["agendado", "reagendado", "confirmado"].includes(dadosAtuais.status)) {
     throw new ErroIsencaoPix(409, "Este agendamento não pode ser reagendado", "AGENDAMENTO_INATIVO");
@@ -512,7 +522,13 @@ export async function atenderAgendamentoIsencao(req, res, pool, dependencies = {
   try {
     // Somente leitura: o cliente só tenta reagendar PIX quando a integração validada estiver ativa.
     if (req.method === "GET" && caminho === "/agendamentos/reagendar/config") {
-      responder(res, 200, { pixPagoHabilitado: pixPagoReagendamentoHabilitado(dependencies) });
+      responder(res, 200, { pixPagoHabilitado: pixPagoReagendamentoHabilitado() });
+      return;
+    }
+    if (req.method === "GET" && caminho === "/agendamentos/reagendar") {
+      const operationId = new URL(req.url, "http://localhost").searchParams.get("operationId");
+      const resultado = await consultarReagendamentoPixPago({ pool, uid, operationId });
+      responder(res, 200, resultado);
       return;
     }
     if (req.method === "GET" && caminho === "/agendamentos/isencao") {
@@ -541,13 +557,17 @@ export async function atenderAgendamentoIsencao(req, res, pool, dependencies = {
     if (req.method === "POST" && caminho === "/agendamentos/reagendar") {
       const dados = await lerJson(req);
       const resultado = await reagendarComBloqueio({ pool, db, uid, dados, dependencies });
-      responder(res, 200, resultado);
+      responder(res, resultado.operationId && resultado.estado !== "concluida" ? 202 : 200, resultado);
       return;
     }
     responder(res, 404, { erro: "Rota não encontrada" });
   } catch (erro) {
     if (erro?.code === "23P01") {
       responder(res, 409, { erro: "Horário reservado por outra cliente", codigo: "HORARIO_OCUPADO" });
+      return;
+    }
+    if (erro instanceof ErroReagendamentoPago) {
+      responder(res, erro.status, { erro: erro.message, codigo: erro.codigo });
       return;
     }
     if (erro instanceof ErroIsencaoPix) {
