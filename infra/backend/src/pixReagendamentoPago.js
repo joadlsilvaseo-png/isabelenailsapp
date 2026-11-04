@@ -5,11 +5,11 @@ const URL_ENV = "PIX_REAGENDAMENTO_PAGO_APPS_SCRIPT_URL";
 const FLAG_ENV = "PIX_REAGENDAMENTO_PAGO_ENABLED";
 const URL_GAS = /^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/;
 
-export function pixPagoReagendamentoHabilitado(dependencies = {}) {
-  if (dependencies.pixPagoReagendamentoHabilitado === true) return true;
-  if (dependencies.pixPagoReagendamentoHabilitado === false) return false;
-  return process.env[FLAG_ENV] === "true" &&
-    URL_GAS.test(String(process.env[URL_ENV] || "").trim());
+export function pixPagoReagendamentoHabilitado() {
+  // A sincronização transacional entre Firestore, PostgreSQL e Calendar
+  // ainda NÃO foi implementada. Não permitir habilitação por variável de
+  // ambiente ou configuração no navegador enquanto a operação é parcial.
+  return false;
 }
 
 export function validarPagamentoPixReagendamento({
