@@ -1083,6 +1083,7 @@ async function inicializarAgendamento() {
             // O backend só conclui após Calendar, Firestore e PostgreSQL.
             localStorage.setItem("dataAgendamento", data);
             localStorage.setItem("horaAgendamento", horario);
+            localStorage.setItem("nomeCliente", payloadWebhook.nomeCliente);
             window.location.href = origemAdmin
               ? "admin-agendamentos.html"
               : "confirmacao.html";
