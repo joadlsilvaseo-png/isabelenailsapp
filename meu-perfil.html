@@ -19,7 +19,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
   <link rel="stylesheet" href="base.css?v=1.0.4">
-  <link rel="stylesheet" href="meu-perfil.css?v=2.0.0">
+  <link rel="stylesheet" href="meu-perfil.css?v=2.0.1">
 </head>
 
 <body data-page="meu-perfil">
@@ -137,6 +137,38 @@
         </div>
       </section>
 
+      <!-- Sugestão personalizada, visível somente após aplicação de gel concluída. -->
+      <section id="perfil-manutencao" class="perfil-manutencao" aria-labelledby="perfil-manutencao-titulo" hidden>
+        <div class="perfil-manutencao-topo">
+          <span class="perfil-manutencao-icone" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <rect x="3.5" y="5" width="17" height="16" rx="3" stroke="currentColor" stroke-width="1.8"/>
+              <path d="M7.5 3V7M16.5 3V7M4 10H20" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              <path d="m9 15 2 2 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </span>
+          <div>
+            <span class="perfil-manutencao-etiqueta">Cuidado com suas unhas</span>
+            <h2 id="perfil-manutencao-titulo">Sua próxima manutenção</h2>
+          </div>
+        </div>
+        <p class="perfil-manutencao-descricao">
+          Após sua aplicação de <strong id="perfil-manutencao-servico">gel</strong>
+          em <span id="perfil-manutencao-aplicacao"></span>, sugerimos a manutenção em:
+        </p>
+        <div class="perfil-manutencao-data-bloco">
+          <strong id="perfil-manutencao-data" class="perfil-manutencao-data"></strong>
+          <span class="perfil-manutencao-prazo">21 dias após a aplicação</span>
+        </div>
+        <p class="perfil-manutencao-nota">É uma sugestão de cuidado. O intervalo ideal pode variar conforme suas unhas e a avaliação da profissional.</p>
+        <a href="principal.html#services-title" class="perfil-manutencao-acao">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          Agendar manutenção
+        </a>
+      </section>
+
       <section id="meus-agendamentos" class="perfil-atendimentos" aria-labelledby="perfil-atendimentos-title">
         <div class="perfil-section-header">
 
@@ -159,6 +191,14 @@
           </span>
 
         </div>
+
+        <a href="principal.html#services-title" class="perfil-novo-agendamento">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <rect x="3.5" y="5" width="17" height="16" rx="3" stroke="currentColor" stroke-width="1.8"/>
+            <path d="M8 3V7M16 3V7M4 10H20M12 13V18M9.5 15.5h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+          Novo Agendamento
+        </a>
 
         <div class="perfil-filters" role="group" aria-label="Filtrar atendimentos">
           <button type="button" class="perfil-filter is-active" data-filter="agendados" aria-pressed="true">
@@ -349,7 +389,7 @@
 
   </dialog>
 
-  <script type="module" src="meu-perfil.js?v=2.0.0"></script>
+  <script type="module" src="meu-perfil.js?v=2.0.1"></script>
   <script type="module" src="foto-perfil-preview.js?v=2"></script>
 
   <script src="app.js?v=1.0.4" defer></script>
