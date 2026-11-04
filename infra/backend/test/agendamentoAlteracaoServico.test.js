@@ -20,6 +20,17 @@ const CHARGE = "charge-1";
 
 function clone(value) { return value === undefined ? undefined : structuredClone(value); }
 
+function normalizarSentinelasFirestore(dados) {
+  // O teste de integração lógica usa FieldValue real do SDK; a fixture de
+  // Firestore não executa sentinelas, portanto interpreta-as no mock.
+  return Object.fromEntries(Object.entries(dados).map(([chave, valor]) => {
+    if (valor && typeof valor === "object" && typeof valor.isEqual === "function") {
+      return [chave, valor._methodName === "FieldValue.delete" ? "__DELETE_FIELD__" : "server-timestamp"];
+    }
+    return [chave, valor];
+  }));
+}
+
 function criarFixture(options = {}) {
   const state = {
     docs: new Map([
@@ -93,11 +104,11 @@ function criarFixture(options = {}) {
           return { exists: Boolean(data), data: () => clone(data) };
         },
         update(target, data) { writes.push(() => {
-          const merged = { ...state.docs.get(target.path), ...clone(data) };
+          const merged = { ...state.docs.get(target.path), ...clone(normalizarSentinelasFirestore(data)) };
           for (const [key, value] of Object.entries(merged)) if (value === "__DELETE_FIELD__") delete merged[key];
           state.docs.set(target.path, merged);
         }); },
-        create(target, data) { writes.push(() => state.history.set(target.path, clone(data))); },
+        create(target, data) { writes.push(() => state.history.set(target.path, clone(normalizarSentinelasFirestore(data)))); },
       };
       try {
         const result = await callback(tx);
@@ -432,6 +443,24 @@ test("isento usa a URL PIX original, sem transformar isenção em pagamento", as
   assert.equal(requisicao.acao, "REAGENDAR");
   assert.equal(requisicao.eventId, "evt_isento");
   assert.equal(operacao.pix_pago, false);
+});
+
+test("produção: sem FieldValue injetado utiliza o SDK Firebase Admin e conclui operação", async () => {
+  const fixture = criarFixture({
+    isento: true,
+    defaultCalendar: true,
+    calendarResponse: { ok: true, status: "REAGENDADO", eventId: "evt_agendamento-1" },
+  });
+  // A versão em produção não injeta dependencies.FieldValue: usa fieldValuePadrao().
+  delete fixture.dependencies.FieldValue;
+  const resultado = await execute(fixture);
+  assert.equal(resultado.status, 200, JSON.stringify(resultado.body));
+  assert.equal(fixture.state.operations.get(OP).estado, "concluida");
+  const agendamento = fixture.state.docs.get(`agendamentos/${APPT}`);
+  assert.equal(agendamento.servico, "Serviço novo");
+  assert.equal(agendamento.duracao, 60);
+  assert.equal("alteracaoServicoOperacaoPendente" in agendamento, false);
+  assert.equal(fixture.state.calendarPayloads.length, 1);
 });
 
 test("PIX pago não aceita resposta de AGENDAR nem evento diferente", async () => {

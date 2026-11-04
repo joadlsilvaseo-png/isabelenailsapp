@@ -326,7 +326,9 @@ async function processarOperacao(pool, operationId, dependencies = {}) {
   const conexao = await pool.connect();
   let alteracaoFirestoreFeita = false;
   let marcadorPendenteSet = false;
-  const { FieldValue } = dependencies.FieldValue ? { FieldValue: dependencies.FieldValue } : await fieldValuePadrao();
+  // fieldValuePadrao() já retorna a classe FieldValue, não um objeto { FieldValue }.
+  // A desestruturação antiga deixava FieldValue undefined em produção.
+  const FieldValue = dependencies.FieldValue || await fieldValuePadrao();
   try {
     await conexao.query("BEGIN");
     await conexao.query("SELECT pg_advisory_xact_lock(hashtext('isabele_pix_agenda'), hashtext($1::text))", [snapshot.data]);
