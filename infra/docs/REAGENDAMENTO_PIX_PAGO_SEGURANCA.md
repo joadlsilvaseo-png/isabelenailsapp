@@ -1,88 +1,112 @@
-# Reagendamento de agendamento com sinal PIX pago — implementação protegida
+# Reagendamento de PIX pago — missão PR #22
 
-A produção **não** está autorizada para reagendar PIX pago até ser possível
-atualizar o MESMO evento no Google Calendar com confirmação legível pela API.
-O bloqueio anterior de PIX no frontend e backend foi mantido intencionalmente.
+## Funcionalidade
 
-## O que foi preparado
+Cliente e profissional podem reagendar **data e horário** de um agendamento
+confirmado com **sinal PIX pago**, sem emitir nova cobrança, estornar, cancelar
+ou perder o pagamento conciliado.
 
-- Testes para validar `pix_cobrancas.estado = 'paga'`, `pix_reservas.estado = 'confirmada'`,
-  e a correspondência da cobrança, cliente, reserva, agendamento e serviço.
-- Uma tentativa de reagendamento nunca usa o fluxo para criar/emitir uma
-  nova cobrança, nem pode mudar o serviço por essa via.
-- Contrato de `REAGENDAR` com `eventId` fixo, `operationId` idempotente,
-  data/hora e duração.
-- A API valida a resposta JSON explícita do Apps Script, inclusive o mesmo
-  `eventId`. Texto de sucesso não verificável ou confirmação de outro evento
-  é rejeitado.
-- Flag `PIX_REAGENDAMENTO_PAGO_ENABLED` (padrão **desligado**) e URL
-  `PIX_REAGENDAMENTO_PAGO_APPS_SCRIPT_URL` exigem validação integrada.
-- `GET /agendamentos/reagendar/config` autenticado retorna o estado da flag
-  sem tocar nos registros financeiros.
+- O serviço original não pode ser trocado por essa operação. Alterar Serviço
+  permanece tarefa independente (PR #20).
+- O horário de início e a duração preservada são validados no backend conforme
+  expediente vigente, bloqueios manuais e regras de dezembro.
+- O mesmo `calendarEventId` / `eventId` é usado no Google Apps Script que
+  criou o evento; não existe chamada `AGENDAR` nem outro evento novo.
+- A funcionalidade é desligada por padrão. Só aparece na interface quando a
+  API publicada confirma `GET /agendamentos/reagendar/config`.
 
-## Teste controlado do Apps Script utilizado pelo PIX — 04/11/2026
+## Validação com Apps Script REAL — 04/11/2026
 
-Na VPS, utilizando a implantação já presente no `pixCalendarWorker.js`,
-o usuário executou três operações com o identificador **exclusivamente fictício**
-`evt_teste_pix_1793824531_28939`. Resultados:
+Utilizando a URL já configurada no `pixCalendarWorker.js`, foi criado um
+evento totalmente fictício com id
+`evt_teste_pix_1793824531_28939`:
 
-- `AGENDAR`: `{"ok":true,"status":"AGENDADO","eventId":"evt_teste_pix_1793824531_28939","googleEventId":"ai8h5crk1g0obb05lt8l7n4ecg@google.com"}`
-- `REAGENDAR`: `{"ok":true,"status":"REAGENDADO","eventId":"evt_teste_pix_1793824531_28939"}`
-- `CANCELAR`: `{"ok":true,"status":"CANCELADO","eventId":"evt_teste_pix_1793824531_28939"}`
+1. `AGENDAR` → `{ok:true,status:"AGENDADO",eventId,googleEventId}`
+2. `REAGENDAR` → `{ok:true,status:"REAGENDADO",eventId}`
+3. `CANCELAR` → `{ok:true,status:"CANCELADO",eventId}`
 
-**Confirmado**: a implantação de `AGENDAR/CANCELAR` reconhece também
-`REAGENDAR` e devolve o mesmo `eventId` interno. O validador da API
-foi ajustado para aceitar a resposta real `status:"REAGENDADO"`, exigindo
-`ok:true` e a identidade esperada. O teste não envolveu cliente real,
-PIX ou alterações em PostgreSQL/Firestore.
+O teste demonstrou suporte a todas as ações pelo mesmo endpoint e
+identificador interno. A API agora exige `ok:true`,
+`status:"REAGENDADO"` ou resposta equivalente explícita e o mesmo
+`eventId`. A execução não inspecionou independentemente o Google Event ID
+depois do reagendamento ou a exclusão física após o cancelamento.
 
-**Ainda não comprovado pela execução**: que o evento permaneceu com o mesmo
-Google Calendar ID após o reagendamento, que o horário foi efetivamente
-atualizado ou que a exclusão final removeu o evento (as respostas de
-sucesso são do Apps Script, sem inspeção independente). Não presumir
-idempotência sob timeout ou concorrência.
+Consulta **somente leitura** na VPS mostrou 58 reservas com cobrança paga
+e estado confirmado; as 58 possuem registro de Calendar enviado na
+`pix_calendar_outbox`. Isso não demonstra que todos os eventos ainda
+existem fisicamente no Google Calendar, mas confirma os vínculos no banco.
 
-**IMPORTANTE**: a sincronização transacional entre PostgreSQL,
-Firestore e Calendar para PIX pago ainda não está implementada. A flag
-no PR retorna sempre `false` por segurança; **nenhuma variável de ambiente
-habilita o reagendamento pago** neste estado. A tela e a API de produção
-continuam bloqueando este caminho.
+## Protocolo durável — Migração 021
 
-## Impedimento para liberação
+`public.pix_reagendamentos_pagos` guarda UUID idempotente, agendamento,
+cliente, serviço, cobrança, reserva, `eventId`, origem, destino, lease,
+estado e erros para retentativas.
 
-A API de produção atualmente envia AGENDAR e CANCELAR para uma implantação de
-Google Apps Script iniciada por `AKfycbzOx...`. O frontend REAGENDAR aponta
-para outra implantação, iniciada por `AKfycbwUw...`. Ambos podem usar o mesmo
-calendário, mas isso não compartilha os mapas `reserva_<eventId>` das Script
-Properties entre projetos.
+1. API autentica cliente ou administradora, valida pagamento
+   `pix_cobrancas.estado='paga'`, reserva `confirmada`, vínculo da
+   mesma cobrança/cliente/agendamento/serviço e outbox Calendar enviada.
+2. Postgres bloqueia ambas as datas. Conserva a reserva original e cria
+   uma reserva protetora para o destino; se os intervalos se sobrepõem,
+   amplia a reserva original temporariamente para cobrir ambos.
+3. Commit da operação durável. Worker chama `REAGENDAR` no Google
+   Apps Script **existente** e só avança após confirmação explícita.
+4. Firestore atualiza data/hora/status `reagendado` com marcador de
+   operação. Os campos do sinal, cobrança, preço pago e identificadores
+   não são modificados.
+5. Postgres, em transação, substitui o intervalo original pelo destino,
+   libera a reserva de proteção e conclui a operação. Por fim limpa o
+   marcador Firestore. O worker pode retomar qualquer fase após timeout.
+6. Cancelamento administrativo ou da cliente é impedido enquanto a
+   operação PIX não foi concluída. Chamadas concorrentes para a mesma
+   reserva são recusadas pela chave e índice único de operação pendente.
 
-**O endereço usado pelo worker PIX ainda não foi comprovado para REAGENDAR
-um evento existente.** A chamada de reconhecimento de ATUALIZAR anterior
-mostrou que ela não estava disponível naquele endpoint. Além disso, o
-frontend usa `no-cors` no reagendamento comum, sem obter confirmação real
-do Calendar. Isso é inadequado para movimentar um agendamento pago.
+**Falha antes da confirmação do Calendar**: mantém ambos os horários
+protegidos e tenta novamente. **Falha do Firestore após Calendar**:
+mantém a operação `calendar_enviado`, sem reenviar a ação externa ao
+retomar. **Falha da transação PostgreSQL após Firestore**: mantém o destino
+bloqueado até conseguir concluir; não perde nem duplica o pagamento.
+Falhas persistentes exigem análise administrativa da fila; a rotina
+prefere manter horários bloqueados a permitir reservas conflitantes.
 
-Não habilitar a flag ainda. Falta criar um caminho de reagendamento pago que
-segure origem e destino durante a operação, preserve `cobranca_id`/
-`pixReservaId` e os valores financeiros, e tenha recuperação idempotente
-em caso de falha entre PostgreSQL, Firestore e Calendar. Só após essa fase
-poderá ser removido o bloqueio da tela.
+## Testes automatizados
 
-## Requisitos de aceite para a próxima fase
+`.github/workflows/validar-backend.yml` valida Node, frontend, regressões
+de cancelamento, e executa PostgreSQL **17 temporário** com a migração
+007 (exclusão de horários) e a nova 021.
 
-1. Script de criação PIX consegue executar REAGENDAR no **mesmo** `eventId`
-   e devolver `{ok:true,reagendado:true,eventId}` sem duplicar, tratar
-   `operationId` repetido idempotentemente.
-2. Backend reconcilia o pagamento pago, atualiza a mesma reserva mantendo
-   `cobranca_id`, nunca chama `pix/emitir`/Orders nem estorna.
-3. A data de origem permanece reservada até confirmação consistente da data
-   nova; a data nova não pode ser ocupada por outra cliente durante a operação.
-4. Reagendamento atende bloqueios administrativos, duração do serviço, regras
-   normais e as exceções especiais de dezembro.
-5. Testes de falha de HTTP, timeout, commit PostgreSQL, gravação Firestore,
-   operação repetida e concorrência. Não usar clientes reais nos testes.
-6. Merge/deploy somente após CI verde, Apps Script identificado e teste
-   controlado de ponta a ponta com evento e cobrança fictícios.
+Casos integrados: destino em outro dia, destino parcialmente sobreposto,
+chave repetida, operação concorrente, conservação do sinal, falha do
+Apps Script antes da confirmação, falha posterior Firestore, falha de
+UPDATE PostgreSQL após atualização Firestore e recuperação do worker
+sem nova cobrança e sem segunda chamada ao Calendar confirmado.
 
-O PR de Alterar Serviço (#20) é separado e também fica sem merge até sua
-própria validação do Calendar. Nenhum dado real foi alterado por este trabalho.
+Todos os dados do teste são sintéticos; nenhuma cobrança Mercado Pago,
+cliente ou evento Google Calendar real é utilizado pelo CI.
+
+## Publicação segura
+
+O fluxo de deploy `infra/scripts/atualizar-vps-pix.sh` aplica preflight
+da migração 021, realiza backup PostgreSQL e da imagem/Compose,
+e só então aplica SQL e recria a API mantendo as demais variáveis.
+O script **não altera automaticamente as flags financeiras** e
+**não liga** reagendamento PIX pago por padrão.
+
+Para ativar explicitamente no deploy, utilizar
+`ENABLE_PIX_PAID_RESCHEDULE=true` junto com `BRANCH=main`
+ao executar a **versão atualizada** do script. Esse opt-in acrescenta ao
+overlay apenas `PIX_REAGENDAMENTO_PAGO_ENABLED=true`, mantendo
+PIX de produção, credenciais e volumes iguais aos anteriores.
+
+Não tentar ativar a flag com a API antiga ou sem migrar a 021.
+A interface PWA atualizada consulta a API antes de liberar o botão.
+A função Alterar Serviço (#20) não é incluída nesta publicação.
+
+## Observação operacional
+
+Em situação de erro persistente, conferir
+`SELECT operation_id, estado, ultimo_erro, criado_em FROM public.pix_reagendamentos_pagos WHERE estado <> 'concluida';`
+em transação de somente leitura. Não apagar manualmente as reservas
+de proteção ou o registro da operação sem conciliar o Google Calendar.
+
+A versão atual do código ainda requer implantação efetiva na VPS para
+ficar ativa; merge no GitHub por si só **não implanta o backend Node.js**.
