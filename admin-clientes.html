@@ -20,7 +20,7 @@
   <link rel="stylesheet" href="base.css?v=1.0.4">
   <link rel="stylesheet" href="admin-clientes.css?v=1.0.0">
   <link rel="stylesheet" href="admin-clientes-live.css?v=1.0.0">
-  <link rel="stylesheet" href="admin-clientes-isabele.css?v=1.0.0">
+  <link rel="stylesheet" href="admin-clientes-isabele.css?v=1.0.1">
   <link rel="stylesheet" href="admin-bottom-nav.css?v=1">
 </head>
 
@@ -77,6 +77,10 @@
             <input id="search-input" type="search" placeholder="Buscar por nome, telefone ou e-mail" autocomplete="off" aria-label="Buscar clientes">
             <button id="clear-search-button" type="button" class="clear-search-button" aria-label="Limpar pesquisa" hidden>×</button>
           </form>
+          <div id="client-pix-filters" class="filters clients-pix-filters" role="group" aria-label="Filtrar clientes por sinal PIX">
+            <button type="button" class="filter-button filter-button--active" data-pix-filter="todos" aria-pressed="true">Todas as clientes</button>
+            <button type="button" class="filter-button" data-pix-filter="isentas" aria-pressed="false">Isentas de sinal PIX</button>
+          </div>
         </section>
         <section class="clients-section" aria-labelledby="clients-title">
           <div class="section-heading">
@@ -87,7 +91,7 @@
           <div id="clients-error" class="client-load-error" role="alert" hidden><span id="clients-error-message"></span><button id="clients-retry" type="button">Tentar novamente</button></div>
           <div id="clients-list" class="clients-list" aria-live="polite" aria-busy="false"></div>
           <div id="empty-state" class="empty-state" hidden><span class="empty-state-icon" aria-hidden="true">♡</span><strong>Nenhuma cliente encontrada</strong>
-            <p>Tente outro termo de busca.</p>
+            <p id="empty-state-message">Tente outro termo de busca.</p>
           </div>
           <button id="load-more" class="load-more-button" type="button" hidden>Carregar mais</button>
         </section>
@@ -146,7 +150,7 @@
       <a href="admin-clientes.html" class="admin-navigation-item admin-navigation-item--active" aria-current="page"><span aria-hidden="true">♙</span><span>Clientes</span></a>
     </nav>
   </div>
-  <script type="module" src="admin-clientes.js?v=1.0.0"></script>
+  <script type="module" src="admin-clientes.js?v=1.0.1"></script>
   <script src="admin-bottom-nav.js?v=1" defer></script>
 </body>
 
