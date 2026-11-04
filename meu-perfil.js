@@ -2,6 +2,7 @@ import { executarAcaoAgendamento } from "./agendamentosApi.js";
 import { auth, db } from "./firebase-config.js";
 import { webhookUrl } from "./config.js";
 import { consultarFotoPerfil } from "./foto-perfil-api.js";
+import { ehAplicacaoDeGel, encontrarManutencaoSugerida, formatarDataSugestao } from "./perfilManutencao.mjs?v=1.0.0";
 import {
   onAuthStateChanged,
   signOut,
@@ -182,6 +183,76 @@ async function resolveNomeServicoVisual(dados) {
   // 3. Fallback final
   console.warn("[meu-perfil] ⚠️ Usando fallback - serviço não identificado");
   return "Serviço Agendado";
+}
+
+/* ============================================================
+   CARD PERSONALIZADO — SUGESTÃO DE MANUTENÇÃO (SOMENTE FRONT)
+   ============================================================ */
+
+function renderizarSugestaoManutencao(sugestao) {
+  const card = document.getElementById("perfil-manutencao");
+  if (!card) return;
+
+  if (!sugestao) {
+    card.hidden = true;
+    return;
+  }
+
+  const dataAplicacao = formatarDataSugestao(sugestao.dataAplicacaoISO);
+  const dataSugerida = formatarDataSugestao(sugestao.dataSugeridaISO);
+  if (!dataAplicacao || !dataSugerida) {
+    card.hidden = true;
+    return;
+  }
+
+  document.getElementById("perfil-manutencao-servico").textContent = sugestao.servico;
+  document.getElementById("perfil-manutencao-aplicacao").textContent = dataAplicacao;
+  document.getElementById("perfil-manutencao-data").textContent = dataSugerida;
+  card.hidden = false;
+}
+
+/**
+ * Dados históricos já são carregados pelo perfil. Consulta apenas a ficha de
+ * serviços concluídos cujos nomes não permitem identificar a categoria.
+ * Assim "Aplicação de Alongamento" da categoria "Unhas em Gel" é elegível,
+ * mas manicure, esmaltação e manutenção não são confundidas com aplicações.
+ */
+async function descobrirSugestaoManutencao(concluidos) {
+  const enriquecidos = concluidos.map((item) => ({ ...item }));
+  const cacheServicos = new Map();
+
+  for (const atendimento of enriquecidos) {
+    if (ehAplicacaoDeGel({
+      nome: atendimento.nomeServico,
+      categoria: atendimento.categoria,
+    }) || !atendimento.idServico) continue;
+
+    const idServico = String(atendimento.idServico).trim();
+    if (!idServico) continue;
+
+    if (!cacheServicos.has(idServico)) {
+      try {
+        const snapshot = await getDoc(doc(db, "servicos", idServico));
+        cacheServicos.set(idServico, snapshot.exists() ? snapshot.data() : null);
+      } catch (erro) {
+        console.warn("Não foi possível consultar o serviço para a manutenção:", erro.message);
+        cacheServicos.set(idServico, null);
+      }
+    }
+
+    const dadosServico = cacheServicos.get(idServico);
+    if (dadosServico) {
+      atendimento.nomeServico = String(
+        dadosServico.nome || dadosServico.nomeServico || atendimento.nomeServico,
+      ).trim();
+      atendimento.categoria = String(
+        dadosServico.categoria || dadosServico.categoriaSlug ||
+        dadosServico.categoriaNome || atendimento.categoria,
+      ).trim();
+    }
+  }
+
+  return encontrarManutencaoSugerida(enriquecidos);
 }
 
 /* ============================================================
@@ -586,6 +657,7 @@ async function carregarAgendamentos(uid) {
   if (!containerAtendimentos) return;
 
   limparContainers();
+  renderizarSugestaoManutencao(null);
 
   const uidBusca = String(uid || "").trim();
   if (!uidBusca) {
@@ -670,6 +742,9 @@ async function carregarAgendamentos(uid) {
       return dataB - dataA; // Ordem decrescente
     });
 
+    // Os candidatos da sugestão são concluídos/realizados, nunca reservas ativas.
+    const candidatosManutencao = [];
+
     // Itera sobre os documentos combinados e ordenados
     for (const docItem of mergedDocs) {
       const dados = docItem.data();
@@ -693,6 +768,16 @@ async function carregarAgendamentos(uid) {
       console.log("Agendamento encontrado:", dados);
 
       const nomeServicoVisual = await resolveNomeServicoVisual(dados);
+      const statusManutencao = String(dados.status || "").trim().toLowerCase();
+      if (statusManutencao === "concluido" || statusManutencao === "realizado") {
+        candidatosManutencao.push({
+          nomeServico: nomeServicoVisual,
+          idServico: dados.idServico || dados.servicoId,
+          categoria: dados.categoria || dados.categoriaNome || dados.categoriaSlug || "",
+          data: dados.data,
+          status: dados.status,
+        });
+      }
 
       const agendamentoData = {
         titulo: nomeServicoVisual,
@@ -740,6 +825,16 @@ async function carregarAgendamentos(uid) {
 
     atualizarContadoresAtendimentos();
     aplicarFiltroAtendimentos(filtroAtivo);
+
+    if (auth.currentUser?.uid === uidBusca) {
+      try {
+        const sugestao = await descobrirSugestaoManutencao(candidatosManutencao);
+        if (auth.currentUser?.uid === uidBusca) renderizarSugestaoManutencao(sugestao);
+      } catch (erro) {
+        console.warn("Não foi possível calcular a sugestão de manutenção:", erro.message);
+        renderizarSugestaoManutencao(null);
+      }
+    }
   } catch (error) {
     console.error("Erro ao carregar agendamentos do Firestore:", error);
   }

@@ -16,6 +16,10 @@ on:
       - "admin-clientes.html"
       - "admin-clientes-isabele.css"
       - "admin-clientes-listagem.mjs"
+      - "meu-perfil.js"
+      - "meu-perfil.html"
+      - "meu-perfil.css"
+      - "perfilManutencao.mjs"
       - "admin-calendario-regras.mjs"
       - "service-worker.js"
       - "infra/migrations/**"
@@ -41,6 +45,8 @@ jobs:
           node --check ../../admin-calendario.js
           node --check ../../admin-agendamentos.js
           node --check ../../admin-clientes.js
+          node --check ../../meu-perfil.js
+          node --check ../../perfilManutencao.mjs
           node --check test/agendamentoCancelamentos.test.js
       - name: Testes do backend
         run: npm test
@@ -50,6 +56,8 @@ jobs:
         run: node --test ../../scripts/admin-clientes-listagem.test.mjs
       - name: Testar filtros e avatar da agenda administrativa
         run: node --test ../../scripts/admin-agenda-filtros-foto.test.mjs
+      - name: Testar card de manutenção e CTA do Meu Perfil
+        run: node --test ../../scripts/perfil-manutencao.test.mjs
       - name: Validar script de deploy
         working-directory: .
         run: bash -n infra/scripts/atualizar-vps-pix.sh
