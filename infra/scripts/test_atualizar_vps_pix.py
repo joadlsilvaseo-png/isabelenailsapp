@@ -223,6 +223,8 @@ class TestAtualizacaoVpsPix(unittest.TestCase):
         self.assertIn("COUNT(*) = 26", SOURCE)
         self.assertIn("COUNT(*) = 10", SOURCE)
         self.assertIn("HAS_020_DEFAULTS", SOURCE)
+        self.assertIn("(SELECT COUNT(*) = 27 FROM information_schema.columns", SOURCE)
+        self.assertIn("('nome_cliente','text','YES')", SOURCE)
         self.assertLess(SOURCE.index("MIGRATION_020_ROW="), SOURCE.index('compose_snapshot stop "$API_SERVICE"'))
         self.assertIn('if [[ "$MIGRATION_020_STATE" == pending ]]; then', SOURCE)
         self.assertIn("MIGRATION_020_APPLIED", SOURCE)
