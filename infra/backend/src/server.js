@@ -17,6 +17,8 @@ import { atenderConfirmacaoAgendamentoPix } from "./pixAgendamentoConfirmacao.js
 import { iniciarWorkerPixWebhook } from "./pixWebhookWorker.js";
 import { iniciarWorkerPixPolling } from "./pixPollingWorker.js";
 import { atenderAgendamentoIsencao } from "./agendamentosIsencaoPix.js";
+import { iniciarWorkerReagendamentoPixPago } from "./pixReagendamentoPagoOperacao.js";
+import { pixPagoReagendamentoHabilitado } from "./pixReagendamentoPago.js";
 import { consultarDisponibilidadePix } from "./pixDisponibilidadeApi.js";
 import { atenderGerenciarCalendario } from "./agendaBloqueios.js";
 import { atenderGestaoClientes } from "./gestaoClientes.js";
@@ -210,6 +212,9 @@ server.listen(PORT, "0.0.0.0", () => {
 
   if (process.env.PIX_CALENDAR_WORKER_ENABLED === "true") {
     iniciarWorkerPixCalendar(pool);
+  }
+  if (pixPagoReagendamentoHabilitado()) {
+    iniciarWorkerReagendamentoPixPago(pool);
   }
 
   iniciarMonitorAgendamentos(pool).catch((erro) => {
