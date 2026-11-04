@@ -67,8 +67,13 @@ export async function enviarReagendamentoPix(payload, fetcher = fetch, url = pro
   const raw = await resposta.text();
   let json;
   try { json = JSON.parse(raw); } catch { throw new Error("Google Calendar não retornou confirmação JSON de reagendamento"); }
+  // O Apps Script original do PIX responde:
+  // { ok: true, status: "REAGENDADO", eventId: "evt_..." }.
+  // Preservamos compatibilidade com respostas estruturadas alternativas,
+  // mas exigimos sucesso explícito e o MESMO identificador interno.
+  const statusConfirmado = json?.status === "REAGENDADO";
   if (json?.ok !== true ||
-      (json.reagendado !== true && json.updated !== true) ||
+      (!statusConfirmado && json?.reagendado !== true && json?.updated !== true) ||
       json.eventId !== payload.eventId) {
     throw new Error("Google Calendar não confirmou alteração do mesmo evento");
   }
