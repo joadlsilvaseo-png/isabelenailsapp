@@ -12,7 +12,7 @@ const ADMIN = "admin-1";
 const CHAVE = "11111111-1111-4111-8111-111111111111";
 const DATA = "2026-11-05";
 
-function criarFixture({ isenta = true, reservas = [], documentos = {}, falharCommit = false, falharFirestore = false } = {}) {
+function criarFixture({ isenta = true, reservas = [], documentos = {}, falharCommit = false, falharFirestore = false, marcarPendenteAntesTransacao = false } = {}) {
   const state = {
     isencoes: new Map(isenta ? [[UID, true]] : []),
     reservas,
@@ -48,6 +48,12 @@ function criarFixture({ isenta = true, reservas = [], documentos = {}, falharCom
       firestoreQueue = new Promise((resolve) => { liberar = resolve; });
       await anterior;
       const operacoes = [];
+      // Simula uma alteração concorrente após a leitura inicial do agendamento.
+      if (marcarPendenteAntesTransacao) {
+        marcarPendenteAntesTransacao = false;
+        const atual = state.documentos.get("agendamentos/original");
+        if (atual) state.documentos.set("agendamentos/original", { ...atual, alteracaoServicoOperacaoPendente: "op-concorrente" });
+      }
       const tx = {
         async get(ref) {
           if (ref?.nome) {
@@ -314,6 +320,39 @@ test("reagendamento não ocupa horário PIX pendente nem altera o documento", as
     dados: { agendamentoId: "original", servicoId: "s1", data: DATA, horario: "14:00" },
     dependencies: f.dependencies,
   }), (erro) => erro.codigo === "HORARIO_RESERVADO_PIX");
+  assert.equal(f.state.documentos.get("agendamentos/original").data, "2026-11-03");
+});
+
+test("reagendamento recusa operação de alteração de serviço já pendente", async () => {
+  const f = criarFixture({ isenta: false, documentos: {
+    "agendamentos/original": {
+      clienteId: UID, data: "2026-11-03", horario: "13:00", duracao: 60,
+      status: "confirmado", calendarEventId: "evt_original",
+      alteracaoServicoOperacaoPendente: "op-andamento",
+    },
+  } });
+  await assert.rejects(reagendarComBloqueio({
+    pool: f.pool, db: f.firestore, uid: UID,
+    dados: { agendamentoId: "original", servicoId: "s1", data: DATA, horario: "14:00" },
+    dependencies: f.dependencies,
+  }), (erro) => erro.status === 409 && erro.codigo === "ALTERACAO_SERVICO_EM_ANDAMENTO");
+  assert.equal(f.state.reservas.length, 0);
+  assert.equal(f.state.documentos.get("agendamentos/original").data, "2026-11-03");
+});
+
+test("reagendamento revalida marcador concorrente dentro da transação Firestore", async () => {
+  const f = criarFixture({ isenta: false, marcarPendenteAntesTransacao: true, documentos: {
+    "agendamentos/original": {
+      clienteId: UID, data: "2026-11-03", horario: "13:00", duracao: 60,
+      status: "confirmado", calendarEventId: "evt_original",
+    },
+  } });
+  await assert.rejects(reagendarComBloqueio({
+    pool: f.pool, db: f.firestore, uid: UID,
+    dados: { agendamentoId: "original", servicoId: "s1", data: DATA, horario: "14:00" },
+    dependencies: f.dependencies,
+  }), (erro) => erro.status === 409 && erro.codigo === "ALTERACAO_SERVICO_EM_ANDAMENTO");
+  assert.equal(f.state.reservas.length, 0);
   assert.equal(f.state.documentos.get("agendamentos/original").data, "2026-11-03");
 });
 
