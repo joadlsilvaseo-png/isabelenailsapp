@@ -20,7 +20,7 @@ const COBRANCA_ID = "11111111-2222-4333-8444-555555555555";
 const UID_CLIENTE = "cliente-123";
 const UID_ADMIN = "admin-123";
 
-function fixture({ tipo = "cliente", falharSql = null, falharFirestore = false, semPix = false } = {}) {
+function fixture({ tipo = "cliente", falharSql = null, falharFirestore = false, semPix = false, reagendamentoPendente = false } = {}) {
   const dados = {
     status: "confirmado",
     clienteId: UID_CLIENTE,
@@ -41,6 +41,7 @@ function fixture({ tipo = "cliente", falharSql = null, falharFirestore = false, 
     reservation: { id: "reserva-1", cobranca_id: semPix ? null : COBRANCA_ID, estado: "confirmada", agendamento_id: AGENDAMENTO_ID, inicio_minuto: 600, fim_minuto: 660 },
     cancellation: null,
     calendarAttempts: 0,
+    reagendamentoPendente,
     failAt: falharSql,
     docs,
     lock: Promise.resolve()
@@ -50,6 +51,9 @@ function fixture({ tipo = "cliente", falharSql = null, falharFirestore = false, 
     state,
     async query(sql, params = []) {
       const normalized = sql.replace(/\s+/g, " ").trim().toLowerCase();
+      if (normalized.includes("from public.pix_reagendamentos_pagos")) {
+        return { rows: state.reagendamentoPendente ? [{}] : [], rowCount: state.reagendamentoPendente ? 1 : 0 };
+      }
       if (normalized.startsWith("insert into public.agendamento_cancelamentos")) {
         if (!state.cancellation) {
           state.cancellation = {
@@ -113,6 +117,9 @@ function fixture({ tipo = "cliente", falharSql = null, falharFirestore = false, 
           }
           if (normalized.includes("from public.agendamento_cancelamentos") && normalized.endsWith("for update")) {
             return { rows: state.cancellation ? [structuredClone(state.cancellation)] : [] };
+          }
+          if (normalized.includes("from public.pix_reagendamentos_pagos")) {
+            return { rows: state.reagendamentoPendente ? [{}] : [], rowCount: state.reagendamentoPendente ? 1 : 0 };
           }
           if (normalized.startsWith("select c.id, c.estado as cobranca_estado")) {
             if (!state.charge || !state.reservation) return { rows: [] };
@@ -181,6 +188,17 @@ function fixture({ tipo = "cliente", falharSql = null, falharFirestore = false, 
     uid: tipo === "cliente" ? UID_CLIENTE : UID_ADMIN
   };
 }
+
+test("cancelamento durante reagendamento PIX pago não move a reserva nem o financeiro", async () => {
+  const f = fixture({ reagendamentoPendente: true });
+  await assert.rejects(solicitarCancelamentoAgendamento({
+    pool: f.pool, firestore: f.firestore, uid: f.uid,
+    agendamentoId: AGENDAMENTO_ID, acao: f.action, dependencies: f.dependencies,
+  }), (erro) => erro.status === 409);
+  assert.equal(f.state.reservation.estado, "confirmada");
+  assert.equal(f.state.charge.estado, "paga");
+  assert.equal(f.state.cancellation, null);
+});
 
 test("cancelamento da cliente com PIX pago preserva a cobrança e libera a reserva", async () => {
   const f = fixture();
