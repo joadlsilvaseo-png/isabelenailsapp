@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { FieldValue as FirebaseFieldValue } from "firebase-admin/firestore";
 import {
   atenderAlteracaoServico,
   enviarAtualizacaoCalendar,
@@ -24,8 +25,8 @@ function normalizarSentinelasFirestore(dados) {
   // O teste de integração lógica usa FieldValue real do SDK; a fixture de
   // Firestore não executa sentinelas, portanto interpreta-as no mock.
   return Object.fromEntries(Object.entries(dados).map(([chave, valor]) => {
-    if (valor && typeof valor === "object" && typeof valor.isEqual === "function") {
-      return [chave, valor._methodName === "FieldValue.delete" ? "__DELETE_FIELD__" : "server-timestamp"];
+    if (valor instanceof FirebaseFieldValue) {
+      return [chave, valor.isEqual(FirebaseFieldValue.delete()) ? "__DELETE_FIELD__" : "server-timestamp"];
     }
     return [chave, valor];
   }));
