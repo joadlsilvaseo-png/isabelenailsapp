@@ -75,6 +75,13 @@ service cloud.firestore {
     match /agendamentos/{document} {
       allow read: if true;
       allow create, update, delete: if ehAdmin();
+
+      // Histórico administrativo da alteração do serviço. Acesso público ao
+      // documento pai não se propaga para esta subcoleção.
+      match /alteracoes_servico/{operationId} {
+        allow read: if ehAdmin();
+        allow create, update, delete: if false;
+      }
     }
 
     // =========================
