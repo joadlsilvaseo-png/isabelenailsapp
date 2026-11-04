@@ -32,6 +32,12 @@ terça, quarta e sábado (horários de início e durações permitidas) e de qui
 e sexta (horários de abertura e encerramento). Sem pausa fixa de almoço;
 a profissional controla intervalos pelo Gerenciar Calendário.
 
+**Atualização semanal em 04/11/2026:** quintas-feiras comuns agora atendem
+**11h–21h** e sextas-feiras comuns, **09h–21h** (último início possível
+às 20h30, para serviço de até 30 minutos). Datas de dezembro com expediente
+especial permanecem com seus horários próprios, inclusive 17 e 18/12 até 20h.
+
+
 **Encerramento é o horário em que o último serviço precisa ter terminado.**
 A validação usa `início + duração real <= encerramento`. Os possíveis inícios
 são em intervalos de 30 minutos; o sistema não deve oferecer uma duração que

@@ -54,9 +54,9 @@ export function validarHorarioPix(dataIso, horario, duracao, agora = new Date())
   const abertura = especial?.inicioMinuto ?? (diaSemana === 4 ? 660 : 540);
   // Encerramento é a hora final do serviço, não seu último horário de início.
   const fechamento = especial?.encerramentoMinuto
-    ?? (sabado ? 1110 : horarioEstendido ? 1140 : 1200);
+    ?? (sabado ? 1110 : horarioEstendido ? 1260 : 1200);
   const ultimoInicio = especial ? fechamento - 30
-    : sabado ? 1020 : horarioEstendido ? 1110 : 1080;
+    : sabado ? 1020 : horarioEstendido ? 1230 : 1080;
   if (inicio < abertura || inicio > ultimoInicio || inicio % 30 !== 0 || fim > fechamento) {
     return horarioInvalido("Fora do horario permitido");
   }

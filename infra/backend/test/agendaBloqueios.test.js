@@ -129,8 +129,10 @@ test("Gerenciar Calendário não oferece intervalos fora do expediente", () => {
     const slots = listarSlotsGerenciaveis(data, FIXO);
     assert.equal(slots.includes(810), true); // 13h30–14h pode ser fechado manualmente
     assert.equal(slots.includes(1110), true); // 18h30–19h
-    assert.equal(slots.includes(1140), false); // a partir das 19h
-    assert.equal(slots.some((minuto) => minuto > 1140), false);
+    assert.equal(slots.includes(1200), true); // 20h–20h30
+    assert.equal(slots.includes(1230), true); // 20h30–21h
+    assert.equal(slots.includes(1260), false); // a partir das 21h
+    assert.equal(slots.some((minuto) => minuto >= 1260), false);
   }
   const sabado = listarSlotsGerenciaveis("2026-11-07", FIXO);
   assert.equal(sabado.includes(810), true); // sem almoço fixo

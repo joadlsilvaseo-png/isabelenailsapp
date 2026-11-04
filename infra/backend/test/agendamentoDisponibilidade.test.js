@@ -81,34 +81,47 @@ const conferir = (data, horario, duracao, esperado) =>
     `${data} ${horario} (${duracao} min)`,
   );
 
-test("quinta encerra atendimento às 19h e não gera horários posteriores", () => {
+test("quinta encerra atendimentos às 21h e inicia no máximo às 20h30", () => {
   const limites = obterLimitesAtendimentoSemanal(4);
   assert.deepEqual(limites, {
     minAbertura: 660,
-    minUltimoInicio: 1110,
-    minFechamento: 1140,
+    minUltimoInicio: 1230,
+    minFechamento: 1260,
   });
-  for (const [horario, duracao] of [["11:00", 120], ["12:00", 60], ["12:00", 120], ["12:30", 60], ["13:00", 30], ["13:00", 60], ["13:30", 30], ["13:30", 90], ["14:00", 120], ["18:00", 60], ["18:30", 30]]) {
-    conferir("2026-11-05", horario, duracao, true);
-  }
-  for (const [horario, duracao] of [["09:00", 60], ["10:30", 60], ["18:30", 60], ["19:00", 30], ["19:30", 60]]) {
-    conferir("2026-11-05", horario, duracao, false);
-  }
+  for (const [horario, duracao] of [
+    ["11:00", 120], ["12:00", 60], ["12:00", 120], ["12:30", 60],
+    ["13:00", 30], ["13:00", 60], ["13:30", 30], ["13:30", 90],
+    ["14:00", 120], ["17:30", 150], ["18:00", 120], ["18:30", 120],
+    ["19:00", 120], ["19:30", 90], ["20:00", 60], ["20:30", 30],
+  ]) conferir("2026-11-05", horario, duracao, true);
+
+  for (const [horario, duracao] of [
+    ["09:00", 60], ["10:30", 60], ["19:00", 150],
+    ["19:30", 120], ["20:00", 90], ["20:30", 60],
+    ["21:00", 30], ["21:30", 30],
+  ]) conferir("2026-11-05", horario, duracao, false);
 });
 
-test("sexta também encerra atendimento às 19h", () => {
+test("sexta encerra atendimentos às 21h e inicia no máximo às 20h30", () => {
   const limites = obterLimitesAtendimentoSemanal(5);
   assert.deepEqual(limites, {
     minAbertura: 540,
-    minUltimoInicio: 1110,
-    minFechamento: 1140,
+    minUltimoInicio: 1230,
+    minFechamento: 1260,
   });
-  for (const [horario, duracao] of [["09:00", 120], ["11:30", 60], ["12:00", 60], ["12:00", 120], ["12:30", 60], ["13:00", 30], ["13:00", 60], ["13:30", 30], ["13:30", 90], ["14:00", 120], ["18:00", 60], ["18:30", 30]]) {
-    conferir("2026-11-06", horario, duracao, true);
-  }
-  for (const [horario, duracao] of [["18:30", 60], ["19:00", 30], ["19:30", 60]]) {
-    conferir("2026-11-06", horario, duracao, false);
-  }
+  for (const [horario, duracao] of [
+    ["09:00", 120], ["11:30", 60], ["12:00", 60], ["12:00", 120],
+    ["12:30", 60], ["13:00", 30], ["13:00", 60],
+    ["13:30", 30], ["13:30", 90], ["14:00", 120],
+    ["17:30", 150], ["18:00", 120], ["18:30", 120],
+    ["19:00", 120], ["19:30", 90], ["20:00", 60], ["20:30", 30],
+  ]) conferir("2026-11-06", horario, duracao, true);
+
+  for (const [horario, duracao] of [
+    ["08:30", 60], ["19:00", 150], ["19:30", 120],
+    ["20:00", 90], ["20:30", 60], ["21:00", 30],
+    ["21:30", 30],
+  ]) conferir("2026-11-06", horario, duracao, false);
 });
 
 test("sábado mantém encerramento às 18h com exceção às 16h para 150 min", () => {
