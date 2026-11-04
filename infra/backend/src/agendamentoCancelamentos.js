@@ -61,9 +61,6 @@ async function validarSolicitacaoFirestore(db, { uid, agendamentoId, acao }) {
     if (dados.reagendamentoPixOperacaoPendente) {
       throw new ErroCancelamento(409, "Reagendamento PIX ainda em processamento", true);
     }
-    if (dados.alteracaoServicoOperacaoPendente) {
-      throw new ErroCancelamento(409, "Alteração de serviço em andamento; cancelamento será retomado depois", false);
-    }
 
     const cobrancaId = texto(dados.pixCobrancaId);
     if (cobrancaId && !/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(cobrancaId)) {
@@ -152,6 +149,9 @@ async function aplicarCancelamentoFirestore(db, solicitacao, dependencies = {}) 
     }
     if (dados.reagendamentoPixOperacaoPendente) {
       throw new ErroCancelamento(409, "Reagendamento PIX ainda em processamento", true);
+    }
+    if (dados.alteracaoServicoOperacaoPendente) {
+      throw new ErroCancelamento(409, "Alteração de serviço em andamento; cancelamento será retomado depois", false);
     }
 
     transacao.update(reference, {
