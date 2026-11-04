@@ -215,6 +215,57 @@ test("PostgreSQL 17: saga PIX protege os intervalos, preserva pagamento e recupe
   assert.equal(db.documentos.get("agendamentos/pago03").data, "2027-03-19");
   assert.equal((await pool.query("SELECT estado FROM public.pix_cobrancas WHERE id=$1", [terceiro.charge])).rows[0].estado, "paga");
 
+  // Falha do Apps Script antes da confirmação: a origem e o destino
+  // permanecem protegidos e o Firestore não é modificado.
+  const quarto = await criarAgendamento(pool, db, {
+    id: "pago04", dataOrigem: "2027-03-21", horarioOrigem: "10:00",
+  });
+  const op4 = randomUUID();
+  await iniciar(pool, db, "pago04", quarto.documento, op4, "2027-03-22", "14:00");
+  const calendarAntesFalha = chamadasCalendar;
+  const falhaCalendar = await processarProximoReagendamentoPixPago(pool, {
+    ...deps,
+    enviarCalendar: async () => { throw new Error("Calendar fictício indisponível"); },
+  });
+  assert.equal(falhaCalendar.estado, "pendente");
+  assert.equal(db.documentos.get("agendamentos/pago04").data, "2027-03-21");
+  assert.equal((await pool.query("SELECT * FROM public.pix_reservas WHERE agendamento_id=$1", ["pix_reag_hold_" + op4])).rowCount, 1);
+  await pool.query("UPDATE public.pix_reagendamentos_pagos SET proxima_tentativa_em=NOW(), bloqueado_ate=NULL WHERE operation_id=$1", [op4]);
+  const retomadaCalendar = await processarProximoReagendamentoPixPago(pool, deps);
+  assert.equal(retomadaCalendar.estado, "concluida");
+  assert.equal(chamadasCalendar, calendarAntesFalha + 1);
+
+  // Falha de escrita PostgreSQL DEPOIS de atualizar o Firestore: o worker
+  // retoma a transação sem reenviar REAGENDAR nem criar nova cobrança.
+  const quinto = await criarAgendamento(pool, db, {
+    id: "pago05", dataOrigem: "2027-03-23", horarioOrigem: "10:00",
+  });
+  const op5 = randomUUID();
+  await iniciar(pool, db, "pago05", quinto.documento, op5, "2027-03-25", "14:00");
+  await pool.query(`CREATE OR REPLACE FUNCTION impedir_commit_pix_teste()
+    RETURNS trigger AS $ BEGIN
+      IF OLD.cobranca_id IS NOT NULL AND NEW.data_servico = DATE '2027-03-25'
+         AND OLD.data_servico <> NEW.data_servico THEN
+        RAISE EXCEPTION 'simulated pg move failure';
+      END IF;
+      RETURN NEW;
+    END $ LANGUAGE plpgsql`);
+  await pool.query("CREATE TRIGGER teste_falha_pix BEFORE UPDATE ON public.pix_reservas FOR EACH ROW EXECUTE FUNCTION impedir_commit_pix_teste()");
+  const antesFalhaPg = chamadasCalendar;
+  const falhaPg = await processarProximoReagendamentoPixPago(pool, deps);
+  assert.equal(falhaPg.estado, "pendente");
+  assert.equal(chamadasCalendar, antesFalhaPg + 1);
+  assert.equal(db.documentos.get("agendamentos/pago05").data, "2027-03-25");
+  assert.equal((await pool.query("SELECT TO_CHAR(data_servico,'YYYY-MM-DD') AS data_iso FROM public.pix_reservas WHERE id=$1", [quinto.reserva])).rows[0].data_iso, "2027-03-23");
+  assert.equal((await pool.query("SELECT * FROM public.pix_reservas WHERE agendamento_id=$1", ["pix_reag_hold_" + op5])).rowCount, 1);
+  await pool.query("DROP TRIGGER teste_falha_pix ON public.pix_reservas");
+  await pool.query("DROP FUNCTION impedir_commit_pix_teste()");
+  await pool.query("UPDATE public.pix_reagendamentos_pagos SET proxima_tentativa_em=NOW(), bloqueado_ate=NULL WHERE operation_id=$1", [op5]);
+  const retomadaPg = await processarProximoReagendamentoPixPago(pool, deps);
+  assert.equal(retomadaPg.estado, "concluida");
+  assert.equal(chamadasCalendar, antesFalhaPg + 1, "não duplica chamadas após atualização Calendar confirmada");
+  assert.equal((await pool.query("SELECT TO_CHAR(data_servico,'YYYY-MM-DD') AS data_iso FROM public.pix_reservas WHERE id=$1", [quinto.reserva])).rows[0].data_iso, "2027-03-25");
+
   const cobrancas = await pool.query("SELECT COUNT(*)::int AS n FROM public.pix_cobrancas");
-  assert.equal(cobrancas.rows[0].n, 3, "nenhuma nova cobrança foi criada pelo reagendamento");
+  assert.equal(cobrancas.rows[0].n, 5, "nenhuma nova cobrança foi criada pelo reagendamento");
 });
