@@ -105,11 +105,17 @@ function dadosPeriodo(agendamento) {
   return { data, horario, inicio: Number(horario.slice(0, 2)) * 60 + Number(horario.slice(3, 5)) };
 }
 
+function usarCalendarPix(operacao) {
+  // O agendamento com sinal isento usa a mesma outbox Calendar do PIX pago.
+  // Isso NÃO o transforma em pagamento e não modifica o cálculo financeiro.
+  return operacao.pix_pago === true || operacao.calendar_isencao === true;
+}
+
 function montarPayloadAtualizacaoCalendar(operacao) {
   return {
     // Sinal PIX: usar REAGENDAR do mesmo script que criou o evento.
     // Demais agendamentos: ATUALIZAR no script usado pelo frontend original.
-    acao: operacao.pix_pago === true ? "REAGENDAR" : "ATUALIZAR",
+    acao: usarCalendarPix(operacao) ? "REAGENDAR" : "ATUALIZAR",
     eventId: operacao.calendar_event_id,
     operationId: operacao.operation_id,
     nomeCliente: operacao.nome_cliente,
@@ -120,7 +126,7 @@ function montarPayloadAtualizacaoCalendar(operacao) {
 }
 
 export async function enviarAtualizacaoCalendar(operacao, fetcher = fetch, url = process.env[URL_ATUALIZAR_ENV]) {
-  const destino = operacao.pix_pago === true ? URL_APPS_SCRIPT : String(url || "").trim();
+  const destino = usarCalendarPix(operacao) ? URL_APPS_SCRIPT : String(url || "").trim();
   if (!PADRAO_URL_ATUALIZAR.test(destino)) {
     throw new ErroAlteracaoServico(503, "Integração ATUALIZAR indisponível; nenhuma alteração foi enviada ao Google Calendar.", false);
   }
@@ -218,6 +224,7 @@ async function prepararSnapshot({ pool, db, operacao, dependencies }) {
       sinalPagoCentavos,
       restanteNovoCentavos: calcularRestanteServicoCentavos(precoNovoCentavos, sinalPagoCentavos),
       possuiPix: Boolean(atual.pixCobrancaId || atual.pixPagamentoId),
+      calendarIsento: atual.origemPagamento === "isencao_sinal_pix",
       reserva: reservaResult.rows[0] || null,
       periodo: validarNovoPeriodoServico({ data, horario: formatarHorario(inicio), duracao: duracaoNova, servico: servicoNovo, now: dependencies.now }),
     };
@@ -290,6 +297,7 @@ async function prepararSnapshot({ pool, db, operacao, dependencies }) {
     duracaoNova, precoNovoCentavos, sinalPagoCentavos,
         restanteNovoCentavos: calcularRestanteServicoCentavos(precoNovoCentavos, sinalPagoCentavos),
     possuiPix,
+    calendarIsento: atual.origemPagamento === "isencao_sinal_pix",
     reserva,
     servicoNovo,
     atual,
@@ -431,6 +439,7 @@ async function processarOperacao(pool, operationId, dependencies = {}) {
       novo_servico_nome: snapshot.servicoNovoNome,
       duracao_nova: snapshot.duracaoNova,
       pix_pago: snapshot.possuiPix,
+      calendar_isencao: snapshot.calendarIsento,
     }, fetcher);
 
     if (!snapshot.jaAplicadaNoFirestore) {
@@ -530,20 +539,31 @@ async function processarOperacao(pool, operationId, dependencies = {}) {
     const erroResposta = erro instanceof ErroAlteracaoServico && erro.permanente && snapshot.jaAplicadaNoFirestore
       ? new ErroAlteracaoServico(503, "A sincronização do evento continua pendente e será retomada automaticamente.", false)
       : erro;
+    let limpezaPendente = false;
     if (permanente && marcadorPendenteSet) {
-      await limparMarcadorPendente(db, operacao, operationId, FieldValue).catch((compensacao) => {
+      try {
+        await limparMarcadorPendente(db, operacao, operationId, FieldValue);
+      } catch (compensacao) {
+        limpezaPendente = true;
         console.error("[Alteração serviço] Marcador pendente precisa de recuperação:", compensacao.message);
-      });
+      }
     }
+    const mensagem = String(erroResposta?.message || "Falha temporária");
+    const erroRegistrado = limpezaPendente
+      ? `${ERRO_LIMPEZA_MARCADOR}: ${mensagem}`.slice(0, 300)
+      : mensagem.slice(0, 300);
     await pool.query(`
       UPDATE public.agendamento_alteracoes_servico
       SET estado = CASE WHEN $2 THEN 'falha_permanente' ELSE 'solicitada' END,
           calendar_estado = CASE WHEN $2 THEN 'falha' ELSE 'pendente' END,
           tentativas = tentativas + 1, bloqueado_ate = NULL,
-          proxima_tentativa_em = NOW() + CASE WHEN $2 THEN INTERVAL '100 years' ELSE INTERVAL '30 seconds' END,
+          proxima_tentativa_em = NOW() + CASE
+            WHEN $4 THEN INTERVAL '30 seconds'
+            WHEN $2 THEN INTERVAL '100 years'
+            ELSE INTERVAL '30 seconds' END,
           ultimo_erro = $3, atualizado_em = NOW()
       WHERE operation_id = $1 AND estado <> 'concluida'
-    `, [operationId, permanente, String(erroResposta?.message || "Falha temporária").slice(0, 300)]).catch(() => {});
+    `, [operationId, permanente, erroRegistrado, limpezaPendente]).catch(() => {});
     if (alteracaoFirestoreFeita) {
       console.error("[Alteração serviço] Dados Firestore gravados; operação será retomada pela fila.");
     }
@@ -633,9 +653,10 @@ export async function atenderAlteracaoServico(req, res, pool, dependencies = {})
         await pool.query(`
           UPDATE public.agendamento_alteracoes_servico
           SET estado = 'falha_permanente', calendar_estado = 'falha',
-              ultimo_erro = $2, bloqueado_ate = NULL, atualizado_em = NOW()
+              ultimo_erro = CASE WHEN ultimo_erro LIKE $3 THEN ultimo_erro ELSE $2 END,
+              bloqueado_ate = NULL, atualizado_em = NOW()
           WHERE operation_id = $1 AND estado <> 'concluida'
-        `, [operationIdFalha, String(erro.message).slice(0, 300)]).catch(() => {});
+        `, [operationIdFalha, String(erro.message).slice(0, 300), `${ERRO_LIMPEZA_MARCADOR}:%`]).catch(() => {});
       }
     }
     if (status >= 500) console.error("[Alteração serviço] Falha:", erro.message);
@@ -649,7 +670,9 @@ export async function processarProximaAlteracaoServico(pool, dependencies = {}) 
   const claimed = await pool.query(`
     WITH proxima AS (
       SELECT operation_id FROM public.agendamento_alteracoes_servico
-      WHERE (estado = 'solicitada' OR (estado = 'concluida' AND ultimo_erro = $1))
+      WHERE (estado = 'solicitada'
+          OR (estado = 'concluida' AND ultimo_erro = $1)
+          OR (estado = 'falha_permanente' AND ultimo_erro LIKE $2))
         AND proxima_tentativa_em <= NOW()
         AND (bloqueado_ate IS NULL OR bloqueado_ate <= NOW())
       ORDER BY criado_em FOR UPDATE SKIP LOCKED LIMIT 1
@@ -658,12 +681,14 @@ export async function processarProximaAlteracaoServico(pool, dependencies = {}) 
     SET bloqueado_ate = NOW() + INTERVAL '2 minutes', atualizado_em = NOW()
     FROM proxima WHERE fila.operation_id = proxima.operation_id
     RETURNING fila.operation_id, fila.estado
-  `, [ERRO_LIMPEZA_MARCADOR]);
+  `, [ERRO_LIMPEZA_MARCADOR, `${ERRO_LIMPEZA_MARCADOR}:%`]);
   const operationId = claimed.rows[0]?.operation_id;
   if (!operationId) return { processado: false };
   const limpezaConcluidaPendente = claimed.rows[0].estado === "concluida";
+  const limpezaFalhaPermanentePendente = claimed.rows[0].estado === "falha_permanente";
+  const limpezaMarcadorPendente = limpezaConcluidaPendente || limpezaFalhaPermanentePendente;
   try {
-    if (limpezaConcluidaPendente) {
+    if (limpezaMarcadorPendente) {
       const result = await pool.query(
         "SELECT * FROM public.agendamento_alteracoes_servico WHERE operation_id = $1",
         [operationId],
@@ -673,25 +698,31 @@ export async function processarProximaAlteracaoServico(pool, dependencies = {}) 
       const db = dependencies.firestore || await firestorePadrao();
       const FieldValue = dependencies.FieldValue || await fieldValuePadrao();
       await limparMarcadorPendente(db, operacao, operationId, FieldValue);
+      // Em falha permanente, restaura a causa original; não reenvia Calendar.
+      const causaOriginal = limpezaFalhaPermanentePendente
+        ? String(operacao.ultimo_erro || "").slice(`${ERRO_LIMPEZA_MARCADOR}: `.length)
+        : null;
       await pool.query(`
         UPDATE public.agendamento_alteracoes_servico
-        SET ultimo_erro = NULL, bloqueado_ate = NULL, atualizado_em = NOW()
-        WHERE operation_id = $1 AND estado = 'concluida' AND ultimo_erro = $2
-      `, [operationId, ERRO_LIMPEZA_MARCADOR]);
-      return { processado: true, estado: "concluida", marcadorLiberado: true };
+        SET ultimo_erro = $2, bloqueado_ate = NULL, atualizado_em = NOW()
+        WHERE operation_id = $1 AND estado = $3
+          AND (ultimo_erro = $4 OR ultimo_erro LIKE $5)
+      `, [operationId, causaOriginal, operacao.estado,
+        ERRO_LIMPEZA_MARCADOR, `${ERRO_LIMPEZA_MARCADOR}:%`]);
+      return { processado: true, estado: operacao.estado, marcadorLiberado: true };
     }
     const resultado = await processarOperacao(pool, operationId, dependencies);
     return { processado: true, ...resultado };
   } catch (erro) {
-    if (limpezaConcluidaPendente) {
-      console.error("[Alteração serviço] Falha ao liberar marcador pós-commit:", erro.message);
+    if (limpezaMarcadorPendente) {
+      console.error("[Alteração serviço] Falha ao liberar marcador:", erro.message);
       await pool.query(`
         UPDATE public.agendamento_alteracoes_servico
         SET bloqueado_ate = NULL, proxima_tentativa_em = NOW() + INTERVAL '60 seconds',
             atualizado_em = NOW()
-        WHERE operation_id = $1 AND estado = 'concluida'
-      `, [operationId]);
-      return { processado: true, estado: "concluida", marcadorLiberado: false };
+        WHERE operation_id = $1 AND estado = $2
+      `, [operationId, claimed.rows[0].estado]);
+      return { processado: true, estado: claimed.rows[0].estado, marcadorLiberado: false };
     }
     const retry = !(erro instanceof ErroAlteracaoServico && erro.permanente);
     await pool.query(`

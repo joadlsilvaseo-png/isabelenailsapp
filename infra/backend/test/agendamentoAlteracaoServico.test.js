@@ -103,7 +103,8 @@ function criarFixture(options = {}) {
         const result = await callback(tx);
         state.firestoreTxCount++;
         if (state.failFirestoreOnce) { state.failFirestoreOnce = false; throw new Error("Firestore write failed"); }
-        if (state.failCleanupOnce && state.firestoreTxCount === 3) {
+        if ((state.failCleanupOnce && state.firestoreTxCount === 3) ||
+            (options.failCleanupOnTransaction && state.firestoreTxCount === options.failCleanupOnTransaction)) {
           state.failCleanupOnce = false;
           throw new Error("Firestore cleanup failure");
         }
@@ -152,7 +153,9 @@ function criarFixture(options = {}) {
       }
       if (normalized.startsWith("with proxima as")) {
         const entry = [...state.operations.values()].find((item) =>
-          item.estado === "solicitada" || (item.estado === "concluida" && item.ultimo_erro === params[0]));
+          item.estado === "solicitada" ||
+          (item.estado === "concluida" && item.ultimo_erro === params[0]) ||
+          (item.estado === "falha_permanente" && item.ultimo_erro?.startsWith("LIMPEZA_MARCADOR_FIRESTORE_PENDENTE:")));
         return { rowCount: entry ? 1 : 0, rows: entry ? [{ operation_id: entry.operation_id, estado: entry.estado }] : [] };
       }
       if (normalized.startsWith("update public.agendamento_alteracoes_servico set ultimo_erro = $2")) {
@@ -189,7 +192,8 @@ function criarFixture(options = {}) {
       }
       if (normalized.startsWith("update public.agendamento_alteracoes_servico set estado = 'falha_permanente'")) {
         const op = state.operations.get(params[0]);
-        if (op && op.estado !== "concluida") Object.assign(op, { estado: "falha_permanente", calendar_estado: "falha", ultimo_erro: params[1] });
+        if (op && op.estado !== "concluida") Object.assign(op, { estado: "falha_permanente", calendar_estado: "falha",
+          ultimo_erro: op.ultimo_erro?.startsWith("LIMPEZA_MARCADOR_FIRESTORE_PENDENTE:") ? op.ultimo_erro : params[1] });
         return { rowCount: op ? 1 : 0, rows: [] };
       }
       throw new Error(`pool.query inesperada: ${normalized}`);
@@ -286,6 +290,17 @@ function criarFixture(options = {}) {
     const appt = state.docs.get(`agendamentos/${APPT}`); delete appt.calendarEventId;
   }
 
+  if (options.isento) {
+    const agendamento = state.docs.get(`agendamentos/${APPT}`);
+    delete agendamento.pixCobrancaId;
+    delete agendamento.pixReservaId;
+    agendamento.origemPagamento = "isencao_sinal_pix";
+    agendamento.sinalPixIsento = true;
+    agendamento.criadoPorBackend = true;
+    state.reservation.cobranca_id = null;
+    state.reservation.cobranca_estado = null;
+    state.reservation.valor_sinal_centavos = null;
+  }
   return { state, pool, dependencies };
 }
 
@@ -386,6 +401,37 @@ test("PIX pago envia REAGENDAR ao mesmo Apps Script original, sem alterar o even
   assert.equal(enviado.duracaoMinutos, 180);
   assert.equal(res.eventId, "evt_stable");
   assert.ok(urlRecebida.includes("AKfycbzOxH8NT960XH0HSmuq5MPDzXkijMVVymGAWD"));
+});
+
+test("isenção PIX usa REAGENDAR do Calendar backend sem registrar pagamento", async () => {
+  const fixture = criarFixture({ isento: true, defaultCalendar: true,
+    calendarResponse: { ok: true, status: "REAGENDADO", eventId: "evt_agendamento-1" } });
+  const cobrancaOriginal = clone(fixture.state.charge);
+  const res = await execute(fixture);
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+  assert.equal(fixture.state.calendarPayloads[0].acao, "REAGENDAR");
+  assert.equal(fixture.state.calendarPayloads[0].eventId, "evt_agendamento-1");
+  assert.equal(fixture.state.docs.get(`agendamentos/${APPT}`).pixCobrancaId, undefined);
+  assert.equal(fixture.state.docs.get(`agendamentos/${APPT}`).valorRestanteCentavos, 12500);
+  assert.deepEqual(fixture.state.charge, cobrancaOriginal);
+});
+
+test("isento usa a URL PIX original, sem transformar isenção em pagamento", async () => {
+  let destino, requisicao;
+  const operacao = { operation_id: OP, calendar_event_id: "evt_isento", nome_cliente: "Cliente",
+    novo_servico_nome: "Novo", data_servico: DATE, inicio_minuto: 660, duracao_nova: 60,
+    pix_pago: false, calendar_isencao: true };
+  await enviarAtualizacaoCalendar(operacao, async (url, req) => {
+    destino = url;
+    requisicao = JSON.parse(req.body);
+    return { ok: true, async text() {
+      return JSON.stringify({ ok: true, status: "REAGENDADO", eventId: "evt_isento" });
+    } };
+  }, "https://script.google.com/macros/s/OUTRA_IMPLANTACAO/exec");
+  assert.ok(destino.includes("AKfycbzOxH8NT960XH0HSmuq5MPDzXkijMVVymGAWD"));
+  assert.equal(requisicao.acao, "REAGENDAR");
+  assert.equal(requisicao.eventId, "evt_isento");
+  assert.equal(operacao.pix_pago, false);
 });
 
 test("PIX pago não aceita resposta de AGENDAR nem evento diferente", async () => {
@@ -600,6 +646,26 @@ test("falha de limpeza após COMMIT mantém bloqueio e worker libera sem reexecu
   assert.equal(fixture.state.operations.get(OP).ultimo_erro, null);
   assert.equal("alteracaoServicoOperacaoPendente" in fixture.state.docs.get(`agendamentos/${APPT}`), false);
   assert.equal(fixture.state.calendarPayloads.length, before);
+});
+
+test("falha de limpeza após 409 é recuperada sem repetir o Calendar", async () => {
+  const fixture = criarFixture({
+    defaultCalendar: true,
+    calendarResponse: { ok: false, erro: "Sem vínculo" },
+    failCleanupOnTransaction: 2,
+  });
+  const res = await execute(fixture);
+  assert.equal(res.status, 409);
+  assert.equal(fixture.state.operations.get(OP).estado, "falha_permanente");
+  assert.match(fixture.state.operations.get(OP).ultimo_erro, /^LIMPEZA_MARCADOR_FIRESTORE_PENDENTE:/);
+  assert.equal(fixture.state.docs.get(`agendamentos/${APPT}`).alteracaoServicoOperacaoPendente, OP);
+  const chamadas = fixture.state.calendarPayloads.length;
+  const retomada = await processarProximaAlteracaoServico(fixture.pool, fixture.dependencies);
+  assert.equal(retomada.estado, "falha_permanente");
+  assert.equal(retomada.marcadorLiberado, true);
+  assert.equal("alteracaoServicoOperacaoPendente" in fixture.state.docs.get(`agendamentos/${APPT}`), false);
+  assert.match(fixture.state.operations.get(OP).ultimo_erro, /Apps Script não confirmou/);
+  assert.equal(fixture.state.calendarPayloads.length, chamadas);
 });
 
 test("reuso de chave idempotente incompatível não invalida operação de outro serviço", async () => {
