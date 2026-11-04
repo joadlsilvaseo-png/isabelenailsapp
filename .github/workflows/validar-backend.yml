@@ -12,6 +12,10 @@ on:
       - "admin-agendamentos.js"
       - "admin-agendamentos.html"
       - "admin-agendamentos.css"
+      - "admin-clientes.js"
+      - "admin-clientes.html"
+      - "admin-clientes-isabele.css"
+      - "admin-clientes-listagem.mjs"
       - "admin-calendario-regras.mjs"
       - "service-worker.js"
       - "infra/migrations/**"
@@ -36,11 +40,14 @@ jobs:
           node --check src/agendaBloqueios.js
           node --check ../../admin-calendario.js
           node --check ../../admin-agendamentos.js
+          node --check ../../admin-clientes.js
           node --check test/agendamentoCancelamentos.test.js
       - name: Testes do backend
         run: npm test
       - name: Testar modal de conclusão (front-end)
         run: node --test ../../scripts/admin-conclusao-modal.test.mjs
+      - name: Testar ordenação e filtro PIX de clientes
+        run: node --test ../../scripts/admin-clientes-listagem.test.mjs
       - name: Validar script de deploy
         working-directory: .
         run: bash -n infra/scripts/atualizar-vps-pix.sh
