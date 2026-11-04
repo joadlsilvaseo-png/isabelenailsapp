@@ -20,6 +20,34 @@ O bloqueio anterior de PIX no frontend e backend foi mantido intencionalmente.
 - `GET /agendamentos/reagendar/config` autenticado retorna o estado da flag
   sem tocar nos registros financeiros.
 
+## Teste controlado do Apps Script utilizado pelo PIX — 04/11/2026
+
+Na VPS, utilizando a implantação já presente no `pixCalendarWorker.js`,
+o usuário executou três operações com o identificador **exclusivamente fictício**
+`evt_teste_pix_1793824531_28939`. Resultados:
+
+- `AGENDAR`: `{"ok":true,"status":"AGENDADO","eventId":"evt_teste_pix_1793824531_28939","googleEventId":"ai8h5crk1g0obb05lt8l7n4ecg@google.com"}`
+- `REAGENDAR`: `{"ok":true,"status":"REAGENDADO","eventId":"evt_teste_pix_1793824531_28939"}`
+- `CANCELAR`: `{"ok":true,"status":"CANCELADO","eventId":"evt_teste_pix_1793824531_28939"}`
+
+**Confirmado**: a implantação de `AGENDAR/CANCELAR` reconhece também
+`REAGENDAR` e devolve o mesmo `eventId` interno. O validador da API
+foi ajustado para aceitar a resposta real `status:"REAGENDADO"`, exigindo
+`ok:true` e a identidade esperada. O teste não envolveu cliente real,
+PIX ou alterações em PostgreSQL/Firestore.
+
+**Ainda não comprovado pela execução**: que o evento permaneceu com o mesmo
+Google Calendar ID após o reagendamento, que o horário foi efetivamente
+atualizado ou que a exclusão final removeu o evento (as respostas de
+sucesso são do Apps Script, sem inspeção independente). Não presumir
+idempotência sob timeout ou concorrência.
+
+**IMPORTANTE**: a sincronização transacional entre PostgreSQL,
+Firestore e Calendar para PIX pago ainda não está implementada. A flag
+no PR retorna sempre `false` por segurança; **nenhuma variável de ambiente
+habilita o reagendamento pago** neste estado. A tela e a API de produção
+continuam bloqueando este caminho.
+
 ## Impedimento para liberação
 
 A API de produção atualmente envia AGENDAR e CANCELAR para uma implantação de
