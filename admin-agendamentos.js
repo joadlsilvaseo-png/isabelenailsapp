@@ -1,4 +1,4 @@
-import { executarAcaoAgendamento, alterarServicoAgendamentoApi, consultarAlteracaoServicoApi } from "./agendamentosApi.js";
+import { executarAcaoAgendamento, alterarServicoAgendamentoApi, consultarAlteracaoServicoApi, consultarLiberacaoAlterarServicoApi } from "./agendamentosApi.js";
 import { auth, db } from "./firebase-config.js";
 import { webhookUrl } from "./config.js";
 
@@ -1372,6 +1372,7 @@ function criarBotaoModal({ label, action, variant }) {
 }
 
 let servicosAlteracaoCache = null;
+let alterarServicoDisponivel = false; // padrão seguro: não mostrar funcionalidade desabilitada
 
 function minutosParaHorario(minutos) {
   return `${String(Math.floor(minutos / 60)).padStart(2, "0")}:${String(minutos % 60).padStart(2, "0")}`;
@@ -1424,6 +1425,7 @@ function atualizarResumoAlteracaoServico(agendamento) {
 }
 
 async function abrirModalAlterarServico(agendamento) {
+  if (!alterarServicoDisponivel) throw new Error("Alteração de serviço ainda não habilitada.");
   const modal = document.getElementById("admin-alterar-servico-modal");
   const select = document.getElementById("admin-servico-novo");
   const atual = document.getElementById("admin-servico-atual");
@@ -1564,7 +1566,7 @@ function renderizarAcoesModal(agendamento) {
   }
 
   if (!finalizado) {
-    if (["confirmado", "reagendado"].includes(status)) {
+    if (alterarServicoDisponivel && ["confirmado", "reagendado"].includes(status)) {
       acoes.push(
         criarBotaoModal({ label: "Alterar Serviço", action: "alterar-servico", variant: "primary" }),
       );
@@ -2397,6 +2399,8 @@ function iniciarPagina() {
 
       liberarConteudoAdmin();
 
+      // Fail-closed: sem resposta autenticada da API, a ação experimental fica oculta.
+      alterarServicoDisponivel = await consultarLiberacaoAlterarServicoApi(auth);
       await carregarAgendamentos();
     } catch (error) {
       console.error("Erro ao verificar acesso administrativo:", error);
