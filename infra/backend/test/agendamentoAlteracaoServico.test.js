@@ -298,6 +298,31 @@ async function execute(fixture, req = request()) {
   return res;
 }
 
+test("configuração somente leitura informa desabilitado sem consultar PostgreSQL", async () => {
+  const fixture = criarFixture();
+  delete fixture.dependencies.alteracaoServicoHabilitada;
+  delete fixture.dependencies.appsScriptAtualizarUrl;
+  fixture.pool.query = async () => { throw new Error("Configuração não deveria consultar PostgreSQL"); };
+  const res = await execute(fixture, {
+    method: "GET",
+    url: "/admin/agendamentos/servico?config=1",
+  });
+  assert.equal(res.status, 200);
+  assert.deepEqual(res.body, { habilitado: false });
+  assert.equal(fixture.state.operations.size, 0);
+});
+
+test("configuração somente leitura informa habilitado no cenário controlado", async () => {
+  const fixture = criarFixture();
+  const res = await execute(fixture, {
+    method: "GET",
+    url: "/admin/agendamentos/servico?config=1",
+  });
+  assert.equal(res.status, 200);
+  assert.deepEqual(res.body, { habilitado: true });
+  assert.equal(fixture.state.operations.size, 0);
+});
+
 test("alteração de serviço é desabilitada por padrão sem configuração validada", async () => {
   const fixture = criarFixture();
   delete fixture.dependencies.alteracaoServicoHabilitada;
