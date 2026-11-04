@@ -61,3 +61,35 @@ jobs:
       - name: Validar script de deploy
         working-directory: .
         run: bash -n infra/scripts/atualizar-vps-pix.sh
+
+  validar-migracao-020-postgresql:
+    name: Migração 020 — PostgreSQL 17 temporário
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: isabele_ci
+          POSTGRES_PASSWORD: ci_local_only
+          POSTGRES_DB: isabele_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U isabele_ci -d isabele_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: infra/backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Instalar dependências
+        run: npm install --no-package-lock --ignore-scripts
+      - name: Verificar migração 020 em PostgreSQL 17 isolado
+        env:
+          PGTEST_URL: postgres://isabele_ci:ci_local_only@127.0.0.1:5432/isabele_ci
+        run: node test/agendamentoAlteracaoServicoPostgres.integration.js
