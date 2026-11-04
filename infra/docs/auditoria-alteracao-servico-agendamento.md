@@ -25,3 +25,31 @@ O procedimento atual é `infra/scripts/atualizar-vps-pix.sh`, documentado em `in
 ## Dados e pagamentos
 
 O serviço e a duração devem vir de `servicos/{id}` no servidor. A reserva vinculada pode ter `cobranca_id`; qualquer ajuste de intervalo deve preservar esse vínculo e o estado conciliado. O sinal pago deve ser obtido da cobrança validada e o novo restante calculado como `max(0, preço_novo_centavos - sinal_pago_centavos)`. O histórico da cobrança permanece inalterado. Nenhum reembolso ou nova cobrança faz parte da operação.
+
+## Revisão complementar após atualização da agenda de 21h
+
+A branch do PR #20 foi sincronizada com a `main` que contém o PR #21.
+Quinta normal: **11h–21h**; sexta normal: **09h–21h**; último início
+possível **20h30** para serviços de até 30 minutos. Os expedientes especiais
+de dezembro (inclusive 17 e 18/12 até 20h) permanecem prioritários.
+
+Correções verificadas no PR #20:
+
+- Migração 020 e preflight agora incluem a coluna `nome_cliente TEXT`; cálculo
+  do restante em SQL usa conversões explícitas `bigint`.
+- Um job independente do GitHub Actions aplica a migração 020 em **PostgreSQL 17
+  temporário**, valida as 27 colunas e realiza o UPDATE financeiro sem mocks.
+- Reagendamentos da rota administrativa/isenta são bloqueados caso exista
+  `alteracaoServicoOperacaoPendente`, inclusive com revalidação transacional.
+- O marcador no Firestore só é removido **após** COMMIT do PostgreSQL. Falha
+  na remoção gera registro persistente e tentativas posteriores pelo worker;
+  o horário permanece protegido até a limpeza.
+- Chaves idempotentes incompatíveis não podem invalidar a operação legítima.
+- Regressão de assets `admin-agendamentos.js` e CSS atualizada.
+
+**Limite de validação:** os testes do GitHub não usam a VPS, PIX real,
+Firestore real ou Google Calendar real. Antes do deploy, obter o código do
+Apps Script existente e implementar `ATUALIZAR` no mesmo evento, sem usar
+`AGENDAR` como alternativa. Repetir `operationId` deve ser idempotente e
+a resposta somente pode confirmar `{ ok: true, eventId, updated: true }`
+após a alteração efetiva no Calendar. Manter o PR em draft até essa etapa.
