@@ -110,7 +110,7 @@ O script não cria Orders, não realiza pagamentos, não solicita estornos/reemb
 
 ## Alteração do serviço de um agendamento
 
-A migração 020 cria somente a fila idempotente de auditoria/sincronização da troca de serviço. O preflight verifica a tabela, as 26 colunas, a chave primária, os índices e as 10 constraints; estado parcial interrompe antes da parada da API. O procedimento aplica a migração 020 somente depois do backup e preserva os dados dela no rollback de código. A migração ainda não foi executada em nenhum banco.
+A migração 020 cria somente a fila idempotente de auditoria/sincronização da troca de serviço. O preflight verifica a tabela, as 27 colunas (incluindo `nome_cliente`), a chave primária, os índices e as 10 constraints; estado parcial interrompe antes da parada da API. O procedimento aplica a migração 020 somente depois do backup e preserva os dados dela no rollback de código. A migração 020 foi validada no PostgreSQL 17 temporário do GitHub Actions, mas **não foi executada na VPS de produção**.
 
 Antes de ativar a funcionalidade, a versão publicada do Google Apps Script precisa aceitar `ATUALIZAR`, localizar o evento existente pelo mesmo `eventId`, alterar serviço/duração no evento, responder com `{"ok":true,"eventId":"...","updated":true}` e tratar `operationId` repetido de forma idempotente. A ação não está disponível para validação neste repositório. Sem esse contrato e teste integrado, a API recusa a operação sem alterar Firestore ou `pix_reservas`.
 
