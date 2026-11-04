@@ -34,7 +34,7 @@
 
   <link rel="stylesheet" href="base.css?v=1.0.4">
 
-  <link rel="stylesheet" href="admin-agendamentos.css?v=1.0.2">
+  <link rel="stylesheet" href="admin-agendamentos.css?v=1.0.3">
   <link rel="stylesheet" href="admin-bottom-nav.css?v=1">
 </head>
 
@@ -514,9 +514,39 @@
 
   </div>
 
+  <!-- Modal de conclusão: mantém a identidade do modal de cancelamento. -->
+  <div id="admin-conclusao-modal" class="admin-cancelamento-modal admin-conclusao-modal" hidden>
+    <button type="button" class="admin-cancelamento-overlay" id="admin-conclusao-overlay" aria-label="Voltar sem concluir atendimento"></button>
+    <section class="admin-cancelamento-painel admin-conclusao-painel" role="dialog" aria-modal="true"
+             aria-labelledby="admin-conclusao-titulo" aria-describedby="admin-conclusao-descricao" tabindex="-1">
+      <div class="admin-cancelamento-icone" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none">
+          <rect x="3.5" y="5" width="17" height="14" rx="3" stroke="currentColor" stroke-width="1.8"/>
+          <path d="M7 9h10M7 13h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <h2 id="admin-conclusao-titulo">Concluir atendimento</h2>
+      <p id="admin-conclusao-descricao">Informe o valor final cobrado no atendimento.</p>
+      <form id="admin-conclusao-form" novalidate>
+        <label class="admin-conclusao-rotulo" for="admin-conclusao-valor">Valor final cobrado</label>
+        <div class="admin-conclusao-campo">
+          <span aria-hidden="true">R$</span>
+          <input id="admin-conclusao-valor" type="text" inputmode="decimal" autocomplete="off"
+                 maxlength="16" placeholder="0,00" aria-describedby="admin-conclusao-ajuda admin-conclusao-erro" required>
+        </div>
+        <p id="admin-conclusao-ajuda" class="admin-conclusao-ajuda">Confirme o valor antes de registrar a conclusão.</p>
+        <p id="admin-conclusao-erro" class="admin-conclusao-erro" role="alert" hidden></p>
+        <div class="admin-cancelamento-acoes">
+          <button type="button" id="admin-conclusao-voltar">Voltar</button>
+          <button type="submit" id="admin-conclusao-confirmar">Concluir atendimento</button>
+        </div>
+      </form>
+    </section>
+  </div>
+
   <script type="module" src="analytics.js?v=1.0.1"></script>
 
-  <script type="module" src="admin-agendamentos.js?v=1.0.0"></script>
+  <script type="module" src="admin-agendamentos.js?v=1.0.1"></script>
 
   <script src="app.js?v=2.0.0" defer></script>
 
