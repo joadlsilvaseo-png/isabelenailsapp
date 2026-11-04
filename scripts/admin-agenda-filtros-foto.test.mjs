@@ -39,8 +39,8 @@ test("foto personalizada autenticada precede foto HTTPS, com iniciais como fallb
 });
 
 test("cache PWA e JS/CSS foram atualizados", () => {
-  assert.match(html, /admin-agendamentos\.js\?v=1\.0\.2/);
-  assert.match(html, /admin-agendamentos\.css\?v=1\.0\.4/);
+  assert.match(html, /admin-agendamentos\.js\?v=1\.0\.3/);
+  assert.match(html, /admin-agendamentos\.css\?v=1\.0\.5/);
   assert.match(sw, /CACHE_VERSION = "v\d+"/);
   assert.match(sw, /\.\/admin-agendamentos\.js/);
   assert.match(sw, /\.\/admin-agendamentos\.css/);
