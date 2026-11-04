@@ -86,6 +86,42 @@ test("GAS deve responder explicitamente JSON confirmando o mesmo evento", async 
   assert.equal(r.eventId, evento);
 });
 
+test("implantação PIX confirma REAGENDAR com status REAGENDADO e mesmo eventId", async () => {
+  const payload = montarPayloadReagendamentoPix({
+    eventId: evento, operationId: operacao, data: "2027-03-10", horario: "04:00",
+    duracao: 30, nomeCliente: "CLIENTE FICTICIA", servico: "TESTE TECNICO",
+  });
+  const resultado = await enviarReagendamentoPix(payload,
+    async () => ({
+      ok: true,
+      async text() {
+        return JSON.stringify({ ok: true, status: "REAGENDADO", eventId: evento });
+      },
+    }), gas,
+  );
+  assert.equal(resultado.status, "REAGENDADO");
+  assert.equal(resultado.eventId, payload.eventId);
+});
+
+test("resposta REAGENDADO sem identidade válida é rejeitada", async () => {
+  const payload = montarPayloadReagendamentoPix({
+    eventId: evento, operationId: operacao, data: "2027-03-10", horario: "04:00",
+    duracao: 30, nomeCliente: "CLIENTE FICTICIA", servico: "TESTE TECNICO",
+  });
+  for (const resultado of [
+    { ok: true, status: "REAGENDADO" },
+    { ok: true, status: "REAGENDADO", eventId: "evt_diferente" },
+    { ok: false, status: "REAGENDADO", eventId: evento },
+    { ok: true, status: "CANCELADO", eventId: evento },
+    { ok: true, status: "AGENDADO", eventId: evento },
+  ]) {
+    await assert.rejects(enviarReagendamentoPix(payload,
+      async () => ({ ok: true, async text() { return JSON.stringify(resultado); } }),
+      gas,
+    ), /não confirmou alteração do mesmo evento/);
+  }
+});
+
 test("GAS devolvendo texto legado, sucesso ambíguo ou id diferente é recusado", async () => {
   const payload = montarPayloadReagendamentoPix({
     eventId: evento, operationId: operacao, data: "2026-11-12", horario: "14:30",
