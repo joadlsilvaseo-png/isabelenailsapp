@@ -1000,6 +1000,7 @@ async function inicializarAgendamento() {
       }
 
       let idEvento = "evt_" + Math.random().toString(36).substr(2, 9);
+      let origemPixPaga = false;
 
       if (reagendarId) {
         const agendamentoAnteriorRef = doc(db, "agendamentos", reagendarId);
@@ -1016,7 +1017,7 @@ async function inicializarAgendamento() {
           agendamentoAnteriorSnap.data().calendarEventId || "",
         ).trim();
 
-        const origemPixPaga = Boolean(
+        origemPixPaga = Boolean(
           agendamentoAnteriorSnap.data().pixCobrancaId ||
           agendamentoAnteriorSnap.data().pixPagamentoId
         );
