@@ -247,6 +247,9 @@ function criarFixture(options = {}) {
   };
 
   const dependencies = {
+    // Somente os testes habilitam a feature antes da validação na VPS.
+    alteracaoServicoHabilitada: true,
+    appsScriptAtualizarUrl: "https://script.google.com/macros/s/TESTE_VALIDO_12345/exec",
     firestore: db,
     verificarUsuario: async () => options.userUid || ADMIN,
     FieldValue: { serverTimestamp: () => "server-timestamp", delete: () => "__DELETE_FIELD__" },
@@ -294,6 +297,36 @@ async function execute(fixture, req = request()) {
   await atenderAlteracaoServico(req, res, fixture.pool, fixture.dependencies);
   return res;
 }
+
+test("alteração de serviço é desabilitada por padrão sem configuração validada", async () => {
+  const fixture = criarFixture();
+  delete fixture.dependencies.alteracaoServicoHabilitada;
+  delete fixture.dependencies.appsScriptAtualizarUrl;
+  const res = await execute(fixture);
+  assert.equal(res.status, 503);
+  assert.equal(fixture.state.operations.size, 0, "não deve registrar operações sem configuração");
+  assert.equal(fixture.state.reservation.reserva_fim, 780);
+  assert.equal(fixture.state.docs.get(`agendamentos/${APPT}`).idServico, "old");
+  assert.equal(fixture.state.calendarPayloads.length, 0);
+});
+
+test("worker de alteração desativada não consulta o PostgreSQL", async () => {
+  const fixture = criarFixture();
+  delete fixture.dependencies.alteracaoServicoHabilitada;
+  delete fixture.dependencies.appsScriptAtualizarUrl;
+  fixture.pool.query = async () => { throw new Error("O banco não deveria ser consultado"); };
+  const res = await processarProximaAlteracaoServico(fixture.pool, fixture.dependencies);
+  assert.deepEqual(res, { processado: false, desabilitado: true });
+});
+
+test("endpoint ATUALIZAR rejeita URL não configurada sem chamar fetch", async () => {
+  let chamado = false;
+  await assert.rejects(enviarAtualizacaoCalendar({
+    operation_id: OP, calendar_event_id: "evt_stable", nome_cliente: "Cliente",
+    novo_servico_nome: "Novo", data_servico: DATE, inicio_minuto: 660, duracao_nova: 60,
+  }, async () => { chamado = true; }, ""), (erro) => erro.status === 503);
+  assert.equal(chamado, false);
+});
 
 test("troca por serviço menor encurta a reserva sem mover o início", async () => {
   const fixture = criarFixture();
@@ -437,7 +470,7 @@ test("Calendar recebe ação de atualização com eventId estável e confirmaç�
   }, async (_url, options) => {
     sent.push(JSON.parse(options.body));
     return { ok: true, async text() { return JSON.stringify({ ok: true, updated: true, eventId: "evt_stable" }); } };
-  });
+  }, "https://script.google.com/macros/s/TESTE_VALIDO_12345/exec");
   assert.equal(result.eventId, "evt_stable");
   assert.equal(sent[0].acao, "ATUALIZAR");
   assert.equal(sent[0].operationId, OP);
