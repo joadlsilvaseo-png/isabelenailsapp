@@ -9,6 +9,9 @@ on:
       - "scripts/**"
       - "agendamento.js"
       - "agendamento.html"
+      - "admin-agendamentos.js"
+      - "admin-agendamentos.html"
+      - "admin-agendamentos.css"
       - "admin-calendario-regras.mjs"
       - "service-worker.js"
       - "infra/migrations/**"
@@ -32,9 +35,12 @@ jobs:
           node --check src/pixCalendarWorker.js
           node --check src/agendaBloqueios.js
           node --check ../../admin-calendario.js
+          node --check ../../admin-agendamentos.js
           node --check test/agendamentoCancelamentos.test.js
       - name: Testes do backend
         run: npm test
+      - name: Testar modal de conclusão (front-end)
+        run: node --test ../../scripts/admin-conclusao-modal.test.mjs
       - name: Validar script de deploy
         working-directory: .
         run: bash -n infra/scripts/atualizar-vps-pix.sh

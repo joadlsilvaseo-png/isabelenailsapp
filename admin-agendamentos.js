@@ -1553,52 +1553,139 @@ async function confirmarAgendamento(agendamento) {
   }
 }
 
+function solicitarValorConclusaoAdmin(agendamento) {
+  return new Promise((resolver) => {
+    const modal = document.getElementById("admin-conclusao-modal");
+    const painel = modal?.querySelector(".admin-conclusao-painel");
+    const descricao = document.getElementById("admin-conclusao-descricao");
+    const formulario = document.getElementById("admin-conclusao-form");
+    const campo = document.getElementById("admin-conclusao-valor");
+    const erro = document.getElementById("admin-conclusao-erro");
+    const voltar = document.getElementById("admin-conclusao-voltar");
+    const confirmar = document.getElementById("admin-conclusao-confirmar");
+    const overlay = document.getElementById("admin-conclusao-overlay");
+
+    if (!modal || !painel || !descricao || !formulario || !campo ||
+        !erro || !voltar || !confirmar || !overlay || !modal.hidden) {
+      console.error("Modal de conclusão do atendimento indisponível.");
+      resolver(null);
+      return;
+    }
+
+    const focoAnterior = document.activeElement;
+    const overflowAnterior = document.body.style.overflow;
+    const eventos = new AbortController();
+    let encerrado = false;
+
+    const nomeCliente = obterNomeCliente(agendamento);
+    const valorSugerido = obterValorSugeridoAgendamento(agendamento);
+    descricao.textContent = "Informe o valor final cobrado no atendimento de " +
+      nomeCliente + ".";
+    campo.value = valorSugerido > 0
+      ? valorSugerido.toFixed(2).replace(".", ",")
+      : "";
+    campo.removeAttribute("aria-invalid");
+    erro.textContent = "";
+    erro.hidden = true;
+
+    function fechar(valor = null) {
+      if (encerrado) return;
+      encerrado = true;
+      eventos.abort();
+      modal.hidden = true;
+      document.body.style.overflow = overflowAnterior;
+      if (focoAnterior?.isConnected && typeof focoAnterior.focus === "function") {
+        focoAnterior.focus();
+      }
+      resolver(valor);
+    }
+
+    voltar.addEventListener("click", () => fechar(), { signal: eventos.signal });
+    overlay.addEventListener("click", () => fechar(), { signal: eventos.signal });
+    campo.addEventListener("input", () => {
+      erro.hidden = true;
+      erro.textContent = "";
+      campo.removeAttribute("aria-invalid");
+    }, { signal: eventos.signal });
+
+    formulario.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const informado = campo.value.trim();
+      const valor = converterValorMonetario(informado);
+      const centavos = Math.round(valor * 100);
+      const valorValido = /^(?:R\$\s*)?[\d.,\s]+$/.test(informado) &&
+        Number.isFinite(valor) && valor > 0 &&
+        Number.isSafeInteger(centavos) &&
+        Math.abs(valor * 100 - centavos) < 0.00001;
+
+      if (!valorValido) {
+        erro.textContent = "Informe um valor válido maior que zero, com até duas casas decimais.";
+        erro.hidden = false;
+        campo.setAttribute("aria-invalid", "true");
+        campo.focus();
+        return;
+      }
+
+      // O botão deste formulário substitui o antigo window.confirm.
+      fechar(valor);
+    }, { signal: eventos.signal });
+
+    modal.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        fechar();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focaveis = [campo, voltar, confirmar];
+      const primeiro = focaveis[0];
+      const ultimo = focaveis[focaveis.length - 1];
+      if (!focaveis.includes(document.activeElement)) {
+        event.preventDefault();
+        primeiro.focus();
+      } else if (event.shiftKey && document.activeElement === primeiro) {
+        event.preventDefault();
+        ultimo.focus();
+      } else if (!event.shiftKey && document.activeElement === ultimo) {
+        event.preventDefault();
+        primeiro.focus();
+      }
+    }, { signal: eventos.signal });
+
+    modal.hidden = false;
+    document.body.style.overflow = "hidden";
+    campo.focus();
+    campo.select();
+  });
+}
+
 async function concluirAgendamento(agendamento) {
-  const nomeCliente = obterNomeCliente(agendamento);
+  const valorFinal = await solicitarValorConclusaoAdmin(agendamento);
 
-  const valorSugerido = obterValorSugeridoAgendamento(agendamento);
-
-  const valorInformado = window.prompt(
-    `Informe o valor final cobrado no atendimento de ${nomeCliente}:`,
-    valorSugerido > 0 ? valorSugerido.toFixed(2).replace(".", ",") : "",
-  );
-
-  if (valorInformado === null) {
-    return;
-  }
-
-  const valorFinal = converterValorMonetario(valorInformado);
-
-  if (valorFinal <= 0) {
-    window.alert("Informe um valor final válido.");
-
-    return;
-  }
-
-  const confirmou = window.confirm(
-    `Concluir o atendimento de ${nomeCliente} por ${formatarValorMonetario(valorFinal)}?`,
-  );
-
-  if (!confirmou) {
-    return;
-  }
+  if (valorFinal === null) return;
 
   try {
     await atualizarAgendamento(agendamento.id, {
       status: "concluido",
-
       valorFinal,
-
       concluidoEm: serverTimestamp(),
     });
 
     fecharModal();
 
-    window.alert("Atendimento concluído com sucesso.");
+    await exibirModalCancelamentoAdmin({
+      titulo: "Atendimento concluído!",
+      mensagem: "O atendimento foi concluído e o valor final foi registrado com sucesso.",
+      sucesso: true,
+    });
   } catch (error) {
     console.error("Erro ao concluir atendimento:", error);
 
-    window.alert("Não foi possível concluir o atendimento.");
+    await exibirModalCancelamentoAdmin({
+      titulo: "Não foi possível concluir",
+      mensagem: "Não foi possível registrar a conclusão do atendimento. Confira sua conexão e tente novamente.",
+    });
   }
 }
 
@@ -1989,11 +2076,13 @@ function configurarEventos() {
     const modalCancelamento = document.getElementById(
       "admin-cancelamento-modal",
     );
+    const modalConclusao = document.getElementById("admin-conclusao-modal");
 
     if (
       event.key === "Escape" &&
       !elements.modal.hidden &&
-      modalCancelamento?.hidden !== false
+      modalCancelamento?.hidden !== false &&
+      modalConclusao?.hidden !== false
     ) {
       fecharModal();
     }
