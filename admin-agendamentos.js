@@ -1734,6 +1734,10 @@ function solicitarValorConclusaoAdmin(agendamento) {
 }
 
 async function concluirAgendamento(agendamento) {
+  if (agendamento.reagendamentoPixOperacaoPendente) {
+    window.alert("Reagendamento PIX em sincronização. Aguarde a conclusão para finalizar o atendimento.");
+    return;
+  }
   const valorFinal = await solicitarValorConclusaoAdmin(agendamento);
 
   if (valorFinal === null) return;
@@ -1971,6 +1975,10 @@ async function cancelarAgendamento(agendamento) {
 }
 
 async function reagendarAgendamento(agendamento) {
+  if (agendamento.reagendamentoPixOperacaoPendente) {
+    window.alert("Já existe um reagendamento PIX em sincronização. Aguarde a conclusão.");
+    return;
+  }
   const idServico = String(agendamento.idServico || "").trim();
 
   if (!idServico) {
