@@ -34,7 +34,7 @@
 
   <link rel="stylesheet" href="base.css?v=1.0.4">
 
-  <link rel="stylesheet" href="admin-agendamentos.css?v=1.0.3">
+  <link rel="stylesheet" href="admin-agendamentos.css?v=1.0.4">
   <link rel="stylesheet" href="admin-bottom-nav.css?v=1">
 </head>
 
@@ -194,26 +194,6 @@
               </div>
             </article>
 
-            <article class="admin-summary-card" data-summary-filter="agendados" role="button" tabindex="0" aria-pressed="false">
-              <span class="admin-summary-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none">
-                  <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8" />
-
-                  <path d="M12 7V12L15 14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-                </svg>
-              </span>
-
-              <div>
-                <strong id="admin-total-pendentes">
-                  0
-                </strong>
-
-                <span>
-                  Aguardando ação
-                </span>
-              </div>
-            </article>
-
             <article class="admin-summary-card" data-summary-filter="confirmados" role="button" tabindex="0" aria-pressed="false">
               <span class="admin-summary-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none">
@@ -229,7 +209,7 @@
                 </strong>
 
                 <span>
-                  Confirmados
+                  Agendados
                 </span>
               </div>
             </article>
@@ -301,16 +281,8 @@
               </span>
             </button>
 
-            <button type="button" class="admin-filter-button" data-status-filter="agendados" aria-pressed="false">
-              Agendados
-
-              <span data-filter-count="agendados">
-                0
-              </span>
-            </button>
-
             <button type="button" class="admin-filter-button" data-status-filter="confirmados" aria-pressed="false">
-              Confirmados
+              Agendados
 
               <span data-filter-count="confirmados">
                 0
@@ -546,7 +518,7 @@
 
   <script type="module" src="analytics.js?v=1.0.1"></script>
 
-  <script type="module" src="admin-agendamentos.js?v=1.0.1"></script>
+  <script type="module" src="admin-agendamentos.js?v=1.0.2"></script>
 
   <script src="app.js?v=2.0.0" defer></script>
 
