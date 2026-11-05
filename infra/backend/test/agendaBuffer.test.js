@@ -6,6 +6,7 @@ import { atendimentosConflitamComBuffer, indisponivelComBuffer, encaixeInteligen
 import { consultarIntervalosDisponibilidade, intervaloSobrepoeDisponibilidade, listarIniciosEncaixe } from "../../../agendamentoDisponibilidade.js";
 import { encontrarConflitoAgendamentoPix } from "../src/pixDocumentoAgendamento.js";
 import { validarHorarioPix } from "../src/pixDisponibilidade.js";
+import { verificarEncaixeNoBanco } from "../src/pixEncaixes.js";
 
 test("15 minutos entre serviços: 14h–15h bloqueia 15h e libera 15h30", () => {
   assert.equal(BUFFER_ENTRE_ATENDIMENTOS_MINUTOS, 15);
@@ -114,4 +115,30 @@ test("PIX aceita encaixe só após revalidação, sem abrir datas fechadas ou qu
   assert.equal(validar("2026-11-03", "14:15", { encaixePendente: true }).valido, false);
   assert.equal(validar("2026-11-07", "16:45", { encaixePendente: true }).valido, true);
   assert.equal(validar("2026-11-07", "17:15", { encaixePendente: true }).valido, false);
+});
+
+// Este teste simula as duas leituras efetivas do backend dentro de uma
+// transação já protegida pelo lock: PostgreSQL e Firestore.
+test("servidor revalida encaixe com reservas, Firestore, bloqueios e exclusão da própria reserva", async () => {
+  const agora = new Date("2026-11-05T12:00:00-03:00");
+  const items = [
+    { inicio_minuto: 960, fim_minuto: 1050, tipo: "reserva" },
+    { inicio_minuto: 1140, fim_minuto: 1230, tipo: "reserva" },
+  ];
+  const consultaPg = { query: async (_sql, parametros) => {
+    assert.equal(parametros[0], "2026-12-23");
+    return { rows: items };
+  } };
+  const banco = { collection: () => ({ where: () => ({
+    get: async () => ({ docs: [] }),
+  }) }) };
+  const params = { conexao: consultaPg, db: banco, data: "2026-12-23",
+    inicio: 1065, fim: 1125, agora };
+  assert.equal(await verificarEncaixeNoBanco(params), true);
+  assert.equal(await verificarEncaixeNoBanco({ ...params, fim: 1140 }), false);
+  items.splice(1, 1);
+  assert.equal(await verificarEncaixeNoBanco(params), false); // falta segunda borda
+  items.push({ inicio_minuto: 1140, fim_minuto: 1230, tipo: "reserva" });
+  items.push({ inicio_minuto: 1080, fim_minuto: 1110, tipo: "bloqueio" });
+  assert.equal(await verificarEncaixeNoBanco(params), false); // fechamento manual
 });

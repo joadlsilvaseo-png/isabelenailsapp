@@ -11,7 +11,7 @@ const HORARIO = /^([01]\d|2[0-3]):[0-5]\d$/;
  * Consulta PG + Firestore + bloqueios manuais, e falha fechada.
  */
 export async function verificarEncaixeNoBanco({
-  conexao, db, data, inicio, fim, excluirAgendamentoId = null,
+  conexao, db, data, inicio, fim, excluirAgendamentoId = null, agora = new Date(),
 }) {
   if (inicio % 30 !== 15) return true;
   if (!db || !conexao || typeof data !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(data)) return false;
@@ -51,7 +51,7 @@ export async function verificarEncaixeNoBanco({
   const validoPadrao = (candidato) => {
     const horario = String(Math.floor(candidato / 60)).padStart(2, "0") + ":" +
       String(candidato % 60).padStart(2, "0");
-    return validarHorarioPix(data, horario, duracao).valido;
+    return validarHorarioPix(data, horario, duracao, agora).valido;
   };
   return encaixeInteligenteDisponivel(inicio, fim, intervalos, validoPadrao);
 }

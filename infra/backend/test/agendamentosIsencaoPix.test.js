@@ -170,7 +170,7 @@ function criarFixture({ isenta = true, reservas = [], documentos = {}, falharCom
       };
     },
   };
-  const dependencies = { serverTimestamp: "SERVER_TIME" };
+  const dependencies = { serverTimestamp: "SERVER_TIME", now: new Date("2026-11-02T12:00:00Z") };
   return { pool, firestore, state, dependencies };
 }
 
