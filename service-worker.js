@@ -4,7 +4,7 @@
 // ======================================================
 
 const CACHE_PREFIX = "im-nails";
-const CACHE_VERSION = "v18";
+const CACHE_VERSION = "v19";
 const STATIC_CACHE = `${CACHE_PREFIX}-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `${CACHE_PREFIX}-runtime-${CACHE_VERSION}`;
 
@@ -56,6 +56,8 @@ const APP_SHELL = [
   "./admin-calendario.js",
   "./admin-calendario-regras.mjs",
   "./agendamento.js",
+  "./agendamentoDisponibilidade.js",
+  "./infra/backend/src/agendaBuffer.mjs",
   "./agendamentoMes.mjs",
   "./categoria.js",
   "./manicure.css",

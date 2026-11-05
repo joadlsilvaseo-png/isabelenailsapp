@@ -3,6 +3,7 @@ import { validarHorarioPix } from "./pixDisponibilidade.js";
 import { validarServicoDezembro2026 } from "./agendamentoRegras.mjs";
 import { possuiBloqueio } from "./agendaBloqueios.js";
 import { encontrarConflitoAgendamentoPix } from "./pixDocumentoAgendamento.js";
+import { BUFFER_ENTRE_ATENDIMENTOS_MINUTOS } from "./agendaBuffer.mjs";
 import { pixPagoReagendamentoHabilitado } from "./pixReagendamentoPago.js";
 import {
   iniciarReagendamentoPixPago,
@@ -234,7 +235,9 @@ export async function criarAgendamentoIsento({ pool, db, uid, dados, dependencie
       FROM public.pix_reservas
       WHERE data_servico = $1
         AND estado IN ('reservada', 'confirmada')
-        AND int4range(inicio_minuto, fim_minuto, '[)') && int4range($2, $3, '[)')
+        AND int4range(inicio_minuto - ${BUFFER_ENTRE_ATENDIMENTOS_MINUTOS},
+                       fim_minuto + ${BUFFER_ENTRE_ATENDIMENTOS_MINUTOS}, '[)')
+            && int4range($2, $3, '[)')
       LIMIT 1
     `, [data, periodo.inicioMinuto, periodo.fimMinuto]);
     if (reservas.rowCount > 0) {
@@ -422,7 +425,9 @@ export async function reagendarComBloqueio({ pool, db, uid, dados, dependencies 
       FROM public.pix_reservas
       WHERE data_servico = $1
         AND estado IN ('reservada', 'confirmada')
-        AND int4range(inicio_minuto, fim_minuto, '[)') && int4range($2, $3, '[)')
+        AND int4range(inicio_minuto - ${BUFFER_ENTRE_ATENDIMENTOS_MINUTOS},
+                       fim_minuto + ${BUFFER_ENTRE_ATENDIMENTOS_MINUTOS}, '[)')
+            && int4range($2, $3, '[)')
         AND agendamento_id IS DISTINCT FROM $4
       LIMIT 1
     `, [data, periodo.inicioMinuto, periodo.fimMinuto, agendamentoId]);

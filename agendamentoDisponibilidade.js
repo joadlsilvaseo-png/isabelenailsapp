@@ -1,3 +1,5 @@
+import { indisponivelComBuffer } from "./infra/backend/src/agendaBuffer.mjs";
+
 /**
  * Limites dos horários de início e término exibidos na agenda.
  * Terça e quarta mantêm suas regras especiais em agendamento.js.
@@ -26,7 +28,11 @@ function validarIntervalos(intervalos) {
         inicioMinuto < 0 || fimMinuto > 1440 || inicioMinuto >= fimMinuto) {
       throw new Error("A disponibilidade retornou um intervalo inválido.");
     }
-    return { inicioMinuto, fimMinuto };
+    const tipo = intervalo?.tipo;
+    if (tipo !== undefined && !["bloqueio", "reserva", "agendamento"].includes(tipo)) {
+      throw new Error("A disponibilidade retornou um tipo inválido.");
+    }
+    return { inicioMinuto, fimMinuto, ...(tipo ? { tipo } : {}) };
   });
 }
 
@@ -46,6 +52,5 @@ export async function consultarIntervalosDisponibilidade({
 }
 
 export function intervaloSobrepoeDisponibilidade(inicio, fim, intervalos) {
-  return intervalos.some((ocupado) =>
-    inicio < ocupado.fimMinuto && fim > ocupado.inicioMinuto);
+  return indisponivelComBuffer(inicio, fim, intervalos);
 }

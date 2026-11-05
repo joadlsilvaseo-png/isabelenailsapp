@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { possuiBloqueio } from "./agendaBloqueios.js";
 import { encontrarConflitoAgendamentoPix } from "./pixDocumentoAgendamento.js";
+import { BUFFER_ENTRE_ATENDIMENTOS_MINUTOS } from "./agendaBuffer.mjs";
 import {
   montarPayloadReagendamentoPix,
   enviarReagendamentoPix,
@@ -186,7 +187,8 @@ export async function iniciarReagendamentoPixPago({
       WHERE data_servico = $1
         AND estado IN ('reservada', 'confirmada')
         AND agendamento_id IS DISTINCT FROM $4
-        AND int4range(inicio_minuto, fim_minuto, '[)') &&
+        AND int4range(inicio_minuto - ${BUFFER_ENTRE_ATENDIMENTOS_MINUTOS},
+                       fim_minuto + ${BUFFER_ENTRE_ATENDIMENTOS_MINUTOS}, '[)') &&
             int4range($2, $3, '[)')
       LIMIT 1
     `, [data, inicio, inicio + origemDuracao, agendamentoId]);

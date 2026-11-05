@@ -1,7 +1,7 @@
 import { auth, db } from "./firebase-config.js";
 import { obterMesPredominante } from "./agendamentoMes.mjs?v=1.0.0";
 import { consultarDisponibilidadePix, reagendarAgendamentoApi, consultarReagendamentoPixConfigApi, consultarReagendamentoPixPagoApi } from "./agendamentosApi.js";
-import { consultarIntervalosDisponibilidade, intervaloSobrepoeDisponibilidade, obterLimitesAtendimentoSemanal } from "./agendamentoDisponibilidade.js";
+import { consultarIntervalosDisponibilidade, intervaloSobrepoeDisponibilidade, obterLimitesAtendimentoSemanal } from "./agendamentoDisponibilidade.js?v=1.0.1";
 import { obterJanelaAgendamento, validarDataNaJanela, validarHorarioEspecial, obterExpedienteEspecialDezembro2026, validarServicoDezembro2026, AGENDA_DEZEMBRO_2026_ABERTA } from "./infra/backend/src/agendamentoRegras.mjs?v=2.0.5";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
 import {
@@ -555,7 +555,7 @@ async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null, s
               !dados.horario || !statusValidos.includes(dados.status)) return;
           const inicio = timeToMins(dados.horario);
           const duracaoAgendada = Number(dados.duracao) || 90;
-          intervalos.push({ inicioMinuto: inicio, fimMinuto: inicio + duracaoAgendada });
+          intervalos.push({ inicioMinuto: inicio, fimMinuto: inicio + duracaoAgendada, tipo: "agendamento" });
         });
         return intervalos;
       },
@@ -583,6 +583,7 @@ async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null, s
     const intervalosBloqueadosFixos = obterIntervalosBloqueadosFixos(dataIso).map((intervalo) => ({
       inicioMinuto: intervalo.start,
       fimMinuto: intervalo.end,
+      tipo: "bloqueio",
     }));
 
     const intervalosIndisponiveis = [

@@ -1,4 +1,5 @@
 import { validarDataNaJanela, validarHorarioEspecial, obterExpedienteEspecialDezembro2026 } from "./agendamentoRegras.mjs";
+import { atendimentosConflitamComBuffer } from "./agendaBuffer.mjs";
 function horarioInvalido(motivo) {
   return { valido: false, motivo };
 }
@@ -79,13 +80,15 @@ export function validarHorarioPix(dataIso, horario, duracao, agora = new Date())
   };
 }
 
-export function possuiSobreposicao(inicio, fim, intervalos) {
+export function possuiSobreposicao(inicio, fim, intervalos, buffer = 0) {
   if (!Array.isArray(intervalos)) {
     throw new TypeError("Lista de intervalos invalida");
   }
 
   return intervalos.some(
-    (ocupado) => inicio < ocupado.fimMinuto && fim > ocupado.inicioMinuto,
+    (ocupado) => atendimentosConflitamComBuffer(
+      inicio, fim, ocupado.inicioMinuto, ocupado.fimMinuto, buffer,
+    ),
   );
 }
 

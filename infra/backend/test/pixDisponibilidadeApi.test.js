@@ -44,8 +44,8 @@ test("disponibilidade inclui reservas PIX pendentes, vencidas ainda reservadas e
 
   assert.equal(resposta.status, 200);
   assert.deepEqual(resposta.body, { intervalos: [
-    { inicioMinuto: 810, fimMinuto: 930 },
-    { inicioMinuto: 930, fimMinuto: 990 },
+    { inicioMinuto: 810, fimMinuto: 930, tipo: "reserva" },
+    { inicioMinuto: 930, fimMinuto: 990, tipo: "reserva" },
   ] });
   assert.equal(JSON.stringify(resposta.body).includes("privado"), false);
   assert.equal(resposta.headers["Cache-Control"], "no-store");
@@ -98,7 +98,7 @@ test("somente exclui reserva do próprio agendamento autorizado ao reagendar", a
     { verificarUsuario: async () => "cliente-1", firestore: db },
   );
   assert.equal(resposta.status, 200);
-  assert.deepEqual(resposta.body.intervalos, [{ inicioMinuto: 840, fimMinuto: 900 }]);
+  assert.deepEqual(resposta.body.intervalos, [{ inicioMinuto: 840, fimMinuto: 900, tipo: "reserva" }]);
   assert.deepEqual(pool.chamadas[0].params, ["2026-11-05", "meu-agendamento", "cliente-1"]);
 });
 
@@ -130,7 +130,7 @@ test("admin autorizado exclui somente a reserva original da cliente no reagendam
   );
 
   assert.equal(resposta.status, 200);
-  assert.deepEqual(resposta.body.intervalos, [{ inicioMinuto: 840, fimMinuto: 900 }]);
+  assert.deepEqual(resposta.body.intervalos, [{ inicioMinuto: 840, fimMinuto: 900, tipo: "reserva" }]);
   assert.deepEqual(pool.chamadas[0].params, ["2026-11-05", "agendamento-cliente", "cliente-proprietaria"]);
 });
 
