@@ -1,3 +1,5 @@
+import { atendimentosConflitamComBuffer, BUFFER_ENTRE_ATENDIMENTOS_MINUTOS } from "./agendaBuffer.mjs";
+
 const STATUS_OCUPADOS = new Set([
   "agendado", "reagendado", "confirmado"
 ]);
@@ -13,7 +15,9 @@ export function obterDuracaoAgendamentoPix(valor) {
   return duracao;
 }
 
-export function encontrarConflitoAgendamentoPix(registros, inicio, fim) {
+export function encontrarConflitoAgendamentoPix(
+  registros, inicio, fim, buffer = BUFFER_ENTRE_ATENDIMENTOS_MINUTOS,
+) {
   for (const registro of registros) {
     if (!STATUS_OCUPADOS.has(registro.status)) continue;
 
@@ -27,7 +31,7 @@ export function encontrarConflitoAgendamentoPix(registros, inicio, fim) {
     const comeco = h * 60 + m;
     const duracao = obterDuracaoAgendamentoPix(registro.duracao);
 
-    if (inicio < comeco + duracao && fim > comeco) {
+    if (atendimentosConflitamComBuffer(inicio, fim, comeco, comeco + duracao, buffer)) {
       return true;
     }
   }

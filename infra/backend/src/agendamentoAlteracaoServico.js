@@ -4,6 +4,7 @@ import { obterDuracaoAgendamentoPix, encontrarConflitoAgendamentoPix } from "./p
 import { converterPrecoServicoCentavos } from "./pixSinalServico.js";
 import { possuiBloqueio } from "./agendaBloqueios.js";
 import { URL_APPS_SCRIPT } from "./pixCalendarWorker.js";
+import { BUFFER_ENTRE_ATENDIMENTOS_MINUTOS } from "./agendaBuffer.mjs";
 import { STATUS_ALTERAVEIS_SERVICO, calcularRestanteServicoCentavos, validarNovoPeriodoServico } from "./agendamentoAlteracaoServicoRegras.mjs";
 
 // Eventos PIX: REAGENDAR no Apps Script original do worker, preservando eventId.
@@ -347,7 +348,9 @@ async function processarOperacao(pool, operationId, dependencies = {}) {
       SELECT 1 FROM public.pix_reservas
       WHERE data_servico = $1 AND estado IN ('reservada', 'confirmada')
         AND agendamento_id IS DISTINCT FROM $2
-        AND int4range(inicio_minuto, fim_minuto, '[)') && int4range($3, $4, '[)')
+        AND int4range(inicio_minuto - ${BUFFER_ENTRE_ATENDIMENTOS_MINUTOS},
+                         fim_minuto + ${BUFFER_ENTRE_ATENDIMENTOS_MINUTOS}, '[)')
+            && int4range($3, $4, '[)')
       LIMIT 1
     `, [snapshot.data, operacao.agendamento_id, snapshot.inicio, snapshot.inicio + snapshot.duracaoNova]);
     if (conflito.rowCount) throw new ErroAlteracaoServico(409, "O novo período conflita com outra reserva PIX.");

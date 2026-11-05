@@ -118,7 +118,8 @@ export async function confirmarAgendamentoPixNoFirestore({
     const conflito = encontrarConflitoAgendamentoPix(
       existentes.docs.map((documento) => documento.data()),
       reserva.inicio_minuto,
-      reserva.fim_minuto
+      reserva.fim_minuto,
+      0, // A cobrança paga respeita o hold PIX já aceito antes da nova regra.
     );
 
     if (conflito) {

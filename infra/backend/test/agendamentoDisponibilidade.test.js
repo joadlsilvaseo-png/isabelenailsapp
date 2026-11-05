@@ -18,11 +18,12 @@ test("combina reservas PIX pendentes e agendamentos do Firestore", async () => {
   ]);
 });
 
-test("reserva de duas horas bloqueia sobreposições e libera o horário exato do término", () => {
+test("reserva de duas horas protege o intervalo técnico após o fim", () => {
   const reservas = [{ inicioMinuto: 810, fimMinuto: 930 }];
   assert.equal(intervaloSobrepoeDisponibilidade(780, 840, reservas), true);
   assert.equal(intervaloSobrepoeDisponibilidade(900, 960, reservas), true);
-  assert.equal(intervaloSobrepoeDisponibilidade(930, 990, reservas), false);
+  assert.equal(intervaloSobrepoeDisponibilidade(930, 990, reservas), true);
+  assert.equal(intervaloSobrepoeDisponibilidade(960, 1020, reservas), false);
 });
 
 test("quarta: horários adicionais respeitam agendamento anterior, duração e próximo início", () => {
@@ -34,14 +35,14 @@ test("quarta: horários adicionais respeitam agendamento anterior, duração e p
   }
   assert.equal(
     intervaloSobrepoeDisponibilidade(600, 690, [{ inicioMinuto: 540, fimMinuto: 600 }]),
-    false,
+    true,
   );
 
   // Tarde: quem terminou às 15:00 não impede novo início exatamente às 15h;
   // serviço iniciado às 14h que ultrapassa 15h continua bloqueando.
   assert.equal(
     intervaloSobrepoeDisponibilidade(900, 990, [{ inicioMinuto: 840, fimMinuto: 900 }]),
-    false,
+    true,
   );
   assert.equal(
     intervaloSobrepoeDisponibilidade(900, 990, [{ inicioMinuto: 840, fimMinuto: 930 }]),
@@ -170,7 +171,7 @@ test("não existe pausa fixa: quinta, sexta e sábado aceitam atendimentos atrav
 });
 
 test("bloqueio administrativo no almoço prevalece mesmo sem pausa automática", () => {
-  const manual = [{ inicioMinuto: 810, fimMinuto: 840 }]; // 13h30–14h
+  const manual = [{ inicioMinuto: 810, fimMinuto: 840, tipo: "bloqueio" }]; // 13h30–14h
   assert.equal(intervaloSobrepoeDisponibilidade(780, 840, manual), true); // 13h–14h
   assert.equal(intervaloSobrepoeDisponibilidade(780, 900, manual), true); // 13h–15h
   assert.equal(intervaloSobrepoeDisponibilidade(840, 900, manual), false); // 14h em diante

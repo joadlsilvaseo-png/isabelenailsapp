@@ -8,6 +8,7 @@ import { getFirestore } from "firebase-admin/firestore";
 
 import { possuiSobreposicao } from "./pixDisponibilidade.js";
 import { obterDuracaoAgendamentoPix } from "./pixDocumentoAgendamento.js";
+import { BUFFER_ENTRE_ATENDIMENTOS_MINUTOS } from "./agendaBuffer.mjs";
 
 const STATUS_OCUPADOS = new Set([
   "agendado",
@@ -87,6 +88,7 @@ export async function verificarConflitoFirestore(
       inicioMinuto,
       fimMinuto,
       intervalosOcupados,
+      BUFFER_ENTRE_ATENDIMENTOS_MINUTOS,
     ),
     quantidadeAgendamentosAtivos: intervalosOcupados.length,
   };

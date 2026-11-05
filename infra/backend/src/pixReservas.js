@@ -24,6 +24,7 @@ import {
 import { efetivarAgendamentoPix } from "./pixEfetivacao.js";
 import { calcularSinalServico } from "./pixSinalServico.js";
 import { consultarIsencaoPix } from "./agendamentosIsencaoPix.js";
+import { BUFFER_ENTRE_ATENDIMENTOS_MINUTOS } from "./agendaBuffer.mjs";
 
 class ErroReserva extends Error {
   constructor(status, mensagem) {
@@ -326,6 +327,19 @@ export async function criarReservaPix(req, res, pool) {
 
       if (await possuiBloqueio(conexao, data, periodo.inicioMinuto, periodo.fimMinuto)) {
         throw new ErroReserva(409, "Agenda fechada pela profissional neste horário");
+      }
+
+      // Reservas PIX ainda aguardando pagamento não aparecem no Firestore:
+      // a checagem SQL com o lock por data protege o buffer entre elas.
+      const reservaProxima = await conexao.query(`
+        SELECT 1 FROM public.pix_reservas
+        WHERE data_servico = $1 AND estado IN ('reservada', 'confirmada')
+          AND inicio_minuto < ($3::integer + ${BUFFER_ENTRE_ATENDIMENTOS_MINUTOS})
+          AND fim_minuto > ($2::integer - ${BUFFER_ENTRE_ATENDIMENTOS_MINUTOS})
+        LIMIT 1
+      `, [data, periodo.inicioMinuto, periodo.fimMinuto]);
+      if (reservaProxima.rowCount) {
+        throw new ErroReserva(409, "É necessário um intervalo de 20 minutos entre atendimentos.");
       }
 
       const conflito = await verificarConflitoFirestore(
