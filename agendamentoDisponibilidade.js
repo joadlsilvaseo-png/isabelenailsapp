@@ -1,4 +1,4 @@
-import { indisponivelComBuffer } from "./infra/backend/src/agendaBuffer.mjs";
+import { indisponivelComBuffer, encaixeInteligenteDisponivel } from "./infra/backend/src/agendaBuffer.mjs";
 
 /**
  * Limites dos horários de início e término exibidos na agenda.
@@ -53,4 +53,21 @@ export async function consultarIntervalosDisponibilidade({
 
 export function intervaloSobrepoeDisponibilidade(inicio, fim, intervalos) {
   return indisponivelComBuffer(inicio, fim, intervalos);
+}
+
+/** Horários adicionais (:15/:45) apenas para lacunas reais e serviços que cabem. */
+export function listarIniciosEncaixe({ abertura, ultimoInicio, duracao, intervalos, validarInicio, validarInicioPadrao }) {
+  if (!Number.isInteger(abertura) || !Number.isInteger(ultimoInicio) ||
+      !Number.isInteger(duracao) || duracao <= 0 || !Array.isArray(intervalos) ||
+      typeof validarInicio !== "function" || typeof validarInicioPadrao !== "function") {
+    throw new TypeError("Parâmetros inválidos para encaixes inteligentes");
+  }
+  const inicios = [];
+  for (let minuto = Math.ceil(abertura / 15) * 15; minuto <= ultimoInicio; minuto += 15) {
+    if (minuto % 30 !== 15 || !validarInicio(minuto)) continue;
+    if (encaixeInteligenteDisponivel(minuto, minuto + duracao, intervalos, validarInicioPadrao)) {
+      inicios.push(minuto);
+    }
+  }
+  return inicios;
 }

@@ -5,6 +5,7 @@ import { converterPrecoServicoCentavos } from "./pixSinalServico.js";
 import { possuiBloqueio } from "./agendaBloqueios.js";
 import { URL_APPS_SCRIPT } from "./pixCalendarWorker.js";
 import { BUFFER_ENTRE_ATENDIMENTOS_MINUTOS } from "./agendaBuffer.mjs";
+import { verificarEncaixeNoBanco } from "./pixEncaixes.js";
 import { STATUS_ALTERAVEIS_SERVICO, calcularRestanteServicoCentavos, validarNovoPeriodoServico } from "./agendamentoAlteracaoServicoRegras.mjs";
 
 // Eventos PIX: REAGENDAR no Apps Script original do worker, preservando eventId.
@@ -361,6 +362,12 @@ async function processarOperacao(pool, operationId, dependencies = {}) {
       .map((doc) => doc.data());
     if (encontrarConflitoAgendamentoPix(outrosAgendamentos, snapshot.inicio, snapshot.inicio + snapshot.duracaoNova)) {
       throw new ErroAlteracaoServico(409, "O novo período conflita com outro agendamento confirmado.");
+    }
+    if (snapshot.inicio % 30 === 15 && snapshot.duracaoNova > snapshot.duracaoAnterior && !(await verificarEncaixeNoBanco({
+      conexao, db, data: snapshot.data, inicio: snapshot.inicio,
+      fim: snapshot.inicio + snapshot.duracaoNova, excluirAgendamentoId: operacao.agendamento_id,
+    }))) {
+      throw new ErroAlteracaoServico(409, "O encaixe de 15 minutos deixou de ser válido.");
     }
 
     const documentoAtual = await db.collection("agendamentos").doc(operacao.agendamento_id).get();

@@ -157,9 +157,17 @@ export function validarServicoDezembro2026(dataIso, servico) {
     : { valido: true };
 }
 
-export function validarHorarioEspecialSemanal(diaSemana, inicioMinuto, duracao) {
+export function validarHorarioEspecialSemanal(diaSemana, inicioMinuto, duracao, opcoes = {}) {
   if (!Number.isInteger(inicioMinuto) || !Number.isInteger(duracao) || duracao <= 0) return false;
   const fim = inicioMinuto + duracao;
+  if (inicioMinuto % 30 === 15) {
+    // Terça e quarta semanais mantêm apenas os inícios autorizados.
+    if (opcoes.permitirEncaixe !== true || ![4, 5, 6].includes(diaSemana)) return false;
+    // Sábado: encaixes nunca ultrapassam 18h; a exceção de 18h30 continua exclusiva de 16h/150min.
+    if (diaSemana === 6) return inicioMinuto >= 540 && inicioMinuto <= 1020 && fim <= 1080;
+    return true;
+  }
+  if (inicioMinuto % 30 !== 0) return false;
   if (diaSemana === 2) return [840, 870, 900].includes(inicioMinuto) && fim <= 1050;
   if (diaSemana === 3) {
     // Quarta de manhã: janelas comerciais autorizadas, com duração real.
@@ -184,7 +192,7 @@ export function validarHorarioEspecialSemanal(diaSemana, inicioMinuto, duracao) 
   return true;
 }
 
-export function validarHorarioEspecial(dataIso, horario, duracao) {
+export function validarHorarioEspecial(dataIso, horario, duracao, opcoes = {}) {
   const partes = partesDataISO(dataIso);
   if (!partes || typeof horario !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(horario)) return false;
   const [hora, minuto] = horario.split(":").map(Number);
@@ -193,11 +201,12 @@ export function validarHorarioEspecial(dataIso, horario, duracao) {
   const especial = obterExpedienteEspecialDezembro2026(dataIso);
   if (especial) {
     return especial.aberto && Number.isInteger(duracaoMinutos) && duracaoMinutos > 0
-      && duracaoMinutos <= 600 && inicioMinuto % 30 === 0
+      && duracaoMinutos <= 600
+      && (inicioMinuto % 30 === 0 || (opcoes.permitirEncaixe === true && inicioMinuto % 30 === 15))
       && inicioMinuto >= especial.inicioMinuto
       && inicioMinuto + duracaoMinutos <= especial.encerramentoMinuto;
   }
-  return validarHorarioEspecialSemanal(partes.data.getUTCDay(), inicioMinuto, duracaoMinutos);
+  return validarHorarioEspecialSemanal(partes.data.getUTCDay(), inicioMinuto, duracaoMinutos, opcoes);
 }
 
 // Horários de 30 minutos que a administradora pode fechar/reabrir.

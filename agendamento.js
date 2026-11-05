@@ -1,8 +1,8 @@
 import { auth, db } from "./firebase-config.js";
 import { obterMesPredominante } from "./agendamentoMes.mjs?v=1.0.0";
 import { consultarDisponibilidadePix, reagendarAgendamentoApi, consultarReagendamentoPixConfigApi, consultarReagendamentoPixPagoApi } from "./agendamentosApi.js";
-import { consultarIntervalosDisponibilidade, intervaloSobrepoeDisponibilidade, obterLimitesAtendimentoSemanal } from "./agendamentoDisponibilidade.js?v=1.0.1";
-import { obterJanelaAgendamento, validarDataNaJanela, validarHorarioEspecial, obterExpedienteEspecialDezembro2026, validarServicoDezembro2026, AGENDA_DEZEMBRO_2026_ABERTA } from "./infra/backend/src/agendamentoRegras.mjs?v=2.0.5";
+import { consultarIntervalosDisponibilidade, intervaloSobrepoeDisponibilidade, obterLimitesAtendimentoSemanal, listarIniciosEncaixe } from "./agendamentoDisponibilidade.js?v=1.0.2";
+import { obterJanelaAgendamento, validarDataNaJanela, validarHorarioEspecial, obterExpedienteEspecialDezembro2026, validarServicoDezembro2026, AGENDA_DEZEMBRO_2026_ABERTA } from "./infra/backend/src/agendamentoRegras.mjs?v=2.0.6";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
 import {
   collection,
@@ -604,9 +604,20 @@ async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null, s
 
     // Quarta-feira: exibir somente os inícios aprovados pela profissional.
     // A duração de cada serviço é validada pela regra compartilhada com o backend.
-    const iniciosPossiveis = !especial && diaSemanaSelecionado === 3
+    const iniciosPadrao = !especial && diaSemanaSelecionado === 3
       ? ["09:00", "10:00", "10:30", "11:00", "14:00", "15:00"].map(timeToMins)
       : Array.from({ length: Math.floor((minUltimoInicio - minAbertura) / 30) + 1 }, (_, indice) => minAbertura + indice * 30);
+    const validarPadrao = (minuto) => minuto >= minAbertura && minuto <= minUltimoInicio &&
+      minuto + duracaoServico <= minFechamento &&
+      validarHorarioEspecial(dataIso, minsToTime(minuto), duracaoServico);
+    const iniciosEncaixe = listarIniciosEncaixe({
+      abertura: minAbertura, ultimoInicio: minUltimoInicio,
+      duracao: duracaoServico, intervalos: intervalosIndisponiveis,
+      validarInicio: (minuto) => minuto + duracaoServico <= minFechamento &&
+        validarHorarioEspecial(dataIso, minsToTime(minuto), duracaoServico, { permitirEncaixe: true }),
+      validarInicioPadrao: validarPadrao,
+    });
+    const iniciosPossiveis = [...new Set([...iniciosPadrao, ...iniciosEncaixe])].sort((a, b) => a - b);
 
     for (const atual of iniciosPossiveis) {
       if (!especial && diaSemanaSelecionado === 2 && atual === timeToMins("15:30")) continue;
@@ -619,7 +630,7 @@ async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null, s
       const horarioTexto = minsToTime(atual);
 
       const bloqueadoPorRegraEspecial =
-        !validarHorarioEspecial(dataIso, horarioTexto, duracaoServico);
+        !validarHorarioEspecial(dataIso, horarioTexto, duracaoServico, { permitirEncaixe: atual % 30 === 15 });
 
       const indisponivel =
         bloqueadoPorRegraEspecial ||

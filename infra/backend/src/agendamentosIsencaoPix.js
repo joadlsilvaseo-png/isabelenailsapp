@@ -4,6 +4,7 @@ import { validarServicoDezembro2026 } from "./agendamentoRegras.mjs";
 import { possuiBloqueio } from "./agendaBloqueios.js";
 import { encontrarConflitoAgendamentoPix } from "./pixDocumentoAgendamento.js";
 import { BUFFER_ENTRE_ATENDIMENTOS_MINUTOS } from "./agendaBuffer.mjs";
+import { verificarEncaixeNoBanco } from "./pixEncaixes.js";
 import { pixPagoReagendamentoHabilitado } from "./pixReagendamentoPago.js";
 import {
   iniciarReagendamentoPixPago,
@@ -77,11 +78,11 @@ function converterPreco(valor) {
   return Number.isFinite(numero) && numero > 0 ? numero : 0;
 }
 
-function validarFuturo(data, horario) {
+function validarFuturo(data, horario, referencia = new Date()) {
   const partes = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit",
     hour: "2-digit", minute: "2-digit", hourCycle: "h23",
-  }).formatToParts(new Date());
+  }).formatToParts(referencia);
   const valores = Object.fromEntries(partes.map((item) => [item.type, item.value]));
   const agora = `${valores.year}-${valores.month}-${valores.day}T${valores.hour}:${valores.minute}`;
   if (`${data}T${horario}` <= agora) throw new ErroIsencaoPix(409, "Horário já passou", "HORARIO_PASSADO");
@@ -183,11 +184,11 @@ export async function criarAgendamentoIsento({ pool, db, uid, dados, dependencie
   const servico = servicoSnap.data();
   const duracao = Number(servico.duracao ?? servico.duracaoMinutos ?? servico.tempo);
   // O bloqueio público de dezembro sempre prevalece sobre restrições comerciais.
-  const periodo = (dependencies.validarHorario || validarHorarioPix)(data, horario, duracao);
+  const periodo = (dependencies.validarHorario || validarHorarioPix)(data, horario, duracao, dependencies.now || new Date(), { encaixePendente: true });
   if (!periodo.valido) throw new ErroIsencaoPix(400, periodo.motivo, "HORARIO_INVALIDO");
   const permitido = validarServicoDezembro2026(data, servico);
   if (!permitido.valido) throw new ErroIsencaoPix(400, permitido.motivo, "SERVICO_INDISPONIVEL");
-  validarFuturo(data, horario);
+  validarFuturo(data, horario, dependencies.now || new Date());
 
   const clienteSnap = await firestore.collection("clientes").doc(uid).get();
   const nomeCliente = String(
@@ -217,6 +218,13 @@ export async function criarAgendamentoIsento({ pool, db, uid, dados, dependencie
 
     if (await possuiBloqueio(conexao, data, periodo.inicioMinuto, periodo.fimMinuto)) {
       throw new ErroIsencaoPix(409, "Agenda fechada pela profissional neste horário", "AGENDA_FECHADA");
+    }
+    if (periodo.inicioMinuto % 30 === 15 && !(await verificarEncaixeNoBanco({
+      conexao, db: firestore, data,
+      inicio: periodo.inicioMinuto, fim: periodo.fimMinuto,
+      excluirAgendamentoId: agendamentoId,
+    }))) {
+      throw new ErroIsencaoPix(409, "Encaixe de 15 minutos indisponível", "ENCAIXE_INDISPONIVEL");
     }
 
     const reservaPropria = await conexao.query(`
@@ -354,11 +362,11 @@ export async function reagendarComBloqueio({ pool, db, uid, dados, dependencies 
   const servico = servicoSnap.data();
   const duracao = Number(servico.duracao ?? servico.duracaoMinutos ?? servico.tempo);
   // O bloqueio público de dezembro sempre prevalece sobre restrições comerciais.
-  const periodo = (dependencies.validarHorario || validarHorarioPix)(data, horario, duracao);
+  const periodo = (dependencies.validarHorario || validarHorarioPix)(data, horario, duracao, dependencies.now || new Date(), { encaixePendente: true });
   if (!periodo.valido) throw new ErroIsencaoPix(400, periodo.motivo, "HORARIO_INVALIDO");
   const permitido = validarServicoDezembro2026(data, servico);
   if (!permitido.valido) throw new ErroIsencaoPix(400, permitido.motivo, "SERVICO_INDISPONIVEL");
-  validarFuturo(data, horario);
+  validarFuturo(data, horario, dependencies.now || new Date());
 
   const referencia = firestore.collection("agendamentos").doc(agendamentoId);
   const inicial = await referencia.get();
@@ -407,6 +415,13 @@ export async function reagendarComBloqueio({ pool, db, uid, dados, dependencies 
 
     if (await possuiBloqueio(conexao, data, periodo.inicioMinuto, periodo.fimMinuto)) {
       throw new ErroIsencaoPix(409, "Agenda fechada pela profissional neste horário", "AGENDA_FECHADA");
+    }
+    if (periodo.inicioMinuto % 30 === 15 && !(await verificarEncaixeNoBanco({
+      conexao, db: firestore, data,
+      inicio: periodo.inicioMinuto, fim: periodo.fimMinuto,
+      excluirAgendamentoId: agendamentoId,
+    }))) {
+      throw new ErroIsencaoPix(409, "Encaixe de 15 minutos indisponível", "ENCAIXE_INDISPONIVEL");
     }
 
     const reservaExistente = await conexao.query(`
