@@ -4,6 +4,7 @@ import { validarServicoDezembro2026 } from "./agendamentoRegras.mjs";
 import { possuiBloqueio } from "./agendaBloqueios.js";
 import { encontrarConflitoAgendamentoPix } from "./pixDocumentoAgendamento.js";
 import { BUFFER_ENTRE_ATENDIMENTOS_MINUTOS } from "./agendaBuffer.mjs";
+import { verificarEncaixeNoBanco } from "./pixEncaixes.js";
 import { pixPagoReagendamentoHabilitado } from "./pixReagendamentoPago.js";
 import {
   iniciarReagendamentoPixPago,
@@ -183,7 +184,7 @@ export async function criarAgendamentoIsento({ pool, db, uid, dados, dependencie
   const servico = servicoSnap.data();
   const duracao = Number(servico.duracao ?? servico.duracaoMinutos ?? servico.tempo);
   // O bloqueio público de dezembro sempre prevalece sobre restrições comerciais.
-  const periodo = (dependencies.validarHorario || validarHorarioPix)(data, horario, duracao);
+  const periodo = (dependencies.validarHorario || validarHorarioPix)(data, horario, duracao, undefined, { encaixePendente: true });
   if (!periodo.valido) throw new ErroIsencaoPix(400, periodo.motivo, "HORARIO_INVALIDO");
   const permitido = validarServicoDezembro2026(data, servico);
   if (!permitido.valido) throw new ErroIsencaoPix(400, permitido.motivo, "SERVICO_INDISPONIVEL");
@@ -217,6 +218,13 @@ export async function criarAgendamentoIsento({ pool, db, uid, dados, dependencie
 
     if (await possuiBloqueio(conexao, data, periodo.inicioMinuto, periodo.fimMinuto)) {
       throw new ErroIsencaoPix(409, "Agenda fechada pela profissional neste horário", "AGENDA_FECHADA");
+    }
+    if (periodo.inicioMinuto % 30 === 15 && !(await verificarEncaixeNoBanco({
+      conexao, db: firestore, data,
+      inicio: periodo.inicioMinuto, fim: periodo.fimMinuto,
+      excluirAgendamentoId: agendamentoId,
+    }))) {
+      throw new ErroIsencaoPix(409, "Encaixe de 15 minutos indisponível", "ENCAIXE_INDISPONIVEL");
     }
 
     const reservaPropria = await conexao.query(`
@@ -354,7 +362,7 @@ export async function reagendarComBloqueio({ pool, db, uid, dados, dependencies 
   const servico = servicoSnap.data();
   const duracao = Number(servico.duracao ?? servico.duracaoMinutos ?? servico.tempo);
   // O bloqueio público de dezembro sempre prevalece sobre restrições comerciais.
-  const periodo = (dependencies.validarHorario || validarHorarioPix)(data, horario, duracao);
+  const periodo = (dependencies.validarHorario || validarHorarioPix)(data, horario, duracao, undefined, { encaixePendente: true });
   if (!periodo.valido) throw new ErroIsencaoPix(400, periodo.motivo, "HORARIO_INVALIDO");
   const permitido = validarServicoDezembro2026(data, servico);
   if (!permitido.valido) throw new ErroIsencaoPix(400, permitido.motivo, "SERVICO_INDISPONIVEL");
@@ -407,6 +415,13 @@ export async function reagendarComBloqueio({ pool, db, uid, dados, dependencies 
 
     if (await possuiBloqueio(conexao, data, periodo.inicioMinuto, periodo.fimMinuto)) {
       throw new ErroIsencaoPix(409, "Agenda fechada pela profissional neste horário", "AGENDA_FECHADA");
+    }
+    if (periodo.inicioMinuto % 30 === 15 && !(await verificarEncaixeNoBanco({
+      conexao, db: firestore, data,
+      inicio: periodo.inicioMinuto, fim: periodo.fimMinuto,
+      excluirAgendamentoId: agendamentoId,
+    }))) {
+      throw new ErroIsencaoPix(409, "Encaixe de 15 minutos indisponível", "ENCAIXE_INDISPONIVEL");
     }
 
     const reservaExistente = await conexao.query(`

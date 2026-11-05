@@ -12,7 +12,7 @@ export function calcularRestanteServicoCentavos(precoNovoCentavos, sinalPagoCent
 }
 
 export function validarNovoPeriodoServico({ data, horario, duracao, servico, now = new Date() }) {
-  const periodo = validarHorarioPix(data, horario, duracao, now);
+  const periodo = validarHorarioPix(data, horario, duracao, now, { encaixePendente: true });
   if (!periodo.valido) return periodo;
   const permitido = validarServicoDezembro2026(data, servico);
   if (!permitido.valido) return permitido;

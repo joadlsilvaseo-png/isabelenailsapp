@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { possuiBloqueio } from "./agendaBloqueios.js";
 import { encontrarConflitoAgendamentoPix } from "./pixDocumentoAgendamento.js";
 import { BUFFER_ENTRE_ATENDIMENTOS_MINUTOS } from "./agendaBuffer.mjs";
+import { verificarEncaixeNoBanco } from "./pixEncaixes.js";
 import {
   montarPayloadReagendamentoPix,
   enviarReagendamentoPix,
@@ -203,6 +204,12 @@ export async function iniciarReagendamentoPixPago({
       .map((doc) => doc.data());
     if (encontrarConflitoAgendamentoPix(outros, inicio, inicio + origemDuracao)) {
       throw new ErroReagendamentoPago(409, "Novo horário ocupado por outro agendamento");
+    }
+    if (inicio % 30 === 15 && !(await verificarEncaixeNoBanco({
+      conexao, db, data, inicio, fim: inicio + origemDuracao,
+      excluirAgendamentoId: agendamentoId,
+    }))) {
+      throw new ErroReagendamentoPago(409, "Encaixe de 15 minutos indisponível");
     }
 
     let holdId = null;

@@ -25,6 +25,7 @@ import { efetivarAgendamentoPix } from "./pixEfetivacao.js";
 import { calcularSinalServico } from "./pixSinalServico.js";
 import { consultarIsencaoPix } from "./agendamentosIsencaoPix.js";
 import { BUFFER_ENTRE_ATENDIMENTOS_MINUTOS } from "./agendaBuffer.mjs";
+import { verificarEncaixeNoBanco } from "./pixEncaixes.js";
 
 class ErroReserva extends Error {
   constructor(status, mensagem) {
@@ -242,7 +243,7 @@ export async function criarReservaPix(req, res, pool) {
     const duracao = Number(servico.duracao);
     // A agenda pública de dezembro permanece fechada antes de qualquer
     // validação comercial ou tentativa de reservar um horário.
-    const periodo = validarHorarioPix(data, horario, duracao);
+    const periodo = validarHorarioPix(data, horario, duracao, undefined, { encaixePendente: true });
     if (!periodo.valido) {
       throw new ErroReserva(400, periodo.motivo);
     }
@@ -339,7 +340,7 @@ export async function criarReservaPix(req, res, pool) {
         LIMIT 1
       `, [data, periodo.inicioMinuto, periodo.fimMinuto]);
       if (reservaProxima.rowCount) {
-        throw new ErroReserva(409, "É necessário um intervalo de 20 minutos entre atendimentos.");
+        throw new ErroReserva(409, "É necessário um intervalo de 15 minutos entre atendimentos.");
       }
 
       const conflito = await verificarConflitoFirestore(
@@ -353,6 +354,12 @@ export async function criarReservaPix(req, res, pool) {
           409,
           "Horario ocupado por outro agendamento"
         );
+      }
+      if (periodo.inicioMinuto % 30 === 15 && !(await verificarEncaixeNoBanco({
+        conexao, db: firestore(), data,
+        inicio: periodo.inicioMinuto, fim: periodo.fimMinuto,
+      }))) {
+        throw new ErroReserva(409, "Encaixe de 15 minutos não está mais disponível");
       }
 
       const reservaId = randomUUID();
