@@ -50,7 +50,7 @@ function determinarPeriodo(pergunta) {
   }
   if (correspondente) return {mes:correspondente};
   if (/proxim[oa] mes|mes que vem/.test(texto)) return {mes:janela[1]};
-  if (/esse mes|este mes|mes atual|\bmes\b|lacuna|encaixe|oportunidade|agenda/.test(texto)) {
+  if (/esse mes|este mes|mes atual|\bmes\b|lacuna|intervalo|bloqueio|sugestao|avaliar|espaco|encaixe|oportunidade|agenda/.test(texto)) {
     return {mes:mesAtual};
   }
   return null;
@@ -77,34 +77,72 @@ function adicionarBolha(texto,tipo="bot"){
   conversa.scrollTop=conversa.scrollHeight;
   return el;
 }
-function renderizarResultado(dados,periodo) {
-  const bloco=elemento("article","assistente-bolha assistente-resultado");
-  const titulo=elemento("h3","",dados.total===1?"1 oportunidade encontrada":`${dados.total} oportunidades encontradas`);
-  bloco.append(titulo);
-  const descricao=periodo.data ? dataFormatada(periodo.data) : `${NOMES[Number(periodo.mes.slice(5))-1]} de ${periodo.mes.slice(0,4)}`;
-  bloco.append(elemento("p","assistente-meta",`Período: ${descricao}. Possíveis lacunas para avaliação manual de encaixe.`));
-  if(!dados.oportunidades?.length){
-    bloco.append(elemento("p","","Não há encaixes excepcionais identificados neste período. Isso não significa que a agenda esteja cheia; horários normais continuam disponíveis na agenda."));
+function icone(nome) {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("fill", "none");
+  svg.setAttribute("stroke", "currentColor");
+  svg.setAttribute("stroke-width", "1.8");
+  svg.setAttribute("stroke-linecap", "round");
+  svg.setAttribute("stroke-linejoin", "round");
+  svg.setAttribute("aria-hidden", "true");
+  if (nome === "relogio") {
+    const circulo = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    circulo.setAttribute("cx", "12");
+    circulo.setAttribute("cy", "12");
+    circulo.setAttribute("r", "9");
+    svg.append(circulo);
   }
-  for(const item of (dados.oportunidades||[])){
-    const card=elemento("section","assistente-oportunidade");
-    card.append(elemento("h4","",`${dataFormatada(item.data)} · ${item.inicio} às ${item.fim}`));
-    card.append(elemento("p","assistente-lacuna",`Lacuna identificada: ${formatarDuracao(item.duracaoLacunaMinutos)} entre atendimentos.`));
-    card.append(elemento("p","assistente-orientacao","A profissional define o serviço após conferir a agenda."));
-    const link=elemento("a","","Conferir no Gerenciador de Calendário");
-    link.href="./admin-calendario.html";
+  const caminho = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  caminho.setAttribute("d", nome === "relogio" ? "M12 7v5l3 2" : "m9 18 6-6-6-6");
+  svg.append(caminho);
+  return svg;
+}
+function renderizarResultado(dados, periodo) {
+  const itens = Array.isArray(dados.oportunidades) ? dados.oportunidades : [];
+  const total = itens.length;
+  const bloco = elemento("article", "assistente-bolha assistente-resultado");
+  bloco.append(elemento("h3", "", total === 1 ? "1 intervalo para avaliar" : total + " intervalos para avaliar"));
+  const descricao = periodo.data ? dataFormatada(periodo.data)
+    : NOMES[Number(periodo.mes.slice(5)) - 1] + " de " + periodo.mes.slice(0, 4);
+  bloco.append(elemento("p", "assistente-meta", "Período consultado: " + descricao + ". Sugestões para análise da profissional."));
+  if (!total) {
+    bloco.append(elemento("p", "assistente-vazio",
+      "Nenhum intervalo que exija atenção foi encontrado. Isso não significa que a agenda esteja cheia; horários regulares podem continuar disponíveis."));
+  }
+  for (const item of itens) {
+    const card = elemento("section", "assistente-oportunidade");
+    const selo = elemento("span", "assistente-selo");
+    selo.append(icone("relogio"), document.createTextNode("Sugestão de bloqueio"));
+    card.append(selo);
+    card.append(elemento("h4", "", dataFormatada(item.data) + " · " + item.inicio + " às " + item.fim));
+    card.append(elemento("p", "assistente-lacuna",
+      "Intervalo disponível: " + formatarDuracao(item.duracaoLacunaMinutos)));
+    card.append(elemento("p", "assistente-orientacao",
+      item.justificativa || "Confira a disponibilidade antes de decidir se vale fechar este intervalo."));
+    const elegiveis = Array.isArray(item.servicosElegiveis) ? item.servicosElegiveis : [];
+    if (elegiveis.length) {
+      const nomes = elegiveis.slice(0, 3).map((servico) => servico.nome).filter(Boolean);
+      const adicionais = elegiveis.length > 3 ? " e mais " + (elegiveis.length - 3) : "";
+      card.append(elemento("p", "assistente-elegiveis",
+        "Serviços que ainda cabem: " + nomes.join(", ") + adicionais + "."));
+    }
+    const link = elemento("a", "assistente-link", "Conferir dia no calendário");
+    link.href = "./admin-calendario.html?data=" + encodeURIComponent(item.data);
+    link.append(icone("seta"));
     card.append(link);
     bloco.append(card);
   }
-  bloco.append(elemento("p","assistente-meta","Lacunas sujeitas a conferência. O assistente não confirma atendimentos nem recebe PIX."));
+  bloco.append(elemento("p", "assistente-meta",
+    "Nenhum bloqueio é feito automaticamente. A agenda e as reservas não foram alteradas."));
   conversa.append(bloco);
-  conversa.scrollTop=conversa.scrollHeight;
+  conversa.scrollTop = conversa.scrollHeight;
 }
 async function consultar(pergunta){
   if(!autorizado||carregando)return;
   const periodo=determinarPeriodo(pergunta);
   adicionarBolha(pergunta,"cliente");
-  if(!periodo){adicionarBolha("Posso consultar hoje, amanhã ou um mês da janela administrativa. Experimente: 'Quais encaixes temos em dezembro?'");return}
+  if(!periodo){adicionarBolha("Posso consultar hoje, amanhã ou um mês da janela administrativa. Experimente: 'Quais intervalos merecem atenção em dezembro?'");return}
   carregando=true;
   enviar.disabled=true;
   const esperando=adicionarBolha("Analisando agendamentos, reservas e bloqueios...");
@@ -137,12 +175,13 @@ form.addEventListener("submit",(event)=>{
 document.querySelectorAll("[data-consulta]").forEach((botao)=>{
   botao.addEventListener("click",()=>{
     const chave=botao.dataset.consulta;
-    const q={hoje:"Quais encaixes temos hoje?",amanha:"Quais encaixes temos amanhã?",mes:"Quais encaixes temos este mês?",proximo:"Quais encaixes temos no próximo mês?"}[chave];
+    const q={hoje:"Quais intervalos devo avaliar hoje?",amanha:"Quais intervalos devo avaliar amanhã?",mes:"Quais intervalos devo avaliar este mês?",proximo:"Quais intervalos devo avaliar no próximo mês?"}[chave];
     if(q)void consultar(q);
   });
 });
 onAuthStateChanged(auth,async(user)=>{
   autorizado=false;
+  document.body.dataset.accessState="loading";
   conteudo.hidden=true;
   acesso.hidden=false;
   if(!user){acesso.textContent="Entre na sua conta para acessar o Assistente de Agenda.";return}
