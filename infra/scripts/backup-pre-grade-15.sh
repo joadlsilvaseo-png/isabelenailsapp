@@ -33,6 +33,17 @@ fi
 
 mkdir -p "$DEST_ROOT"
 chmod 700 "$DEST_ROOT"
+# Reserva uma margem de segurança para evitar lotar o disco da VPS.
+IMAGE_BYTES="$(docker image inspect -f '{{.Size}}' "$IMAGE_ID")"
+DB_BYTES="$(docker exec -i "$PG_CONTAINER" psql -U isabele_admin -d isabele_nails -Atqc 'SELECT pg_database_size(current_database())')"
+FREE_BYTES="$(df -B1 --output=avail "$DEST_ROOT" | tail -n 1 | tr -d '[:space:]')"
+[[ "$IMAGE_BYTES" =~ ^[0-9]+$ && "$DB_BYTES" =~ ^[0-9]+$ && "$FREE_BYTES" =~ ^[0-9]+$ ]] ||
+  { echo "Não foi possível estimar o espaço; backup abortado." >&2; exit 1; }
+REQUIRED_BYTES="$((IMAGE_BYTES + DB_BYTES * 2 + 1073741824))"
+if (( FREE_BYTES < REQUIRED_BYTES )); then
+  printf 'ABORTADO: espaço livre insuficiente (%s bytes); mínimo estimado %s.\n' "$FREE_BYTES" "$REQUIRED_BYTES" >&2
+  exit 1
+fi
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 DEST="$DEST_ROOT/pre-grade-15-$STAMP"
 mkdir -m 700 "$DEST"
