@@ -4,8 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex, nofollow">
-  <meta name="description" content="Assistente de Agenda da Isabele Mariana Nails">
+  <meta name="description" content="Assistente Preventivo de Agenda da Isabele Mariana Nails">
   <meta name="theme-color" content="#591c31">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="IM Nails">
   <title>Assistente de Agenda | Isabele Mariana Nails</title>
   <link rel="manifest" href="./manifest.json">
   <link rel="icon" type="image/png" href="./assets/favicon.png">
@@ -14,54 +17,98 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./base.css?v=1.0.4">
-  <link rel="stylesheet" href="./admin-assistente.css?v=2">
+  <link rel="stylesheet" href="./admin-assistente.css?v=3">
+  <link rel="stylesheet" href="./admin-bottom-nav.css?v=1">
 </head>
 <body data-page="admin-assistente" data-access-state="loading">
   <div class="app-container assistente-layout">
     <header class="assistente-header">
-      <a href="./principal.html" class="assistente-voltar" aria-label="Voltar à gestão">←</a>
-      <div>
-        <p class="assistente-eyebrow">Gestão profissional</p>
-        <h1>Assistente de Agenda</h1>
-      </div>
-      <span aria-hidden="true" class="assistente-avatar">✦</span>
+      <nav class="assistente-nav" aria-label="Navegação administrativa">
+        <a href="./principal.html" class="assistente-nav-link" aria-label="Voltar para Gestão">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M15 18L9 12L15 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </a>
+        <div class="assistente-nav-titulo"><span>Gestão profissional</span><h1>Assistente de Agenda</h1></div>
+        <a href="./admin-calendario.html" class="assistente-nav-link" aria-label="Abrir Gerenciador de Calendário" title="Gerenciar Calendário">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <rect x="3.5" y="5.5" width="17" height="15" rx="2.5" stroke="currentColor" stroke-width="1.8"/>
+            <path d="M7.5 3.5v4M16.5 3.5v4M3.5 10h17M8 15h3M13 15h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+        </a>
+      </nav>
+      <section class="assistente-hero" aria-labelledby="assistente-hero-titulo">
+        <div class="assistente-hero-conteudo">
+          <p class="assistente-kicker">Planejamento inteligente</p>
+          <h2 id="assistente-hero-titulo">Mais controle sobre cada intervalo.</h2>
+          <p>Encontre lacunas pouco aproveitáveis e avalie quando vale a pena manter um horário aberto.</p>
+        </div>
+        <span class="assistente-hero-icone" aria-hidden="true">
+          <svg viewBox="0 0 32 32" fill="none">
+            <rect x="5" y="7" width="22" height="21" rx="4" stroke="currentColor" stroke-width="1.8"/>
+            <path d="M11 4v6M21 4v6M5 13h22M11 19h5M11 23h9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            <path d="m22 19 2 2 4-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+      </section>
     </header>
 
-    <section id="assistente-acesso" class="assistente-estado" role="status" aria-live="polite">
-      Verificando acesso administrativo...
-    </section>
+    <section id="assistente-acesso" class="assistente-estado" role="status" aria-live="polite">Verificando acesso administrativo...</section>
 
-    <main id="assistente-conteudo" hidden>
-      <section class="assistente-intro">
-        <h2>Descubra oportunidades de encaixe</h2>
-        <p>Encontre lacunas entre atendimentos que podem permitir encaixes manuais. O assistente informa o intervalo, e a profissional escolhe o serviço após conferir a agenda.</p>
-        <p class="assistente-aviso">Somente sugestões para avaliação. Nenhum agendamento ou cobrança será criado pelo assistente.</p>
+    <main id="assistente-conteudo" class="assistente-main" hidden>
+      <section class="assistente-intro" aria-labelledby="assistente-intro-titulo">
+        <span class="assistente-intro-icone" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6l-8-3Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+            <path d="m9 12 2 2 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <div><h2 id="assistente-intro-titulo">Você decide o que bloquear</h2>
+          <p>O assistente analisa a agenda e recomenda intervalos para avaliação. <strong>Nenhum horário é bloqueado automaticamente.</strong></p>
+        </div>
       </section>
 
-      <section class="assistente-chat" aria-label="Conversa com o assistente">
+      <section class="assistente-atalhos" aria-labelledby="assistente-atalhos-titulo">
+        <div class="assistente-secao-cabecalho">
+          <span class="assistente-secao-kicker">Explore sua agenda</span>
+          <h2 id="assistente-atalhos-titulo">Consultas rápidas</h2>
+        </div>
+        <div class="assistente-atalhos-lista">
+          <button type="button" data-consulta="hoje">Hoje</button>
+          <button type="button" data-consulta="amanha">Amanhã</button>
+          <button type="button" data-consulta="mes">Este mês</button>
+          <button type="button" data-consulta="proximo">Próximo mês</button>
+        </div>
+      </section>
+
+      <section class="assistente-chat" aria-labelledby="assistente-chat-titulo">
+        <div class="assistente-chat-topo">
+          <span class="assistente-chat-icone" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="m12 2 1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8L12 2Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+              <path d="m19 17 .8 2.2L22 20l-2.2.8L19 23l-.8-2.2L16 20l2.2-.8L19 17Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+            </svg>
+          </span>
+          <div><h2 id="assistente-chat-titulo">Análise preventiva</h2><p>Faça uma pergunta sobre seus intervalos.</p></div>
+        </div>
         <div class="assistente-dialogo" id="assistente-dialogo" role="log" aria-live="polite" aria-relevant="additions">
-          <article class="assistente-bolha assistente-bolha--bot">
-            Olá, Isabele! Posso analisar oportunidades de encaixe para um dia ou mês. Por exemplo: <strong>“Quais encaixes temos em dezembro?”</strong>
-          </article>
+          <article class="assistente-bolha assistente-bolha--bot">Olá, Isabele! Posso identificar intervalos que merecem atenção na sua agenda. Experimente: <strong>“Quais horários devo avaliar hoje?”</strong></article>
         </div>
         <form id="assistente-form" class="assistente-form">
           <label class="assistente-label" for="assistente-pergunta">Pergunte sobre sua agenda</label>
           <div class="assistente-controles">
             <input id="assistente-pergunta" name="pergunta" maxlength="220" autocomplete="off" required
-                   placeholder="Ex.: Quais encaixes temos em dezembro?">
-            <button id="assistente-enviar" type="submit">Consultar</button>
+                   placeholder="Ex.: Quais intervalos avaliar em dezembro?">
+            <button id="assistente-enviar" type="submit"><span>Consultar</span>
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
           </div>
         </form>
       </section>
-      <section class="assistente-atalhos" aria-label="Consultas rápidas">
-        <button type="button" data-consulta="hoje">Hoje</button>
-        <button type="button" data-consulta="amanha">Amanhã</button>
-        <button type="button" data-consulta="mes">Este mês</button>
-        <button type="button" data-consulta="proximo">Próximo mês</button>
-      </section>
-      <p class="assistente-rodape">Os dados são consultados em tempo real no sistema. Confirme a disponibilidade antes de negociar encaixes manualmente.</p>
+      <p class="assistente-rodape">As sugestões são consultivas e podem mudar com os agendamentos. Confira o dia no calendário antes de fechar qualquer intervalo.</p>
     </main>
   </div>
-  <script type="module" src="./admin-assistente.js?v=2"></script>
+  <script type="module" src="./admin-assistente.js?v=3"></script>
+  <script src="./admin-bottom-nav.js?v=1" defer></script>
 </body>
 </html>

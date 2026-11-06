@@ -37,6 +37,8 @@ body[data-page="admin-clientes"][data-access-state="allowed"]
 body[data-page="admin-servicos"][data-access-state="allowed"]
   .isabele-admin-bottom-nav,
 body[data-page="dashboard"][data-access-state="allowed"]
+  .isabele-admin-bottom-nav,
+body[data-page="admin-assistente"][data-access-state="allowed"]
   .isabele-admin-bottom-nav {
   display: grid;
 }
@@ -116,3 +118,6 @@ body[data-page="dashboard"][data-access-state="allowed"] .app-container {
     height: 18px;
   }
 }
+
+/* Espaço para a navegação inferior do Assistente autorizado. */
+body[data-page="admin-assistente"][data-access-state="allowed"] .assistente-main{padding-bottom:max(116px,calc(98px + env(safe-area-inset-bottom)))}

@@ -33,7 +33,8 @@
   ];
 
   const paginaAtual = document.body.dataset.page;
-  if (!paginas.some((p) => p.id === paginaAtual)) return;
+  // O Assistente é uma tela auxiliar; mostrar atalhos sem marcar outra página como ativa.
+  if (!paginas.some((p) => p.id === paginaAtual) && paginaAtual !== "admin-assistente") return;
 
   // Remove o menu antigo de três itens da tela Clientes.
   document
