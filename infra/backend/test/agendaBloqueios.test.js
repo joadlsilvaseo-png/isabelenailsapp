@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   sobrepoe, possuiBloqueio, alterarHorarios, alterarHorariosLote, atenderGerenciarCalendario,
-  ErroCalendario,
+  normalizarHorariosDaRequisicao, ErroCalendario,
 } from "../src/agendaBloqueios.js";
 import { listarSlotsGerenciaveis } from "../src/agendamentoRegras.mjs";
 
@@ -320,7 +320,7 @@ test("rota de lote exige admin ativo e processa múltiplas datas", async () => {
     { data: "2026-12-03", horas: [840] },
   ];
   await atenderGerenciarCalendario(
-    reqJson("POST", "/admin/calendario/lote", { acao: "fechar", datas }),
+    reqJson("POST", "/admin/calendario/lote", { acao: "fechar", resolucaoMinutos: 15, datas }),
     resposta, pool,
     { verificarUsuario: async () => "admin-1", firestore: criarDbPorData(), now: FIXO },
   );
@@ -331,7 +331,7 @@ test("rota de lote exige admin ativo e processa múltiplas datas", async () => {
   const poolCliente = criarPoolLote();
   const respostaCliente = criarResposta();
   await atenderGerenciarCalendario(
-    reqJson("POST", "/admin/calendario/lote", { acao: "fechar", datas }),
+    reqJson("POST", "/admin/calendario/lote", { acao: "fechar", resolucaoMinutos: 15, datas }),
     respostaCliente, poolCliente,
     { verificarUsuario: async () => "cliente-1", firestore: criarDbPorData("cliente"), now: FIXO },
   );
@@ -349,7 +349,38 @@ test("POST individual continua compatível com o contrato anterior", async () =>
   );
   assert.equal(resposta.status, 200);
   assert.equal(resposta.body.data, DATA);
-  assert.equal(resposta.body.quantidade, 1);
+  assert.equal(resposta.body.quantidade, 2, "legado de 30 min equivale a dois intervalos de 15 min");
+  const inseridos = pool.chamadas.filter(({ sql }) => sql.includes("INSERT INTO public.agenda_bloqueios"));
+  assert.deepEqual(inseridos.map(({ params }) => [params[1], params[2]]), [[900, 915], [915, 930]]);
+});
+
+test("API distingue novo front 15min e rejeita payload legada de minutos quebrados", async () => {
+  assert.deepEqual(
+    normalizarHorariosDaRequisicao([900, 915], 15, DATA, FIXO),
+    [900, 915],
+  );
+  assert.deepEqual(
+    normalizarHorariosDaRequisicao([900, 930], undefined, DATA, FIXO),
+    [900, 915, 930, 945],
+  );
+  assert.throws(() =>
+    normalizarHorariosDaRequisicao([915], undefined, DATA, FIXO),
+    (erro) => erro.status === 409 && /Atualize o calendário/.test(erro.message));
+  assert.throws(() =>
+    normalizarHorariosDaRequisicao([900], 20, DATA, FIXO),
+    (erro) => erro.status === 400);
+  const pool = criarPool();
+  const resposta = criarResposta();
+  await atenderGerenciarCalendario(
+    reqJson("POST", "/admin/calendario", {
+      data: DATA, acao: "fechar", horas: [915], resolucaoMinutos: 15,
+    }),
+    resposta, pool,
+    { verificarUsuario: async () => "admin-1", firestore: criarDb(), now: FIXO },
+  );
+  assert.equal(resposta.status, 200);
+  const inseridos = pool.chamadas.filter(({ sql }) => sql.includes("INSERT INTO public.agenda_bloqueios"));
+  assert.deepEqual(inseridos.map(({ params }) => [params[1], params[2]]), [[915, 930]]);
 });
 
 test("admin pode fechar dezembro; datas passadas e horários inválidos são rejeitados", async () => {
