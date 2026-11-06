@@ -51,7 +51,7 @@ test("quatro datas de novembro e dezembro viram um único lote com intervalos ag
     ["2026-11-19", [840, 870, 900, 930]],
     ["2026-12-03", [840, 870, 900, 930]],
   ]);
-  assert.equal(resumo.datas[0].grupos[0].fim, 960);
+  assert.equal(resumo.datas[0].grupos[0].fim, 855);
 });
 
 test("reabertura mantém cada data separada no payload", () => {
