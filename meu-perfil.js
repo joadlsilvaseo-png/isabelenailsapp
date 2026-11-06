@@ -268,6 +268,29 @@ function formatarDataCancelamento(data) {
   return `${partes[3]}/${partes[2]}/${partes[1]}`;
 }
 
+function criarLinkWhatsappAgendamento({ titulo, data, horario, observacoes }) {
+  // Usa os dados do próprio agendamento, sem depender do cache de confirmação.
+  const nomeAtual =
+    document.getElementById("nome-cliente")?.textContent?.trim() ||
+    auth.currentUser?.displayName ||
+    "Não informado";
+  const linhasMensagem = [
+    "Olá, Isabele! Gostaria de enviar os dados do meu agendamento:",
+    "",
+    `Cliente: ${nomeAtual}`,
+    `Serviço: ${titulo || "Não informado"}`,
+    `Data: ${formatarDataCancelamento(data) || "Não informada"}`,
+    `Horário: ${horario || "Não informado"}`,
+  ];
+
+  if (typeof observacoes === "string" && observacoes.trim()) {
+    linhasMensagem.push(`Observações: ${observacoes.trim()}`);
+  }
+  linhasMensagem.push("", "Obrigada!");
+
+  return `https://wa.me/5511949494062?text=${encodeURIComponent(linhasMensagem.join("\n"))}`;
+}
+
 function exibirModalCancelamento({
   titulo,
   mensagem,
@@ -406,6 +429,7 @@ function criarCardAtivo({
   horario,
   id,
   idServico,
+  observacoes,
   status: statusAgendamento,
 }) {
   const card = document.createElement("article");
@@ -444,6 +468,34 @@ function criarCardAtivo({
   actions.style.display = "flex";
   actions.style.gap = "8px";
   actions.style.marginTop = "12px";
+
+  // Mesmo CTA da tela de confirmação, mas com os dados deste agendamento.
+  const whatsappButton = document.createElement("a");
+  whatsappButton.className = "perfil-button perfil-button--whatsapp";
+  whatsappButton.href = criarLinkWhatsappAgendamento({
+    titulo,
+    data,
+    horario,
+    observacoes,
+  });
+  whatsappButton.target = "_blank";
+  whatsappButton.rel = "noopener noreferrer";
+  whatsappButton.setAttribute("aria-label", `Enviar dados de ${titulo} pelo WhatsApp`);
+  whatsappButton.innerHTML = `
+    <span class="perfil-whatsapp-conteudo">
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M20 11.6C20 16.2 16.3 20 11.7 20C10.2 20 8.8 19.6 7.6 18.9L4 20L5.1 16.5C4.4 15.2 4 13.8 4 12.3C4 7.7 7.7 4 12.3 4C16.8 4 20 7.4 20 11.6Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+        <path d="M9 8.5C9.3 10.7 11.2 13.3 14.8 14.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+      </svg>
+      <span>Enviar pelo WhatsApp</span>
+    </span>
+    <svg class="perfil-whatsapp-seta" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M9 18L15 12L9 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+    </svg>
+  `;
+
+  const secondaryActions = document.createElement("div");
+  secondaryActions.className = "perfil-card-actions-secondary";
 
   const rebookButton = document.createElement("button");
   rebookButton.className = "perfil-button btn-reagendar";
@@ -563,8 +615,10 @@ function criarCardAtivo({
     }
   });
 
-  actions.appendChild(rebookButton);
-  actions.appendChild(cancelButton);
+  secondaryActions.appendChild(rebookButton);
+  secondaryActions.appendChild(cancelButton);
+  actions.appendChild(whatsappButton);
+  actions.appendChild(secondaryActions);
 
   card.appendChild(content);
   card.appendChild(meta);
@@ -785,6 +839,10 @@ async function carregarAgendamentos(uid) {
         horario: dados.horario || "--:--",
         id: docItem.id,
         idServico: dados.idServico,
+        observacoes:
+          typeof (dados.observacoes || dados.observacao) === "string"
+            ? (dados.observacoes || dados.observacao).trim()
+            : "",
         status: dados.status || "agendado",
       };
 
