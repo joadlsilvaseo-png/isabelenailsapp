@@ -10,21 +10,31 @@ PG_CONTAINER="isabele-infra-postgres-1"
 API_CONTAINER="isabele-infra-api-1"
 DEST_ROOT="/root/backups-isabele"
 EXPECTED_SHA="94809f76f9cb9d7f4b2b39d802bf46c281830993"
+EXPECTED_IMAGE="isabele-nails-api:release-94809f76f9cb9d7f4b2b39d802bf46c281830993"
 
 [[ "$MODE" == "check" || "$MODE" == "create" ]] || { echo "Uso: sudo bash backup-pre-grade-15.sh [check|create]" >&2; exit 2; }
 [[ "$(id -u)" -eq 0 ]] || { echo "Execute como root" >&2; exit 2; }
 [[ -d "$APP_DIR/.git" ]] || { echo "Diretório da API não encontrado" >&2; exit 1; }
 command -v docker >/dev/null || { echo "Docker ausente" >&2; exit 1; }
+# O checkout local pode estar em uma branch antiga e ter mudanças pendentes.
+# Ele é apenas informativo. O backup protege a IMAGEM que realmente está
+# rodando no container, sem alterar arquivos locais ou o Git.
 CURRENT_SHA="$(git -C "$APP_DIR" rev-parse HEAD)"
-[[ "$CURRENT_SHA" == "$EXPECTED_SHA" ]] || { echo "ABORTADO: commit VPS diferente do baseline" >&2; exit 1; }
-
 for item in "$API_CONTAINER" "$PG_CONTAINER"; do
   [[ "$(docker inspect -f '{{.State.Running}}' "$item")" == "true" ]] ||
     { echo "ABORTADO: container não está executando: $item" >&2; exit 1; }
 done
 IMAGE_ID="$(docker inspect -f '{{.Image}}' "$API_CONTAINER")"
 IMAGE_TAG="$(docker inspect -f '{{.Config.Image}}' "$API_CONTAINER")"
-printf 'Preflight OK. Git: %s / Imagem: %s\n' "$CURRENT_SHA" "$IMAGE_TAG"
+if [[ "$IMAGE_TAG" != "$EXPECTED_IMAGE" ]]; then
+  printf 'ABORTADO: a API ativa usa %s, mas o backup exige %s.\n' "$IMAGE_TAG" "$EXPECTED_IMAGE" >&2
+  exit 1
+fi
+if [[ "$CURRENT_SHA" != "$EXPECTED_SHA" ]]; then
+  printf 'AVISO: o checkout local (%s) é diferente da API ativa.\n' "$CURRENT_SHA"
+  echo "O Git e os arquivos locais não serão modificados."
+fi
+printf 'Preflight OK. Imagem ATIVA: %s\nID: %s\n' "$IMAGE_TAG" "$IMAGE_ID"
 if [[ "$MODE" == "check" ]]; then
   echo "Modo check: nenhum backup foi feito."
   echo "Para criar: sudo bash backup-pre-grade-15.sh create"
