@@ -1,7 +1,7 @@
 import { auth, db } from "./firebase-config.js";
 import { obterMesPredominante } from "./agendamentoMes.mjs?v=1.0.0";
 import { consultarDisponibilidadePix, reagendarAgendamentoApi, consultarReagendamentoPixConfigApi, consultarReagendamentoPixPagoApi } from "./agendamentosApi.js";
-import { consultarIntervalosDisponibilidade, intervaloSobrepoeDisponibilidade, } from "./agendamentoDisponibilidade.js?v=2.1.0";
+import { consultarIntervalosDisponibilidade, intervaloSobrepoeDisponibilidade, } from "./agendamentoDisponibilidade.js?v=2.2.0";
 import { obterJanelaAgendamento, validarDataNaJanela, validarHorarioEspecial, obterExpedienteEspecialDezembro2026, validarServicoDezembro2026, obterJanelasAtendimento, AGENDA_DEZEMBRO_2026_ABERTA } from "./infra/backend/src/agendamentoRegras.mjs?v=2.1.0";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
 import {
@@ -553,7 +553,11 @@ async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null, s
 
     // Os períodos do dia vêm da mesma regra compartilhada com o backend.
     // Não existem mais fechamentos artificiais ou exceções para :15/:45.
-    const intervalosIndisponiveis = intervalosOcupados;
+    // Reagendamentos permanecem com as validações anteriores no backend.
+    // A exceção para mesma cliente vale somente para NOVOS serviços consecutivos.
+    const intervalosIndisponiveis = reagendarId
+      ? intervalosOcupados.map(({ mesmaCliente, ...intervalo }) => intervalo)
+      : intervalosOcupados;
     const especial = obterExpedienteEspecialDezembro2026(dataIso);
     const janelas = obterJanelasAtendimento(dataIso);
     if (!janelas.length) {
