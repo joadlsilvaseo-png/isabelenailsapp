@@ -1,5 +1,5 @@
 import { indisponivelComBuffer, encaixeInteligenteDisponivel } from "./infra/backend/src/agendaBuffer.mjs";
-import { obterJanelasAtendimentoSemanal } from "./infra/backend/src/agendamentoRegras.mjs";
+import { obterJanelasAtendimentoSemanal } from "./infra/backend/src/agendamentoRegras.mjs?v=2.1.0";
 
 /**
  * Resumo visual dos limites semanais. A validação definitiva usa
