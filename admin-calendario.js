@@ -1,8 +1,8 @@
 import { auth, db } from "./firebase-config.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
 import { doc, getDoc } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
-import { obterMesesGerenciaveis, listarSlotsGerenciaveis, obterExpedienteEspecialDezembro2026 } from "./infra/backend/src/agendamentoRegras.mjs?v=2.0.4";
-import { obterRegraVisualDoIntervalo } from "./admin-calendario-regras.mjs?v=2.0.1";
+import { obterMesesGerenciaveis, listarSlotsGerenciaveis, obterExpedienteEspecialDezembro2026 } from "./infra/backend/src/agendamentoRegras.mjs?v=2.2.0";
+import { obterRegraVisualDoIntervalo } from "./admin-calendario-regras.mjs?v=2.2.0";
 import {
   alternarIntervalo,
   agruparIntervalos,
@@ -56,8 +56,8 @@ const estado = {
 const diasSemana = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 const formatoHora = (m) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 const sobrepoe = (a, b, c, d) => a < d && b > c;
-const estaOcupado = (m) => estado.ocupados.some(({ inicioMinuto, fimMinuto }) => sobrepoe(m, m + 30, inicioMinuto, fimMinuto));
-const estaFechado = (m) => estado.bloqueados.some(({ inicioMinuto, fimMinuto }) => sobrepoe(m, m + 30, inicioMinuto, fimMinuto));
+const estaOcupado = (m) => estado.ocupados.some(({ inicioMinuto, fimMinuto }) => sobrepoe(m, m + 15, inicioMinuto, fimMinuto));
+const estaFechado = (m) => estado.bloqueados.some(({ inicioMinuto, fimMinuto }) => sobrepoe(m, m + 15, inicioMinuto, fimMinuto));
 const dataFormatada = (iso, opcoes = { weekday: "long", day: "2-digit", month: "long", year: "numeric" }) =>
   new Intl.DateTimeFormat("pt-BR", { ...opcoes, timeZone: "UTC" }).format(new Date(`${iso}T12:00:00Z`));
 const horaFormatada = (minuto) => formatoHora(minuto);
@@ -128,7 +128,7 @@ function renderizarResumo() {
   }
 
   el.resumo.textContent = `${resumo.quantidadeDatas} ${resumo.quantidadeDatas === 1 ? "data" : "datas"} selecionada${resumo.quantidadeDatas === 1 ? "" : "s"}`;
-  el.contagem.textContent = `${resumo.quantidadeIntervalos} intervalos de 30 minutos no total.`;
+  el.contagem.textContent = `${resumo.quantidadeIntervalos} intervalos de 15 minutos no total.`;
   for (const item of resumo.datas) {
     const linha = document.createElement("li");
     linha.className = "calendario-resumo-data";
@@ -172,7 +172,7 @@ function criarPeriodo(titulo, slots) {
   const nome = document.createElement("strong");
   nome.textContent = titulo;
   const detalhe = document.createElement("span");
-  detalhe.textContent = "Intervalos de 30 minutos";
+  detalhe.textContent = "Intervalos de 15 minutos";
   cabecalho.append(nome, detalhe);
   const grade = document.createElement("div");
   grade.className = "agendamento-time-grid";
@@ -255,7 +255,8 @@ function renderizarHorarios() {
     return;
   }
   criarPeriodo("Manhã", slots.filter((m) => m < 720));
-  criarPeriodo("Tarde", slots.filter((m) => m >= 720));
+  criarPeriodo("Tarde", slots.filter((m) => m >= 720 && m < 1080));
+  criarPeriodo("Noite", slots.filter((m) => m >= 1080));
   const elegiveis = slots.filter((m) => !estaOcupado(m) && (estado.modo === "fechar" ? !estaFechado(m) : estaFechado(m))).length;
   el.status.textContent = estado.modo === "fechar"
     ? `${elegiveis} intervalos para fechar` : `${elegiveis} fechados`;
