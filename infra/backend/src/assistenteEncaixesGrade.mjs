@@ -1,5 +1,5 @@
 import { atendimentosConflitamComBuffer } from "./agendaBuffer.mjs";
-import { obterJanelasAtendimento, validarHorarioEspecial } from "./agendamentoRegras.mjs";
+import { obterJanelasAtendimento, validarHorarioEspecial, validarServicoDezembro2026 } from "./agendamentoRegras.mjs";
 
 const BUFFER = 15;
 const GRADE = 15;
@@ -80,6 +80,7 @@ export function analisarLacunasDoDia({
 
     const opcoes = [];
     for (const servico of servicosValidos) {
+      if (!validarServicoDezembro2026(data, servico).valido) continue;
       const horarios = [];
       const primeiro = Math.ceil(inicioLacuna / GRADE) * GRADE;
       for (let inicio = primeiro; inicio + servico.duracaoMinutos <= fimLacuna; inicio += GRADE) {

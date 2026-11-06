@@ -59,6 +59,8 @@ export async function consultarMesEncaixes({ pool, db, mes, agora = new Date() }
     .map((item) => ({
       id: item.id,
       nome: String(item.nome || "").trim(),
+      categoria: String(item.categoria || "").trim(),
+      categoriaNome: String(item.categoriaNome || "").trim(),
       duracaoMinutos: Number(item.duracao ?? item.duracaoMinutos ?? item.tempo),
     }));
 

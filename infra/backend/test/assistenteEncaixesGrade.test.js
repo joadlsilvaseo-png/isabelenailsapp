@@ -49,3 +49,30 @@ assert.throws(() => analisarLacunasDoDia({ ...base, agendamentos: [
 ] }), /sobrepostos/);
 
 console.log("Assistente de Agenda: regras de encaixe excepcional aprovadas");
+
+const expedientesDezembro = [
+  { id: "ped", nome: "Pedicure Simples", categoria: "Pedicure", duracaoMinutos: 60 },
+  { id: "man", nome: "Manicure Simples", categoria: "Manicure", duracaoMinutos: 60 },
+];
+const sextaDezembro = analisarLacunasDoDia({
+  data: "2026-12-18",
+  agendamentos: [
+    { inicioMinuto: 540, fimMinuto: 600 },
+    { inicioMinuto: 720, fimMinuto: 780 },
+  ],
+  reservas: [], bloqueios: [], servicos: expedientesDezembro, hoje: "2026-11-06",
+});
+assert.equal(sextaDezembro.length, 1);
+assert.deepEqual(sextaDezembro[0].opcoes.map(x => x.servicoId), ["man"],
+  "pedicure não pode ser sugerida durante suspensão de dezembro");
+
+const vespera = analisarLacunasDoDia({
+  data: "2026-12-24",
+  agendamentos: [
+    { inicioMinuto: 480, fimMinuto: 540 },
+    { inicioMinuto: 660, fimMinuto: 720 },
+  ],
+  reservas: [], bloqueios: [], servicos: expedientesDezembro, hoje: "2026-11-06",
+});
+assert.deepEqual(vespera[0]?.opcoes.map(x => x.servicoId), ["man"],
+  "24/12 permite somente os serviços autorizados");
