@@ -169,6 +169,7 @@ function criarFixture({ isenta = true, reservas = [], documentos = {}, falharCom
               inicio < reserva.fim + 15 && fim > reserva.inicio - 15 &&
               !(temExcecao && reserva.estado === "confirmada" &&
                 (reserva.clienteUid || reserva.cliente_uid) === uid &&
+                Boolean(reserva.agendamentoId || reserva.agendamento_id) &&
                 (reserva.fim === inicio || reserva.inicio === fim)));
             return { rows: encontrados, rowCount: encontrados.length };
           }
