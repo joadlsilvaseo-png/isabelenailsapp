@@ -1,4 +1,4 @@
-import { indisponivelComBuffer, encaixeInteligenteDisponivel } from "./infra/backend/src/agendaBuffer.mjs";
+import { indisponivelComBufferSequencial, encaixeInteligenteDisponivel } from "./infra/backend/src/agendaBuffer.mjs";
 import { obterJanelasAtendimentoSemanal } from "./infra/backend/src/agendamentoRegras.mjs?v=2.1.0";
 
 /**
@@ -34,7 +34,8 @@ function validarIntervalos(intervalos) {
     if (tipo !== undefined && !["bloqueio", "reserva", "agendamento"].includes(tipo)) {
       throw new Error("A disponibilidade retornou um tipo inválido.");
     }
-    return { inicioMinuto, fimMinuto, ...(tipo ? { tipo } : {}) };
+    return { inicioMinuto, fimMinuto, ...(tipo ? { tipo } : {}),
+      ...(intervalo.sequencialMesmaCliente === true ? { sequencialMesmaCliente: true } : {}) };
   });
 }
 
@@ -54,7 +55,7 @@ export async function consultarIntervalosDisponibilidade({
 }
 
 export function intervaloSobrepoeDisponibilidade(inicio, fim, intervalos) {
-  return indisponivelComBuffer(inicio, fim, intervalos);
+  return indisponivelComBufferSequencial(inicio, fim, intervalos);
 }
 
 /** Horários adicionais (:15/:45) apenas para lacunas reais e serviços que cabem. */
