@@ -212,9 +212,9 @@ export function validarHorarioEspecial(dataIso, horario, duracao, opcoes = {}) {
   return validarHorarioEspecialSemanal(partes.data.getUTCDay(), inicioMinuto, duracaoMinutos);
 }
 
-// Horários de 30 minutos que a administradora pode fechar/reabrir.
+// Horários de 15 minutos que a administradora pode fechar/reabrir.
 // Engloba também partes de serviços já iniciados: na quarta, por exemplo,
-// fechar 09:30 bloqueia um atendimento iniciado às 09:00 que avance até 10:00.
+// fechar 09:15 bloqueia um atendimento iniciado às 09:00 que avance até 10:00.
 // NÃO muda os horários de início disponíveis para as clientes.
 export function listarSlotsGerenciaveis(dataIso, agora = new Date()) {
   const validacao = validarDataGerenciavel(dataIso, agora);
@@ -233,7 +233,7 @@ export function listarSlotsGerenciaveis(dataIso, agora = new Date()) {
   const slots = [];
   const periodos = especial ? [[especial.inicioMinuto, especial.encerramentoMinuto]] : (limites[dia] || []);
   for (const [inicio, fim] of periodos) {
-    for (let minuto = inicio; minuto + 30 <= fim; minuto += 30) {
+    for (let minuto = inicio; minuto + 15 <= fim; minuto += 15) {
       // A administradora pode fechar qualquer intervalo dentro da
       // janela de atendimento, inclusive 13h30–14h quando houver expediente.
       slots.push(minuto);
