@@ -222,7 +222,7 @@ export async function criarAgendamentoIsento({ pool, db, uid, dados, dependencie
     if (periodo.inicioMinuto % 30 === 15 && !(await verificarEncaixeNoBanco({
       conexao, db: firestore, data,
       inicio: periodo.inicioMinuto, fim: periodo.fimMinuto,
-      excluirAgendamentoId: agendamentoId,
+      excluirAgendamentoId: agendamentoId, clienteUid: uid,
     }))) {
       throw new ErroIsencaoPix(409, "Encaixe de 15 minutos indisponível", "ENCAIXE_INDISPONIVEL");
     }
@@ -246,8 +246,12 @@ export async function criarAgendamentoIsento({ pool, db, uid, dados, dependencie
         AND int4range(inicio_minuto - ${BUFFER_ENTRE_ATENDIMENTOS_MINUTOS},
                        fim_minuto + ${BUFFER_ENTRE_ATENDIMENTOS_MINUTOS}, '[)')
             && int4range($2, $3, '[)')
+        AND NOT (
+          cliente_uid = $4
+          AND (fim_minuto = $2::integer OR inicio_minuto = $3::integer)
+        )
       LIMIT 1
-    `, [data, periodo.inicioMinuto, periodo.fimMinuto]);
+    `, [data, periodo.inicioMinuto, periodo.fimMinuto, uid]);
     if (reservas.rowCount > 0) {
       throw new ErroIsencaoPix(409, "Horário temporariamente reservado para pagamento PIX", "HORARIO_RESERVADO_PIX");
     }
@@ -281,6 +285,8 @@ export async function criarAgendamentoIsento({ pool, db, uid, dados, dependencie
         doDia.docs.map((documento) => documento.data()),
         periodo.inicioMinuto,
         periodo.fimMinuto,
+        BUFFER_ENTRE_ATENDIMENTOS_MINUTOS,
+        uid,
       );
       if (conflito) throw new ErroIsencaoPix(409, "Horário ocupado por outro agendamento", "HORARIO_OCUPADO");
 

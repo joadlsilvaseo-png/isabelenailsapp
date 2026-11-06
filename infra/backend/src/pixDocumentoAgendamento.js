@@ -1,4 +1,4 @@
-import { atendimentosConflitamComBuffer, BUFFER_ENTRE_ATENDIMENTOS_MINUTOS } from "./agendaBuffer.mjs";
+import { conflitaComAtendimentoDaCliente, BUFFER_ENTRE_ATENDIMENTOS_MINUTOS } from "./agendaBuffer.mjs";
 
 const STATUS_OCUPADOS = new Set([
   "agendado", "reagendado", "confirmado"
@@ -16,7 +16,7 @@ export function obterDuracaoAgendamentoPix(valor) {
 }
 
 export function encontrarConflitoAgendamentoPix(
-  registros, inicio, fim, buffer = BUFFER_ENTRE_ATENDIMENTOS_MINUTOS,
+  registros, inicio, fim, buffer = BUFFER_ENTRE_ATENDIMENTOS_MINUTOS, clienteUid = null,
 ) {
   for (const registro of registros) {
     if (!STATUS_OCUPADOS.has(registro.status)) continue;
@@ -31,7 +31,8 @@ export function encontrarConflitoAgendamentoPix(
     const comeco = h * 60 + m;
     const duracao = obterDuracaoAgendamentoPix(registro.duracao);
 
-    if (atendimentosConflitamComBuffer(inicio, fim, comeco, comeco + duracao, buffer)) {
+    if (conflitaComAtendimentoDaCliente(inicio, fim, comeco, comeco + duracao,
+      typeof clienteUid === "string" && clienteUid.length > 0 && registro.clienteId === clienteUid, buffer)) {
       return true;
     }
   }

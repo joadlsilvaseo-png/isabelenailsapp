@@ -10,7 +10,7 @@ const HORARIO = /^([01]\d|2[0-3]):[0-5]\d$/;
  * Consulta PG + Firestore + bloqueios manuais, e falha fechada.
  */
 export async function verificarEncaixeNoBanco({
-  conexao, db, data, inicio, fim, excluirAgendamentoId = null, agora = new Date(),
+  conexao, db, data, inicio, fim, excluirAgendamentoId = null, clienteUid = null, agora = new Date(),
 }) {
   if (!Number.isInteger(inicio) || !Number.isInteger(fim) || inicio % 15 !== 0 || inicio >= fim) return false;
   // :15 e :45 deixam de exigir dois agendamentos vizinhos.
@@ -18,12 +18,12 @@ export async function verificarEncaixeNoBanco({
   if (!db || !conexao || typeof data !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(data)) return false;
   const [resultado, documentos] = await Promise.all([
     conexao.query(`
-      SELECT inicio_minuto, fim_minuto, 'reserva'::text AS tipo
+      SELECT inicio_minuto, fim_minuto, 'reserva'::text AS tipo, cliente_uid
       FROM public.pix_reservas
       WHERE data_servico = $1 AND estado IN ('reservada', 'confirmada')
         AND ($2::text IS NULL OR agendamento_id IS DISTINCT FROM $2)
       UNION ALL
-      SELECT inicio_minuto, fim_minuto, 'bloqueio'::text AS tipo
+      SELECT inicio_minuto, fim_minuto, 'bloqueio'::text AS tipo, NULL::text AS cliente_uid
       FROM public.agenda_bloqueios WHERE data_servico = $1
     `, [data, excluirAgendamentoId]),
     db.collection("agendamentos").where("data", "==", data).get(),
@@ -32,6 +32,7 @@ export async function verificarEncaixeNoBanco({
     inicioMinuto: Number(item.inicio_minuto),
     fimMinuto: Number(item.fim_minuto),
     tipo: item.tipo === "bloqueio" ? "bloqueio" : "reserva",
+    mesmaCliente: typeof clienteUid === "string" && clienteUid.length > 0 && item.cliente_uid === clienteUid,
   }));
   for (const doc of documentos.docs) {
     if (doc.id === excluirAgendamentoId) continue;
@@ -46,6 +47,7 @@ export async function verificarEncaixeNoBanco({
       inicioMinuto: comeco,
       fimMinuto: comeco + obterDuracaoAgendamentoPix(item.duracao),
       tipo: "agendamento",
+      mesmaCliente: typeof clienteUid === "string" && clienteUid.length > 0 && item.clienteId === clienteUid,
     });
   }
   return !indisponivelComBuffer(inicio, fim, intervalos);

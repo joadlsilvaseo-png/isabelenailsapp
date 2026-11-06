@@ -22,11 +22,13 @@ function criarPool(reservas) {
     chamadas,
     async query(sql, params) {
       chamadas.push({ sql, params });
-      const [data, agendamentoId, clienteUidExcluido] = params;
+      const [data, agendamentoId, clienteUidExcluido, uidAutenticado] = params;
       const rows = reservas.filter((reserva) => reserva.data === data &&
         ["reservada", "confirmada"].includes(reserva.estado) &&
         (agendamentoId === null || reserva.agendamentoId !== agendamentoId || reserva.clienteUid !== clienteUidExcluido));
-      return { rows: rows.map(({ inicio, fim }) => ({ inicio_minuto: inicio, fim_minuto: fim })) };
+      return { rows: rows.map(({ inicio, fim, clienteUid }) => ({
+        inicio_minuto: inicio, fim_minuto: fim, mesma_cliente: clienteUid === uidAutenticado,
+      })) };
     },
   };
 }
@@ -103,7 +105,7 @@ test("somente exclui reserva do próprio agendamento autorizado ao reagendar", a
   );
   assert.equal(resposta.status, 200);
   assert.deepEqual(resposta.body.intervalos, [{ inicioMinuto: 840, fimMinuto: 900, tipo: "reserva" }]);
-  assert.deepEqual(pool.chamadas[0].params, ["2026-11-05", "meu-agendamento", "cliente-1"]);
+  assert.deepEqual(pool.chamadas[0].params, ["2026-11-05", "meu-agendamento", "cliente-1", "cliente-1"]);
 });
 
 test("admin autorizado exclui somente a reserva original da cliente no reagendamento", async () => {
@@ -135,7 +137,7 @@ test("admin autorizado exclui somente a reserva original da cliente no reagendam
 
   assert.equal(resposta.status, 200);
   assert.deepEqual(resposta.body.intervalos, [{ inicioMinuto: 840, fimMinuto: 900, tipo: "reserva" }]);
-  assert.deepEqual(pool.chamadas[0].params, ["2026-11-05", "agendamento-cliente", "cliente-proprietaria"]);
+  assert.deepEqual(pool.chamadas[0].params, ["2026-11-05", "agendamento-cliente", "cliente-proprietaria", "admin-1"]);
 });
 
 test("agendamento PIX que exige conciliação não pode ter sua reserva excluída", async () => {
@@ -218,4 +220,32 @@ test("consulta autenticada libera dezembro aberto e rejeita dia fechado sem cons
   assert.equal(fechado.status, 400);
   assert.equal(fechado.body.erro, "Dia sem atendimento");
   assert.equal(pool.chamadas.length, 1);
+});
+
+test("somente o dono recebe indicador de atendimento consecutivo sem expor o UID", async () => {
+  const pool = criarPool([
+    { data: "2026-11-05", inicio: 960, fim: 1020,
+      estado: "reservada", clienteUid: "cliente-1" },
+    { data: "2026-11-05", inicio: 1140, fim: 1200,
+      estado: "confirmada", clienteUid: "cliente-2" },
+  ]);
+  const minha = criarResposta();
+  await consultarDisponibilidadePix(
+    { method: "GET", url: "/pix/disponibilidade?data=2026-11-05" },
+    minha, pool, { verificarUsuario: async () => "cliente-1" },
+  );
+  assert.equal(minha.status, 200);
+  assert.deepEqual(minha.body.intervalos, [
+    { inicioMinuto: 960, fimMinuto: 1020, tipo: "reserva", mesmaCliente: true },
+    { inicioMinuto: 1140, fimMinuto: 1200, tipo: "reserva" },
+  ]);
+  const outra = criarResposta();
+  await consultarDisponibilidadePix(
+    { method: "GET", url: "/pix/disponibilidade?data=2026-11-05" },
+    outra, pool, { verificarUsuario: async () => "cliente-2" },
+  );
+  assert.equal(outra.status, 200);
+  assert.equal(outra.body.intervalos[0].mesmaCliente, undefined);
+  assert.equal(outra.body.intervalos[1].mesmaCliente, true);
+  assert.doesNotMatch(JSON.stringify(minha.body), /cliente-1|cliente-2/);
 });
