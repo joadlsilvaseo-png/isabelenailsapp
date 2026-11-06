@@ -339,6 +339,7 @@ export async function criarReservaPix(req, res, pool) {
           AND fim_minuto > ($2::integer - ${BUFFER_ENTRE_ATENDIMENTOS_MINUTOS})
           AND NOT (
             estado = 'confirmada' AND cliente_uid = $4::text
+            AND agendamento_id IS NOT NULL
             AND (fim_minuto = $2::integer OR inicio_minuto = $3::integer)
           )
         LIMIT 1

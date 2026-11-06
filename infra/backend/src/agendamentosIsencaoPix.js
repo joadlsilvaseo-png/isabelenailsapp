@@ -249,6 +249,7 @@ export async function criarAgendamentoIsento({ pool, db, uid, dados, dependencie
             && int4range($2, $3, '[)')
         AND NOT (
           estado = 'confirmada' AND cliente_uid = $4::text
+            AND agendamento_id IS NOT NULL
           AND (fim_minuto = $2::integer OR inicio_minuto = $3::integer)
         )
       LIMIT 1

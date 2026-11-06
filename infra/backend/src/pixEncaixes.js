@@ -20,13 +20,14 @@ export async function verificarEncaixeNoBanco({
   const [resultado, documentos] = await Promise.all([
     conexao.query(`
       SELECT inicio_minuto, fim_minuto, 'reserva'::text AS tipo,
-        cliente_uid, estado
+        cliente_uid, estado, agendamento_id
       FROM public.pix_reservas
       WHERE data_servico = $1 AND estado IN ('reservada', 'confirmada')
         AND ($2::text IS NULL OR agendamento_id IS DISTINCT FROM $2)
       UNION ALL
       SELECT inicio_minuto, fim_minuto, 'bloqueio'::text AS tipo,
-        NULL::text AS cliente_uid, NULL::text AS estado
+        NULL::text AS cliente_uid, NULL::text AS estado,
+        NULL::text AS agendamento_id
       FROM public.agenda_bloqueios WHERE data_servico = $1
     `, [data, excluirAgendamentoId]),
     db.collection("agendamentos").where("data", "==", data).get(),
@@ -35,7 +36,8 @@ export async function verificarEncaixeNoBanco({
     inicioMinuto: Number(item.inicio_minuto),
     fimMinuto: Number(item.fim_minuto),
     tipo: item.tipo === "bloqueio" ? "bloqueio" : "reserva",
-    sequencialMesmaCliente: Boolean(clienteUid && item.cliente_uid === clienteUid && item.estado === "confirmada"),
+    sequencialMesmaCliente: Boolean(clienteUid && item.cliente_uid === clienteUid &&
+      item.estado === "confirmada" && item.agendamento_id),
   }));
   for (const doc of documentos.docs) {
     if (doc.id === excluirAgendamentoId) continue;

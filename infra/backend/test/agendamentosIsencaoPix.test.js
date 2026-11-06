@@ -433,3 +433,14 @@ test("isenta não permite sobreposição mesmo entre serviços da mesma cliente"
     dependencies: f.dependencies,
   }), (erro) => ["HORARIO_RESERVADO_PIX", "HORARIO_OCUPADO", "ENCAIXE_INDISPONIVEL"].includes(erro.codigo));
 });
+
+test("reserva sem agendamento vinculado não concede exceção mesmo se estiver confirmada", async () => {
+  const f = criarFixture({ reservas: [{
+    data: DATA, inicio: 840, fim: 900, estado: "confirmada",
+    clienteUid: UID, agendamentoId: null,
+  }] });
+  await assert.rejects(criarAgendamentoIsento({
+    pool: f.pool, db: f.firestore, uid: UID, dados: payload(CHAVE, "15:00"),
+    dependencies: f.dependencies,
+  }), (erro) => erro.codigo === "HORARIO_RESERVADO_PIX");
+});
