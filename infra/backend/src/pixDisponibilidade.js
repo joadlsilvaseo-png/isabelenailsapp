@@ -1,5 +1,5 @@
-import { validarDataNaJanela, validarHorarioEspecial, obterExpedienteEspecialDezembro2026 } from "./agendamentoRegras.mjs";
-import { atendimentosConflitamComBuffer, encaixeInteligenteDisponivel } from "./agendaBuffer.mjs";
+import { validarDataNaJanela, validarHorarioEspecial, obterExpedienteEspecialDezembro2026, PASSO_GRADE_AGENDAMENTO_MINUTOS } from "./agendamentoRegras.mjs";
+import { atendimentosConflitamComBuffer, indisponivelComBuffer } from "./agendaBuffer.mjs";
 function horarioInvalido(motivo) {
   return { valido: false, motivo };
 }
@@ -41,11 +41,9 @@ export function validarHorarioPix(dataIso, horario, duracao, agora = new Date(),
 
   const inicio = horas * 60 + minutos;
   const fim = inicio + duracao;
-  const encaixe = inicio % 30 === 15;
-  // A verificação preliminar é limitada ao expediente. A reserva só pode
-  // confirmar um encaixe após ler a ocupação real dentro do lock da data.
-  const podeTestarEncaixe = opcoes.encaixePendente === true || Array.isArray(opcoes.intervalosEncaixe);
-  const gradeValida = inicio % 30 === 0 || (encaixe && podeTestarEncaixe);
+  // Todos os inícios válidos pertencem à mesma grade de 15 minutos.
+  // A ocupação é revalidada sob lock nos fluxos de PIX e reagendamento.
+  const gradeValida = inicio % PASSO_GRADE_AGENDAMENTO_MINUTOS === 0;
   const diaSemana = data.getUTCDay();
 
   const especial = obterExpedienteEspecialDezembro2026(dataIso);
@@ -61,8 +59,7 @@ export function validarHorarioPix(dataIso, horario, duracao, agora = new Date(),
   // Encerramento é a hora final do serviço, não seu último horário de início.
   const fechamento = especial?.encerramentoMinuto
     ?? (sabado ? 1110 : horarioEstendido ? 1260 : 1200);
-  const ultimoInicio = especial ? fechamento - 30
-    : sabado ? 1020 : horarioEstendido ? 1230 : 1080;
+  const ultimoInicio = fechamento - 30; // Duração mínima comercial de 30 min.
   if (inicio < abertura || inicio > ultimoInicio || !gradeValida || fim > fechamento) {
     return horarioInvalido("Fora do horario permitido");
   }
@@ -70,27 +67,18 @@ export function validarHorarioPix(dataIso, horario, duracao, agora = new Date(),
   // Sem pausa fixa: intervalos manuais, reservas e agendamentos são
   // revalidados pelas rotas de disponibilidade e confirmação.
 
-  if (!validarHorarioEspecial(dataIso, horario, duracao, { permitirEncaixe: encaixe && podeTestarEncaixe })) {
-    return horarioInvalido(
-      diaSemana === 2 ? "Horario indisponivel na terca"
-        : diaSemana === 3 ? "Horario indisponivel na quarta"
-        : "Horario ou duracao indisponivel no sabado"
-    );
+  if (!validarHorarioEspecial(dataIso, horario, duracao)) {
+    return horarioInvalido("Horário fora da janela de atendimento da data");
   }
 
-  if (encaixe && Array.isArray(opcoes.intervalosEncaixe)) {
-    const inicioPadraoValido = (candidato) => {
-      const h = String(Math.floor(candidato / 60)).padStart(2, "0");
-      const m = String(candidato % 60).padStart(2, "0");
-      return candidato >= abertura && candidato <= ultimoInicio &&
-        candidato + duracao <= fechamento &&
-        validarHorarioEspecial(dataIso, h + ":" + m, duracao);
-    };
-    if (!encaixeInteligenteDisponivel(inicio, fim, opcoes.intervalosEncaixe, inicioPadraoValido)) {
-      return horarioInvalido("Encaixe de 15 minutos indisponível");
-    }
+  // Opção de compatibilidade de testes e pré-validação: nunca criar
+  // privilégio especial para :15/:45. Bloqueios são literais; reservas
+  // e atendimentos exigem 15 min antes/depois.
+  if (Array.isArray(opcoes.intervalosEncaixe) &&
+      indisponivelComBuffer(inicio, fim, opcoes.intervalosEncaixe)) {
+    return horarioInvalido("Horário indisponível ou sem intervalo de segurança");
   }
-  return { valido: true, inicioMinuto: inicio, fimMinuto: fim, encaixeInteligente: encaixe };
+  return { valido: true, inicioMinuto: inicio, fimMinuto: fim, encaixeInteligente: false };
 }
 
 export function possuiSobreposicao(inicio, fim, intervalos, buffer = 0) {
