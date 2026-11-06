@@ -34,7 +34,7 @@ function validarIntervalos(intervalos) {
     if (tipo !== undefined && !["bloqueio", "reserva", "agendamento"].includes(tipo)) {
       throw new Error("A disponibilidade retornou um tipo inválido.");
     }
-    return { inicioMinuto, fimMinuto, ...(tipo ? { tipo } : {}) };
+    return { inicioMinuto, fimMinuto, ...(tipo ? { tipo } : {}), mesmaCliente: intervalo?.mesmaCliente === true };
   });
 }
 

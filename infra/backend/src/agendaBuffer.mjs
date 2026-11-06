@@ -15,11 +15,25 @@ export function atendimentosConflitamComBuffer(
   return inicio < fimExistente + buffer && fim > inicioExistente - buffer;
 }
 
+/**
+ * O buffer é dispensado SOMENTE quando dois serviços são exatamente
+ * consecutivos e pertencem ao mesmo UID autenticado. Jamais libera
+ * sobreposição, atrasos ou intervalos próximos de clientes diferentes.
+ */
+export function conflitaComAtendimentoDaCliente(
+  inicio, fim, inicioExistente, fimExistente, mesmaCliente = false,
+  buffer = BUFFER_ENTRE_ATENDIMENTOS_MINUTOS,
+) {
+  if (!atendimentosConflitamComBuffer(inicio, fim, inicioExistente, fimExistente, buffer)) return false;
+  return !(mesmaCliente === true &&
+    (inicio === fimExistente || fim === inicioExistente));
+}
+
 export function indisponivelComBuffer(inicio, fim, intervalos) {
   if (!Array.isArray(intervalos)) throw new TypeError("Lista de intervalos inválida");
   return intervalos.some((intervalo) => intervalo.tipo === "bloqueio"
     ? inicio < intervalo.fimMinuto && fim > intervalo.inicioMinuto
-    : atendimentosConflitamComBuffer(inicio, fim, intervalo.inicioMinuto, intervalo.fimMinuto));
+    : conflitaComAtendimentoDaCliente(inicio, fim, intervalo.inicioMinuto, intervalo.fimMinuto, intervalo.mesmaCliente === true));
 }
 
 /**

@@ -337,8 +337,12 @@ export async function criarReservaPix(req, res, pool) {
         WHERE data_servico = $1 AND estado IN ('reservada', 'confirmada')
           AND inicio_minuto < ($3::integer + ${BUFFER_ENTRE_ATENDIMENTOS_MINUTOS})
           AND fim_minuto > ($2::integer - ${BUFFER_ENTRE_ATENDIMENTOS_MINUTOS})
+          AND NOT (
+            cliente_uid = $4
+            AND (fim_minuto = $2::integer OR inicio_minuto = $3::integer)
+          )
         LIMIT 1
-      `, [data, periodo.inicioMinuto, periodo.fimMinuto]);
+      `, [data, periodo.inicioMinuto, periodo.fimMinuto, uid]);
       if (reservaProxima.rowCount) {
         throw new ErroReserva(409, "É necessário um intervalo de 15 minutos entre atendimentos.");
       }
@@ -346,7 +350,8 @@ export async function criarReservaPix(req, res, pool) {
       const conflito = await verificarConflitoFirestore(
         data,
         periodo.inicioMinuto,
-        periodo.fimMinuto
+        periodo.fimMinuto,
+        uid
       );
 
       if (conflito.ocupado) {
@@ -357,7 +362,7 @@ export async function criarReservaPix(req, res, pool) {
       }
       if (periodo.inicioMinuto % 30 === 15 && !(await verificarEncaixeNoBanco({
         conexao, db: firestore(), data,
-        inicio: periodo.inicioMinuto, fim: periodo.fimMinuto,
+        inicio: periodo.inicioMinuto, fim: periodo.fimMinuto, clienteUid: uid,
       }))) {
         throw new ErroReserva(409, "Encaixe de 15 minutos não está mais disponível");
       }
