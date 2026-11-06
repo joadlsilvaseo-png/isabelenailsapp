@@ -63,7 +63,7 @@ export async function consultarMesEncaixes({ pool, db, mes, agora = new Date() }
     }));
 
   const agendamentosPorDia = new Map();
-  const idsAtivos = new Set();
+  const periodosPorId = new Map();
   for (const doc of documentos.docs) {
     const item = doc.data();
     if (!ATIVOS.has(String(item.status || "").toLowerCase())) continue;
@@ -77,7 +77,7 @@ export async function consultarMesEncaixes({ pool, db, mes, agora = new Date() }
     const lista = agendamentosPorDia.get(data) || [];
     lista.push({ inicioMinuto, fimMinuto: inicioMinuto + duracao });
     agendamentosPorDia.set(data, lista);
-    idsAtivos.add(doc.id);
+    periodosPorId.set(doc.id, { data, inicioMinuto, fimMinuto: inicioMinuto + duracao });
   }
 
   const reservasPorDia = new Map();
@@ -85,8 +85,13 @@ export async function consultarMesEncaixes({ pool, db, mes, agora = new Date() }
   for (const item of banco.rows) {
     const destino = item.tipo === "bloqueio" ? bloqueiosPorDia : reservasPorDia;
     // Reserva confirmada já representada pelo agendamento do Firestore.
+    const correspondente = periodosPorId.get(item.agendamento_id);
+    // Só deduplicar se Firestore e PostgreSQL concordarem sobre data E período.
+    // Reagendamentos PIX em andamento podem manter uma reserva antiga.
     if (item.tipo === "reserva" && item.estado === "confirmada" &&
-        item.agendamento_id && idsAtivos.has(item.agendamento_id)) continue;
+        correspondente?.data === item.data &&
+        correspondente.inicioMinuto === Number(item.inicio_minuto) &&
+        correspondente.fimMinuto === Number(item.fim_minuto)) continue;
     const dados = {
       inicioMinuto: Number(item.inicio_minuto),
       fimMinuto: Number(item.fim_minuto),
