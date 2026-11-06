@@ -1,6 +1,5 @@
-import { encaixeInteligenteDisponivel } from "./agendaBuffer.mjs";
+import { indisponivelComBuffer } from "./agendaBuffer.mjs";
 import { obterDuracaoAgendamentoPix } from "./pixDocumentoAgendamento.js";
-import { validarHorarioPix } from "./pixDisponibilidade.js";
 
 const STATUS_OCUPADOS = new Set(["agendado", "reagendado", "confirmado"]);
 const HORARIO = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -13,7 +12,9 @@ const HORARIO = /^([01]\d|2[0-3]):[0-5]\d$/;
 export async function verificarEncaixeNoBanco({
   conexao, db, data, inicio, fim, excluirAgendamentoId = null, agora = new Date(),
 }) {
-  if (inicio % 30 !== 15) return true;
+  if (!Number.isInteger(inicio) || !Number.isInteger(fim) || inicio % 15 !== 0 || inicio >= fim) return false;
+  // :15 e :45 deixam de exigir dois agendamentos vizinhos.
+  // Continuamos fazendo a validação redundante no lock para proteger o PIX.
   if (!db || !conexao || typeof data !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(data)) return false;
   const [resultado, documentos] = await Promise.all([
     conexao.query(`
@@ -47,11 +48,5 @@ export async function verificarEncaixeNoBanco({
       tipo: "agendamento",
     });
   }
-  const duracao = fim - inicio;
-  const validoPadrao = (candidato) => {
-    const horario = String(Math.floor(candidato / 60)).padStart(2, "0") + ":" +
-      String(candidato % 60).padStart(2, "0");
-    return validarHorarioPix(data, horario, duracao, agora).valido;
-  };
-  return encaixeInteligenteDisponivel(inicio, fim, intervalos, validoPadrao);
+  return !indisponivelComBuffer(inicio, fim, intervalos);
 }
