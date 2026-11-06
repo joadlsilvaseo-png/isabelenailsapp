@@ -112,6 +112,11 @@ jobs:
         run: node --test ../../scripts/admin-clientes-listagem.test.mjs
       - name: Testar filtros e avatar da agenda administrativa
         run: node --test ../../scripts/admin-agenda-filtros-foto.test.mjs
+      - name: Validar interface preventiva do Assistente de Agenda
+        run: |
+          node --check ../../admin-assistente.js
+          node --check ../../admin-bottom-nav.js
+          node --test ../../scripts/admin-assistente-ui.test.mjs
       - name: Testar card de manutenção e CTA do Meu Perfil
         run: node --test ../../scripts/perfil-manutencao.test.mjs
       - name: Validar sintaxe dos scripts operacionais (sem executar)

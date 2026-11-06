@@ -22,6 +22,7 @@ test("links e acesso administrativo preservados",async()=>{
   assert.match(j,/admin-calendario\.html\?data=/);
   assert.match(j,/encodeURIComponent\(item\.data\)/);
   assert.match(j,/perfil\.data\(\)\.role!=="admin"/);
+  assert.match(j,/document\.body\.dataset\.accessState="loading"/);
   assert.match(n,/paginaAtual !== "admin-assistente"/);
   assert.match(c,/body\[data-page="admin-assistente"\]\[data-access-state="allowed"\]/);
   for (const id of ["assistente-acesso","assistente-conteudo","assistente-dialogo","assistente-form","assistente-pergunta","assistente-enviar"]) assert.ok(h.includes('id="'+id+'"'),id);

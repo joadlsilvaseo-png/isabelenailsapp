@@ -181,6 +181,7 @@ document.querySelectorAll("[data-consulta]").forEach((botao)=>{
 });
 onAuthStateChanged(auth,async(user)=>{
   autorizado=false;
+  document.body.dataset.accessState="loading";
   conteudo.hidden=true;
   acesso.hidden=false;
   if(!user){acesso.textContent="Entre na sua conta para acessar o Assistente de Agenda.";return}
