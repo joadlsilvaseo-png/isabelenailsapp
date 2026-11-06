@@ -71,7 +71,7 @@ test("PIX, isenção, reagendamento pago e Alterar Serviço validam buffer no ba
   ]) {
     assert.match(ler(path), /BUFFER_ENTRE_ATENDIMENTOS_MINUTOS/);
   }
-  assert.match(ler("pixAgendaFirestore.js"), /BUFFER_ENTRE_ATENDIMENTOS_MINUTOS/);
+  assert.match(ler("pixAgendaFirestore.js"), /indisponivelComBuffer/);
   assert.match(ler("pixConfirmacaoFirestore.js"), /reserva\.fim_minuto,\s*0,/);
   assert.match(ler("pixDisponibilidadeApi.js"), /'bloqueio'::text AS tipo/);
 });

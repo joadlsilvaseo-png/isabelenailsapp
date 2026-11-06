@@ -118,7 +118,7 @@ export async function consultarDisponibilidadePix(req, res, pool, dependencies =
       inicioMinuto: Number(linha.inicio_minuto),
       fimMinuto: Number(linha.fim_minuto),
       tipo: linha.tipo === "bloqueio" ? "bloqueio" : "reserva",
-      mesmaCliente: linha.mesma_cliente === true,
+      ...(linha.mesma_cliente === true ? { mesmaCliente: true } : {}),
     }));
     if (intervalos.some(({ inicioMinuto, fimMinuto }) =>
       !Number.isInteger(inicioMinuto) || !Number.isInteger(fimMinuto) ||
