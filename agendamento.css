@@ -966,3 +966,60 @@ button {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+
+/* ============================================================
+   GRADE NATIVA DE 15 MIN — CARROSSEL POR PERÍODO
+   Isolado da grade administrativa (.agendamento-time-grid).
+   ============================================================ */
+.agendamento-times { gap: 13px; }
+.agendamento-period {
+  padding: 14px 12px 11px;
+  border: 1px solid rgba(89,28,49,.11);
+  border-radius: 19px;
+  background: rgba(255,250,252,.97);
+  box-shadow: 0 7px 18px rgba(89,28,49,.045);
+}
+.agendamento-period-heading { margin-bottom: 12px; }
+.agendamento-period-heading strong { font-size: 14px; font-weight: 750; }
+.agendamento-period-heading span { font-size: 10px; font-weight: 500; text-align: right; }
+.agendamento-carousel { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.agendamento-time-carousel {
+  flex: 1; min-width: 0; display: flex; gap: 8px; align-items: center;
+  overflow-x: auto; overscroll-behavior-inline: contain;
+  scroll-snap-type: x proximity; scroll-padding-inline: 4px;
+  scrollbar-width: none; -webkit-overflow-scrolling: touch;
+  padding: 6px 4px 10px;
+}
+.agendamento-time-carousel::-webkit-scrollbar { display: none; }
+.agendamento-time-carousel .agendamento-time {
+  flex: 0 0 83px; min-width: 83px; min-height: 49px;
+  border-radius: 13px; font-size: 13px; font-weight: 650;
+  scroll-snap-align: start; white-space: nowrap;
+}
+.agendamento-carousel-arrow {
+  flex: 0 0 26px; width: 26px; min-height: 43px;
+  border: 1px solid rgba(124,51,76,.17); border-radius: 10px;
+  background: #fff9fb; color: var(--booking-primary);
+  font-size: 26px; line-height: 1; display: grid; place-items: center;
+}
+.agendamento-carousel-arrow:disabled { opacity: .28; cursor: default; }
+.agendamento-carousel-arrow:not(:disabled):hover { background: #fceaf1; }
+.agendamento-carousel-hint {
+  font-size: 10px; text-align: center; margin: 5px 0 0;
+  color: var(--booking-text-muted); letter-spacing: .01em;
+}
+.agendamento-time-info {
+  background: #fce7ef; border: 1px solid #f3d6e1;
+  border-radius: 11px; padding: 11px 13px;
+  color: #79314f; font-size: 11px; line-height: 1.4;
+  margin: 12px 0 16px;
+}
+@media (max-width: 390px) {
+  .agendamento-period { padding-inline: 8px; }
+  .agendamento-time-carousel .agendamento-time { flex-basis: 77px; min-width: 77px; font-size: 12px; }
+  .agendamento-carousel-arrow { flex-basis: 24px; width: 24px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .agendamento-time-carousel { scroll-behavior: auto; }
+}

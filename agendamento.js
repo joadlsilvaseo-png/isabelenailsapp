@@ -1,8 +1,8 @@
 import { auth, db } from "./firebase-config.js";
 import { obterMesPredominante } from "./agendamentoMes.mjs?v=1.0.0";
 import { consultarDisponibilidadePix, reagendarAgendamentoApi, consultarReagendamentoPixConfigApi, consultarReagendamentoPixPagoApi } from "./agendamentosApi.js";
-import { consultarIntervalosDisponibilidade, intervaloSobrepoeDisponibilidade, obterLimitesAtendimentoSemanal, listarIniciosEncaixe } from "./agendamentoDisponibilidade.js?v=1.0.2";
-import { obterJanelaAgendamento, validarDataNaJanela, validarHorarioEspecial, obterExpedienteEspecialDezembro2026, validarServicoDezembro2026, AGENDA_DEZEMBRO_2026_ABERTA } from "./infra/backend/src/agendamentoRegras.mjs?v=2.0.6";
+import { consultarIntervalosDisponibilidade, intervaloSobrepoeDisponibilidade, } from "./agendamentoDisponibilidade.js?v=1.0.2";
+import { obterJanelaAgendamento, validarDataNaJanela, validarHorarioEspecial, obterExpedienteEspecialDezembro2026, validarServicoDezembro2026, obterJanelasAtendimento, AGENDA_DEZEMBRO_2026_ABERTA } from "./infra/backend/src/agendamentoRegras.mjs?v=2.1.0";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
 import {
   collection,
@@ -474,40 +474,6 @@ async function carregarServicoSelecionado(serviceId) {
     return null;
   }
 }
-function obterIntervalosBloqueadosFixos(dataIso) {
-  if (!dataIso) {
-    return [];
-  }
-
-  const [ano, mes, dia] = String(dataIso).split("-").map(Number);
-
-  const data = new Date(ano, mes - 1, dia, 12, 0, 0);
-
-  const diaSemana = data.getDay();
-
-  /*
-   * 0 = Domingo
-   * 1 = Segunda
-   * 2 = Terça
-   * 3 = Quarta
-   * 4 = Quinta
-   * 5 = Sexta
-   * 6 = Sábado
-   */
-
-  // Não há pausa fixa de almoço. O intervalo é fechado manualmente
-  // pela administradora no Gerenciar Calendário quando necessário.
-  const intervalos = [];
-
-  if (diaSemana === 2 && !obterExpedienteEspecialDezembro2026(dataIso)) {
-    intervalos.push({
-      start: timeToMins("09:00"),
-      end: timeToMins("13:30"),
-    });
-  }
-
-  return intervalos;
-}
 async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null, servicoInfo = null) {
   const requisicao = (renderizarHorarios.requisicao || 0) + 1;
   renderizarHorarios.requisicao = requisicao;
@@ -580,57 +546,40 @@ async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null, s
       0,
     ).getDay();
 
-    const intervalosBloqueadosFixos = obterIntervalosBloqueadosFixos(dataIso).map((intervalo) => ({
-      inicioMinuto: intervalo.start,
-      fimMinuto: intervalo.end,
-      tipo: "bloqueio",
-    }));
-
-    const intervalosIndisponiveis = [
-      ...intervalosOcupados,
-      ...intervalosBloqueadosFixos,
-    ];
-
+    // Os períodos do dia vêm da mesma regra compartilhada com o backend.
+    // Não existem mais fechamentos artificiais ou exceções para :15/:45.
+    const intervalosIndisponiveis = intervalosOcupados;
     const especial = obterExpedienteEspecialDezembro2026(dataIso);
-    const limites = obterLimitesAtendimentoSemanal(diaSemanaSelecionado);
-    const minAbertura = especial?.inicioMinuto ?? limites.minAbertura;
-    const minFechamento = especial?.encerramentoMinuto ?? limites.minFechamento;
-    const minUltimoInicio = especial ? minFechamento - 30 : limites.minUltimoInicio;
+    const janelas = obterJanelasAtendimento(dataIso);
+    if (!janelas.length) {
+      container.textContent = "Não há expediente nesta data.";
+      if (availabilityElement) availabilityElement.textContent = "Sem expediente";
+      return;
+    }
+    const minFechamento = Math.max(...janelas.map((janela) => janela.encerramentoMinuto));
 
     const horariosManha = [];
     const horariosTarde = [];
+    const horariosNoite = [];
 
     let quantidadeDisponivel = 0;
 
-    // Quarta-feira: exibir somente os inícios aprovados pela profissional.
-    // A duração de cada serviço é validada pela regra compartilhada com o backend.
-    const iniciosPadrao = !especial && diaSemanaSelecionado === 3
-      ? ["09:00", "10:00", "10:30", "11:00", "14:00", "15:00"].map(timeToMins)
-      : Array.from({ length: Math.floor((minUltimoInicio - minAbertura) / 30) + 1 }, (_, indice) => minAbertura + indice * 30);
-    const validarPadrao = (minuto) => minuto >= minAbertura && minuto <= minUltimoInicio &&
-      minuto + duracaoServico <= minFechamento &&
-      validarHorarioEspecial(dataIso, minsToTime(minuto), duracaoServico);
-    const iniciosEncaixe = listarIniciosEncaixe({
-      abertura: minAbertura, ultimoInicio: minUltimoInicio,
-      duracao: duracaoServico, intervalos: intervalosIndisponiveis,
-      validarInicio: (minuto) => minuto + duracaoServico <= minFechamento &&
-        validarHorarioEspecial(dataIso, minsToTime(minuto), duracaoServico, { permitirEncaixe: true }),
-      validarInicioPadrao: validarPadrao,
-    });
-    const iniciosPossiveis = [...new Set([...iniciosPadrao, ...iniciosEncaixe])].sort((a, b) => a - b);
+    // A grade inteira usa 15 minutos; cada início é checado pela duração real,
+    // janela de expediente, bloqueios e buffer. Nenhum início é aberto à força.
+    const iniciosPossiveis = [...new Set(janelas.flatMap(({ inicioMinuto, encerramentoMinuto }) => {
+      const inicios = [];
+      for (let minuto = inicioMinuto; minuto <= encerramentoMinuto - 15; minuto += 15) {
+        inicios.push(minuto);
+      }
+      return inicios;
+    }))].sort((a, b) => a - b);
 
     for (const atual of iniciosPossiveis) {
-      if (!especial && diaSemanaSelecionado === 2 && atual === timeToMins("15:30")) continue;
       const fimServico = atual + duracaoServico;
-
-      if (fimServico > minFechamento && (especial || (diaSemanaSelecionado !== 2 && diaSemanaSelecionado !== 3))) {
-        continue;
-      }
-
       const horarioTexto = minsToTime(atual);
 
       const bloqueadoPorRegraEspecial =
-        !validarHorarioEspecial(dataIso, horarioTexto, duracaoServico, { permitirEncaixe: atual % 30 === 15 });
+        !validarHorarioEspecial(dataIso, horarioTexto, duracaoServico);
 
       const indisponivel =
         bloqueadoPorRegraEspecial ||
@@ -661,8 +610,10 @@ async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null, s
 
       if (atual < timeToMins("12:00")) {
         horariosManha.push(botao);
-      } else {
+      } else if (atual < timeToMins("18:00")) {
         horariosTarde.push(botao);
+      } else {
+        horariosNoite.push(botao);
       }
     }
 
@@ -672,49 +623,56 @@ async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null, s
       if (!horarios.length) return;
 
       const periodo = document.createElement("section");
-
       periodo.className = "agendamento-period";
+      periodo.setAttribute("aria-label", "Horários de " + titulo.toLowerCase());
 
       const heading = document.createElement("div");
-
       heading.className = "agendamento-period-heading";
-
       const title = document.createElement("strong");
-
       title.textContent = titulo;
-
       const description = document.createElement("span");
-
       description.textContent = subtitulo;
+      heading.append(title, description);
 
-      const grid = document.createElement("div");
+      const carousel = document.createElement("div");
+      carousel.className = "agendamento-carousel";
+      const rolagem = document.createElement("div");
+      rolagem.className = "agendamento-time-carousel";
+      rolagem.setAttribute("role", "group");
+      rolagem.setAttribute("aria-label", "Deslize para escolher um horário de " + titulo.toLowerCase());
+      rolagem.tabIndex = 0;
+      horarios.forEach((horario) => rolagem.appendChild(horario));
 
-      grid.className = "agendamento-time-grid";
-
-      horarios.forEach((horario) => {
-        grid.appendChild(horario);
-      });
-
-      heading.appendChild(title);
-      heading.appendChild(description);
-
-      periodo.appendChild(heading);
-      periodo.appendChild(grid);
-
+      const criarSeta = (simbolo, direcao, nome) => {
+        const seta = document.createElement("button");
+        seta.type = "button";
+        seta.className = "agendamento-carousel-arrow";
+        seta.textContent = simbolo;
+        seta.setAttribute("aria-label", nome + " horários de " + titulo.toLowerCase());
+        seta.addEventListener("click", () => {
+          rolagem.scrollBy({ left: direcao * Math.max(rolagem.clientWidth * 0.75, 230), behavior: "smooth" });
+        });
+        return seta;
+      };
+      const anterior = criarSeta("‹", -1, "Ver anteriores");
+      const proximo = criarSeta("›", 1, "Ver próximos");
+      const atualizarSetas = () => {
+        anterior.disabled = rolagem.scrollLeft <= 2;
+        proximo.disabled = rolagem.scrollLeft >= rolagem.scrollWidth - rolagem.clientWidth - 2;
+      };
+      rolagem.addEventListener("scroll", atualizarSetas, { passive: true });
+      carousel.append(anterior, rolagem, proximo);
+      const dica = document.createElement("p");
+      dica.className = "agendamento-carousel-hint";
+      dica.textContent = "Deslize para ver mais horários";
+      periodo.append(heading, carousel, dica);
       container.appendChild(periodo);
+      requestAnimationFrame(atualizarSetas);
     }
 
-    criarGrupoHorario("Manhã", especial
-      ? `Expediente ${minsToTime(minAbertura)}–${minsToTime(minFechamento)}`
-      : diaSemanaSelecionado === 4 ? "Das 11h às 12h" : "Das 9h às 12h", horariosManha);
-
-    criarGrupoHorario("Tarde", especial
-      ? `Término dos serviços até ${minsToTime(minFechamento)}`
-      : [4, 5, 6].includes(diaSemanaSelecionado)
-        ? ([4, 5].includes(diaSemanaSelecionado)
-          ? `Atendimentos até ${minsToTime(minFechamento)} · inícios até ${minsToTime(minUltimoInicio)}`
-          : "Inícios até 17h")
-        : "Das 12h às 18h", horariosTarde);
+    criarGrupoHorario("Manhã", "Antes das 12h", horariosManha);
+    criarGrupoHorario("Tarde", "Das 12h às 18h", horariosTarde);
+    criarGrupoHorario("Noite", "A partir das 18h · término até " + minsToTime(minFechamento), horariosNoite);
 
     if (availabilityElement) {
       availabilityElement.textContent =
