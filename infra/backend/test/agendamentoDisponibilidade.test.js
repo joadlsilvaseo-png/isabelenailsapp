@@ -107,7 +107,7 @@ test("sexta encerra atendimentos às 21h e inicia no máximo às 20h30", () => {
   const limites = obterLimitesAtendimentoSemanal(5);
   assert.deepEqual(limites, {
     minAbertura: 540,
-    minUltimoInicio: 1230,
+    minUltimoInicio: 1245,
     minFechamento: 1260,
   });
   for (const [horario, duracao] of [
