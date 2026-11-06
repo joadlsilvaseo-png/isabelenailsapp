@@ -58,6 +58,13 @@ function determinarPeriodo(pergunta) {
 function dataFormatada(data) {
   return data.split("-").reverse().join("/");
 }
+function formatarDuracao(minutos) {
+  const horas = Math.floor(minutos / 60);
+  const restantes = minutos % 60;
+  if (horas === 0) return `${restantes} minuto${restantes === 1 ? "" : "s"}`;
+  if (restantes === 0) return `${horas} hora${horas === 1 ? "" : "s"}`;
+  return `${horas}h${String(restantes).padStart(2, "0")}`;
+}
 function elemento(tag,classe,texto) {
   const el=document.createElement(tag);
   if(classe)el.className=classe;
@@ -75,29 +82,21 @@ function renderizarResultado(dados,periodo) {
   const titulo=elemento("h3","",dados.total===1?"1 oportunidade encontrada":`${dados.total} oportunidades encontradas`);
   bloco.append(titulo);
   const descricao=periodo.data ? dataFormatada(periodo.data) : `${NOMES[Number(periodo.mes.slice(5))-1]} de ${periodo.mes.slice(0,4)}`;
-  bloco.append(elemento("p","assistente-meta",`Período: ${descricao}. Somente encaixes que exigem reduzir o buffer de 15 minutos.`));
+  bloco.append(elemento("p","assistente-meta",`Período: ${descricao}. Possíveis lacunas para avaliação manual de encaixe.`));
   if(!dados.oportunidades?.length){
     bloco.append(elemento("p","","Não há encaixes excepcionais identificados neste período. Isso não significa que a agenda esteja cheia; horários normais continuam disponíveis na agenda."));
   }
   for(const item of (dados.oportunidades||[])){
     const card=elemento("section","assistente-oportunidade");
     card.append(elemento("h4","",`${dataFormatada(item.data)} · ${item.inicio} às ${item.fim}`));
-    card.append(elemento("p","",`Lacuna de ${item.duracaoLacunaMinutos} minutos entre dois atendimentos.`));
-    const lista=elemento("ul","assistente-servicos");
-    for(const opcao of item.opcoes){
-      const li=elemento("li");
-      const nome=elemento("strong","",`${opcao.servico} · ${opcao.duracaoMinutos} min`);
-      const inicios=opcao.horarios.length>8?`${opcao.horarios.slice(0,8).join(", ")} e mais ${opcao.horarios.length-8}` : opcao.horarios.join(", ");
-      li.append(nome,document.createTextNode(` — início(s): ${inicios}`));
-      lista.append(li);
-    }
-    card.append(lista);
+    card.append(elemento("p","assistente-lacuna",`Lacuna identificada: ${formatarDuracao(item.duracaoLacunaMinutos)} entre atendimentos.`));
+    card.append(elemento("p","assistente-orientacao","A profissional define o serviço após conferir a agenda."));
     const link=elemento("a","","Conferir no Gerenciador de Calendário");
     link.href="./admin-calendario.html";
     card.append(link);
     bloco.append(card);
   }
-  bloco.append(elemento("p","assistente-meta","Sugestões sujeitas a conferência. O assistente não confirma atendimentos nem recebe PIX."));
+  bloco.append(elemento("p","assistente-meta","Lacunas sujeitas a conferência. O assistente não confirma atendimentos nem recebe PIX."));
   conversa.append(bloco);
   conversa.scrollTop=conversa.scrollHeight;
 }

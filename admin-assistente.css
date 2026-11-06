@@ -23,9 +23,8 @@ body[data-page="admin-assistente"]{background:#fff7fa;color:#591c31;font:400 16p
 .assistente-oportunidade{border:1px solid #ebdca2;background:#fffcf1;padding:14px;border-radius:16px;margin:12px 0}
 .assistente-oportunidade h4{color:#75500e;font-size:16px;margin:0 0 4px}
 .assistente-oportunidade p{font-size:13px;color:#765c32;margin:4px 0}
-.assistente-servicos{margin:8px 0 0;padding-left:19px}
-.assistente-servicos li{padding:4px 0;font-size:14px}
-.assistente-servicos strong{font-size:14px}
+.assistente-oportunidade .assistente-lacuna{font-size:15px;font-weight:600;color:#75500e}
+.assistente-oportunidade .assistente-orientacao{font-size:14px;color:#765c32}
 .assistente-oportunidade a{display:inline-block;margin-top:10px;color:#591c31;font-size:14px;font-weight:600}
 .assistente-form{border-top:1px solid #ead5dd;padding:14px;background:#fff}
 .assistente-label{display:block;margin-bottom:9px;font-size:13px;font-weight:600}
