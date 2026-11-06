@@ -72,7 +72,9 @@ jobs:
           psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE DATABASE isabele_agenda15_ci"
           psql -v ON_ERROR_STOP=1 -d isabele_agenda15_ci -f infra/migrations/018_agenda_bloqueios.sql
           psql -v ON_ERROR_STOP=1 -d isabele_agenda15_ci -f infra/backend/test/sql/fixture_agenda_grade15_pg17.sql
+          test "$(psql -v ON_ERROR_STOP=1 -d isabele_agenda15_ci -At -f infra/scripts/agenda-grade15-state.sql)" = "pending"
           psql -v ON_ERROR_STOP=1 -d isabele_agenda15_ci -f infra/migrations/022_agenda_bloqueios_grade_15.sql
+          test "$(psql -v ON_ERROR_STOP=1 -d isabele_agenda15_ci -At -f infra/scripts/agenda-grade15-state.sql)" = "applied"
           psql -v ON_ERROR_STOP=1 -d isabele_agenda15_ci -f infra/backend/test/sql/assert_agenda_grade15_pg17.sql
       - name: Testes integrados de pagamento, agendamento, Calendar simulado e recuperação
         run: node --test infra/backend/test/pixReagendamentoPagoPostgres.test.js
