@@ -95,8 +95,8 @@ test("frontend usa janelas compartilhadas com a API e resolução de 15 minutos"
 
 test("terça, quarta, quinta, sexta e sábado mantêm os slots administrativos", () => {
   const agora = new Date("2026-10-22T12:00:00Z");
-  assert.deepEqual(listarSlotsGerenciaveis(dataDoDia(2), agora).slice(0, 2), [840, 870]);
-  assert.deepEqual(listarSlotsGerenciaveis(dataDoDia(3), agora).slice(0, 2), [540, 570]);
+  assert.deepEqual(listarSlotsGerenciaveis(dataDoDia(2), agora).slice(0, 2), [840, 855]);
+  assert.deepEqual(listarSlotsGerenciaveis(dataDoDia(3), agora).slice(0, 2), [540, 555]);
   for (const weekday of [4, 5, 6]) assert.equal(validarHorarioEspecial(dataDoDia(weekday), "16:00", 60), true);
   assert.equal(listarSlotsGerenciaveis(dataDoDia(6), agora).includes(960), true);
   for (const dia of [4, 5]) {
