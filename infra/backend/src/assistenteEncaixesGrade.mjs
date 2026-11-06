@@ -124,7 +124,9 @@ export function analisarLacunasDoDia({
     }
     if (!classificacao) continue;
     sugestoes.push({
-      chave: `${data}:${inicioAnalisado}:${fimLacuna}`,
+      // O relógio pode reduzir o período futuro, mas não cria outra lacuna.
+      // A identidade é o intervalo físico original entre dois períodos ocupados.
+      chave: `${data}:${inicioLacuna}:${fimLacuna}`,
       data,
       inicio: formatarMinutos(inicioAnalisado),
       fim: formatarMinutos(fimLacuna),

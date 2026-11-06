@@ -501,7 +501,55 @@ export async function reagendarComBloqueio({ pool, db, uid, dados, dependencies 
         .filter((documento) => documento.id !== agendamentoId)
         .map((documento) => documento.data());
       if (encontrarConflitoAgendamentoPix(registros, periodo.inicioMinuto, periodo.fimMinuto)) {
-        throw new ErroI…467 tokens truncated…|| (await import("./pushSubscriptions.js")).verificarUsuario;
+        throw new ErroIsencaoPix(409, "Horário ocupado por outro agendamento", "HORARIO_OCUPADO");
+      }
+
+      documentoAnterior = atual;
+      transacao.update(referencia, {
+        servico: String(servico.nome || "Serviço").slice(0, 120),
+        idServico: servicoId,
+        data,
+        horario,
+        duracao,
+        duracaoSnapshot: duracao,
+        precoSnapshot: converterPreco(servico.preco ?? servico.valor ?? servico.valorReferencia),
+        observacoes: typeof dados.observacoes === "string" ? dados.observacoes.trim().slice(0, 1000) : "",
+        calendarEventId: eventId,
+        status: "reagendado",
+        reagendadoEm: timestamp,
+        reagendadoPor: uid,
+        reagendamentoOperacao: operacaoId,
+      });
+      documentoAlterado = true;
+    });
+
+    await conexao.query("COMMIT");
+    return { agendamentoId, calendarEventId: eventId, duracaoMinutos: duracao, reagendado: documentoAlterado };
+  } catch (erro) {
+    await conexao.query("ROLLBACK").catch(() => {});
+    if (documentoAlterado && documentoAnterior) {
+      try {
+        await firestore.runTransaction(async (transacao) => {
+          const atual = await transacao.get(referencia);
+          if (atual.exists && atual.data()?.reagendamentoOperacao === operacaoId &&
+              atual.data()?.data === data && atual.data()?.horario === horario) {
+            transacao.set(referencia, documentoAnterior);
+          }
+        });
+      } catch (compensacao) {
+        console.error("[Reagendamento] Falha na compensação Firestore; verifique a agenda:", compensacao.message);
+      }
+    }
+    throw erro;
+  } finally {
+    conexao.release();
+  }
+}
+
+export async function atenderAgendamentoIsencao(req, res, pool, dependencies = {}) {
+  let uid;
+  try {
+    const verificar = dependencies.verificarUsuario || (await import("./pushSubscriptions.js")).verificarUsuario;
     uid = await verificar(req);
   }
   catch { responder(res, 401, { erro: "Não autenticado" }); return; }

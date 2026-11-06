@@ -65,4 +65,25 @@ assert.equal(analisarLacunasDoDia({
 }).length, 0, "serviço normal autorizado em dezembro deixa a lacuna aproveitável");
 
 assert.throws(() => analisarLacunasDoDia({ data, agendamentos: [{ inicioMinuto: 600, fimMinuto: 1500 }], servicos: manicurias }), /Intervalo inválido/);
+
+// A passagem do relógio muda o trecho ainda disponível, não a identidade
+// física da lacuna; evitar novos pushes a cada 15 minutos.
+const lacunaHoje = {
+  data,
+  agendamentos: [{ inicioMinuto: 600, fimMinuto: 720 }, { inicioMinuto: 810, fimMinuto: 900 }],
+  servicos: [{ id: "long", nome: "Procedimento longo", duracaoMinutos: 90 }],
+  hoje: data,
+};
+const amostras = ["15:17:00Z", "15:32:00Z", "15:47:00Z"].map((hora) => {
+  const itens = analisarLacunasDoDia({
+    ...lacunaHoje, agora: new Date(`2026-11-06T${hora}`),
+  });
+  assert.equal(itens.length, 1);
+  return itens[0];
+});
+assert.deepEqual(amostras.map((item) => item.inicio), ["12:30", "12:45", "13:00"]);
+assert.deepEqual(amostras.map((item) => item.duracaoLacunaMinutos), [60, 45, 30]);
+assert.deepEqual(amostras.map((item) => item.chave), Array(3).fill("2026-11-06:720:810"),
+  "a mesma lacuna não deve gerar novas identidades durante a passagem do tempo");
+
 console.log("Assistente de Agenda: classificação preventiva e regras de lacunas aprovadas");

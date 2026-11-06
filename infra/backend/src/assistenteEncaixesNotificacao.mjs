@@ -22,11 +22,21 @@ export function criarNotificacaoPreventiva(data, itens) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(data || "") || !Array.isArray(itens) || !itens.length) {
     throw new TypeError("Resumo de sugestão inválido");
   }
+  if (itens.some((item) => item?.data !== data ||
+      !/^([01]\\d|2[0-3]):[0-5]\\d$/.test(item.inicio) ||
+      !/^([01]\\d|2[0-3]):[0-5]\\d$/.test(item.fim))) {
+    throw new TypeError("Horário inválido na sugestão preventiva");
+  }
   const [ano, mes, dia] = data.split("-");
   const dataPt = `${dia}/${mes}/${ano}`;
+  // O intervalo vem primeiro para aparecer inclusive na prévia curta do push.
+  // Agrupamentos grandes exibem os primeiros horários e o total restante.
+  const horarios = itens.slice(0, 5)
+    .map((item) => `${item.inicio}–${item.fim}`).join(", ");
+  const restantes = itens.length > 5 ? ` e mais ${itens.length - 5}` : "";
   const mensagem = itens.length === 1
-    ? `Sugestão para ${dataPt}: ${resumoItem(itens[0])} Confira a agenda atual.`
-    : `${itens.length} intervalos para avaliar em ${dataPt}: ${itens.map(resumoItem).join(" ")}`;
+    ? `Sugestão para ${dataPt}, das ${itens[0].inicio} às ${itens[0].fim}: ${resumoItem(itens[0])} Confira a agenda atual.`
+    : `${itens.length} intervalos para avaliar em ${dataPt}: ${horarios}${restantes}. Consulte o Gerenciador de Calendário.`;
   return {
     titulo: itens.length === 1 ? "Sugestão de Bloqueio" : "Sugestões de Agenda",
     mensagem: mensagem.slice(0, 1800),

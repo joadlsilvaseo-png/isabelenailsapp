@@ -52,6 +52,11 @@ const agora = new Date("2026-11-06T12:00:00Z");
 let resultados = [];
 const consultar = async ({ agora: passado }) => { assert.equal(passado, agora); return resultados; };
 
+assert.match(criarNotificacaoPreventiva("2026-11-07", [{
+  ...dados[0], contemServicoBaixaProcura: true,
+  servicosElegiveis: [{ id: "remo", nome: "Remoção de Gel", duracaoMinutos: 30 }],
+}]).mensagem, /07\\/11\\/2026, das 12:00 às 12:30/);
+
 const primeiro = await varrerOportunidades({ pool, db, agora, consultar });
 assert.equal(primeiro.inicializado, true);
 assert.equal(pool.estado.notificacoes.length, 0, "inicialização silenciosa não deve gerar alertas retroativos");
@@ -66,6 +71,8 @@ assert.match(entrega.sql, /'sugestao_bloqueio_agenda'/);
 assert.match(entrega.args[0], /^assistente-agenda-v1:2026-11-07:uid-admin:[a-f0-9]{24}$/);
 assert.equal(entrega.args[5], "./admin-calendario.html?data=2026-11-07");
 assert.match(entrega.args[4], /2 intervalos/);
+assert.match(entrega.args[4], /12:00–12:30/);
+assert.match(entrega.args[4], /12:30–13:00/);
 assert.equal((await varrerOportunidades({ pool, db, agora, consultar })).novas, 0);
 assert.equal(pool.estado.notificacoes.length, 1, "a chave estável evita duplicação em varreduras repetidas");
 
