@@ -910,6 +910,19 @@ async function inicializarAgendamento() {
 
   if (horariosContainer) {
     horariosContainer.addEventListener("click", (event) => {
+      const seta = event.target.closest(".agendamento-carousel-arrow");
+      if (seta) {
+        const trilho = seta.closest(".agendamento-time-carousel")?.querySelector(".agendamento-time-grid");
+        if (trilho) {
+          const distancia = Math.max(180, trilho.clientWidth * 0.75);
+          trilho.scrollBy({
+            left: seta.dataset.carousel === "anterior" ? -distancia : distancia,
+            behavior: "smooth",
+          });
+        }
+        return;
+      }
+
       const botao = event.target.closest(".agendamento-time");
 
       if (
