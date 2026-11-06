@@ -49,6 +49,7 @@ export function resumirSelecoes(selecoes) {
 export function criarPayloadLote(selecoes, acao) {
   return {
     acao,
+    resolucaoMinutos: 15,
     datas: resumirSelecoes(selecoes).datas.map(({ data }) => ({
       data,
       horas: [...selecoes.get(data)].sort((a, b) => a - b),
