@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { atendimentosConflitamComBuffer, indisponivelComBuffer, encaixeInteligenteDisponivel,
   BUFFER_ENTRE_ATENDIMENTOS_MINUTOS } from "../src/agendaBuffer.mjs";
-import { consultarIntervalosDisponibilidade, intervaloSobrepoeDisponibilidade, listarIniciosEncaixe } from "../../../agendamentoDisponibilidade.js";
+import { consultarIntervalosDisponibilidade, intervaloSobrepoeDisponibilidade, listarIniciosEncaixe, listarIniciosGrade15 } from "../../../agendamentoDisponibilidade.js";
 import { encontrarConflitoAgendamentoPix } from "../src/pixDocumentoAgendamento.js";
 import { validarHorarioPix } from "../src/pixDisponibilidade.js";
 import { verificarEncaixeNoBanco } from "../src/pixEncaixes.js";
@@ -142,4 +142,38 @@ test("servidor valida disponibilidade real :15 sob lock com uma ou duas bordas",
   assert.equal(await verificarEncaixeNoBanco(params), true); // Sem borda
   items.push({ inicio_minuto: 1080, fim_minuto: 1110, tipo: "bloqueio" });
   assert.equal(await verificarEncaixeNoBanco(params), false); // Bloqueio manual
+});
+
+test("agenda sequencial: 10h15–11h15, 11h30–13h30, 13h45–14h45", () => {
+  const data = "2026-11-06"; // sexta 09h–21h
+  const agora = new Date("2026-11-05T12:00:00-03:00");
+  const confirmados = [
+    { inicioMinuto: 540, fimMinuto: 600, tipo: "agendamento" }, // 09h–10h
+    { inicioMinuto: 690, fimMinuto: 810, tipo: "reserva" },      // 11h30–13h30
+  ];
+  for (const [horario, inicio, fim] of [
+    ["10:15", 615, 675],
+    ["13:45", 825, 885],
+  ]) {
+    assert.equal(validarHorarioPix(data, horario, 60, agora).valido, true);
+    assert.equal(indisponivelComBuffer(inicio, fim, confirmados), false);
+    const candidatoAnterior = inicio - 15;
+    assert.equal(indisponivelComBuffer(candidatoAnterior, candidatoAnterior + 60, confirmados), true);
+  }
+  assert.equal(atendimentosConflitamComBuffer(675, 690, 690, 810), true);
+  const grade = listarIniciosGrade15({
+    abertura: 540,
+    ultimoInicio: 1230,
+    duracao: 60,
+    validarInicio: (minuto) => {
+      const horario = String(Math.floor(minuto / 60)).padStart(2, "0") + ":" +
+        String(minuto % 60).padStart(2, "0");
+      return validarHorarioPix(data, horario, 60, agora).valido &&
+        !indisponivelComBuffer(minuto, minuto + 60, confirmados);
+    },
+  });
+  assert.ok(grade.includes(615)); // 10h15
+  assert.ok(grade.includes(825)); // 13h45
+  assert.ok(!grade.includes(600)); // Sem buffer após 10h
+  assert.ok(!grade.includes(630)); // Terminaria em 11h30 sem buffer
 });
