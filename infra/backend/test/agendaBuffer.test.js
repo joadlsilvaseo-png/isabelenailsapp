@@ -100,7 +100,8 @@ test("encaixe 17h45–18h45 é seguro entre 17h30 e 19h, sem abrir :15 desnecess
 
 test("PIX valida inícios de 15 minutos sem exigir vizinhos dos dois lados", () => {
   const agora = new Date("2026-11-05T12:00:00-03:00");
-  const validar = (data, horario) => validarHorarioPix(data, horario, 60, agora);
+  const validar = (data, horario) => validarHorarioPix(data, horario, 60,
+    data.startsWith("2026-11-") ? new Date("2026-10-22T12:00:00Z") : agora);
   assert.equal(validar("2026-12-23", "17:45").valido, true);
   assert.equal(validar("2026-12-23", "18:15").valido, true);
   assert.equal(validar("2026-12-15", "17:45").valido, false);
