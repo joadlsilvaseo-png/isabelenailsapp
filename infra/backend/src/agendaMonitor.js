@@ -3,6 +3,7 @@ import { initializeApp, applicationDefault, getApps } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { extrairAgendamento, sincronizarLembretesAgendamento } from "./agendaLembretes.js";
 import { identificarNotificacoesAgendamento } from "./agendaNotificacoes.js";
+import { sinalizarMudancaNaAgenda } from "./assistenteEncaixesMonitor.js";
 
 const PROJECT_ID = "isabele-nails-app";
 
@@ -246,6 +247,8 @@ export async function iniciarMonitorAgendamentos(pool) {
               alteracao.type === "removed",
             );
           }
+
+          if (alteracoes.length && !importacaoInicial) sinalizarMudancaNaAgenda();
 
           if (importacaoInicial) {
             await pool.query(

@@ -5,8 +5,8 @@ import { obterHojeSaoPaulo, obterMesesGerenciaveis } from "./agendamentoRegras.m
 import { verificarUsuario } from "./pushSubscriptions.js";
 
 const ATIVOS = new Set(["agendado", "confirmado", "reagendado"]);
-const DATA = /^\\d{4}-\\d{2}-\\d{2}$/;
-const MES = /^\\d{4}-(0[1-9]|1[0-2])$/;
+const DATA = /^\d{4}-\d{2}-\d{2}$/;
+const MES = /^\d{4}-(0[1-9]|1[0-2])$/;
 
 export function firestoreAssistente() {
   if (!getApps().length) {

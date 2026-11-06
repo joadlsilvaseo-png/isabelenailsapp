@@ -24,6 +24,8 @@ import { atenderGerenciarCalendario } from "./agendaBloqueios.js";
 import { atenderGestaoClientes } from "./gestaoClientes.js";
 import { atenderFotosPerfil } from "./fotosPerfil.js";
 import { atenderAlteracaoServico, iniciarWorkerAlteracaoServico } from "./agendamentoAlteracaoServico.js";
+import { atenderAssistenteEncaixes } from "./assistenteEncaixes.js";
+import { iniciarMonitorOportunidades } from "./assistenteEncaixesMonitor.js";
 
 const { Pool } = pg;
 
@@ -125,6 +127,12 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // Assistente consultivo de encaixes — acesso administrativo, somente leitura.
+  if (new URL(req.url, "http://localhost").pathname === "/admin/assistente/encaixes") {
+    await atenderAssistenteEncaixes(req, res, pool);
+    return;
+  }
+
   // PIX - Reserva temporaria autenticada
   if (req.method === "POST" && req.url === "/pix/reservar") {
     await criarReservaPix(req, res, pool);
@@ -223,6 +231,7 @@ server.listen(PORT, "0.0.0.0", () => {
     iniciarWorkerReagendamentoPixPago(pool);
   }
   iniciarWorkerAlteracaoServico(pool);
+  iniciarMonitorOportunidades(pool);
 
   iniciarMonitorAgendamentos(pool).catch((erro) => {
     console.error("Falha ao iniciar monitor de agendamentos:", erro);

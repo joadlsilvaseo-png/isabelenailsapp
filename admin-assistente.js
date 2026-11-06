@@ -25,21 +25,21 @@ function adicionarMes(mes, qtd) {
   return new Date(Date.UTC(ano,m-1+qtd,1)).toISOString().slice(0,7);
 }
 function normalizar(texto) {
-  return texto.normalize("NFD").replace(/[\\u0300-\\u036f]/g,"").toLowerCase();
+  return texto.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
 }
 function determinarPeriodo(pergunta) {
   const hoje = dataSaoPaulo();
   const texto = normalizar(pergunta);
-  if (/\\bamanha\\b/.test(texto)) {
+  if (/\bamanha\b/.test(texto)) {
     const data=adicionarDia(hoje,1);return {mes:data.slice(0,7),data};
   }
-  if (/\\bhoje\\b/.test(texto)) return {mes:hoje.slice(0,7),data:hoje};
+  if (/\bhoje\b/.test(texto)) return {mes:hoje.slice(0,7),data:hoje};
   const mesAtual=hoje.slice(0,7);
   const janela=[mesAtual,adicionarMes(mesAtual,1),adicionarMes(mesAtual,2)];
   const correspondente=janela.find((mes)=>texto.includes(normalizar(NOMES[Number(mes.slice(5))-1])));
   if (correspondente) return {mes:correspondente};
   if (/proxim[oa] mes|mes que vem/.test(texto)) return {mes:janela[1]};
-  if (/esse mes|este mes|mes atual|\\bmes\\b|lacuna|encaixe|oportunidade|agenda/.test(texto)) {
+  if (/esse mes|este mes|mes atual|\bmes\b|lacuna|encaixe|oportunidade|agenda/.test(texto)) {
     return {mes:mesAtual};
   }
   return null;
