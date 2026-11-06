@@ -48,4 +48,28 @@ resultados = [...dados, {
 assert.equal((await varrerOportunidades({ pool, db, agora, consultar })).novas, 1);
 assert.equal(pool.estado.notificacoes.length, 1);
 assert.equal((await varrerOportunidades({ pool, db, agora, consultar })).novas, 0);
-console.log("Assistente: deduplicação e primeiro ciclo silencioso aprovados");
+const entradaNovoMes = {
+  chave: "2027-02-11:720:810", data: "2027-02-11",
+  inicio: "12:00", fim: "13:30", duracaoLacunaMinutos: 90, opcoes: [],
+};
+let oportunidadesFevereiro = [entradaNovoMes];
+const consultarNovoMes = async ({ mes }) => {
+  if (mes === "2026-12") return resultados;
+  if (mes === "2027-02") return oportunidadesFevereiro;
+  return [];
+};
+const dezembro = new Date("2026-12-01T12:00:00Z");
+const primeiroNovoMes = await varrerOportunidades({
+  pool, db, agora: dezembro, consultar: consultarNovoMes,
+});
+assert.equal(primeiroNovoMes.novas, 0, "mês recém-vigiado não pode disparar alertas antigos");
+assert.equal(pool.estado.notificacoes.length, 1);
+oportunidadesFevereiro = [...oportunidadesFevereiro, {
+  ...entradaNovoMes, chave: "2027-02-12:720:810", data: "2027-02-12",
+}];
+assert.equal((await varrerOportunidades({
+  pool, db, agora: dezembro, consultar: consultarNovoMes,
+})).novas, 1);
+assert.equal(pool.estado.notificacoes.length, 2);
+
+console.log("Assistente: deduplicação, virada de mês e primeiro ciclo silencioso aprovados");
