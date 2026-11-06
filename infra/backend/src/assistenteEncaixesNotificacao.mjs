@@ -23,8 +23,8 @@ export function criarNotificacaoPreventiva(data, itens) {
     throw new TypeError("Resumo de sugestão inválido");
   }
   if (itens.some((item) => item?.data !== data ||
-      !/^([01]\\d|2[0-3]):[0-5]\\d$/.test(item.inicio) ||
-      !/^([01]\\d|2[0-3]):[0-5]\\d$/.test(item.fim))) {
+      !/^([01]\d|2[0-3]):[0-5]\d$/.test(item.inicio) ||
+      !/^([01]\d|2[0-3]):[0-5]\d$/.test(item.fim))) {
     throw new TypeError("Horário inválido na sugestão preventiva");
   }
   const [ano, mes, dia] = data.split("-");

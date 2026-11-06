@@ -55,7 +55,7 @@ const consultar = async ({ agora: passado }) => { assert.equal(passado, agora); 
 assert.match(criarNotificacaoPreventiva("2026-11-07", [{
   ...dados[0], contemServicoBaixaProcura: true,
   servicosElegiveis: [{ id: "remo", nome: "Remoção de Gel", duracaoMinutos: 30 }],
-}]).mensagem, /07\\/11\\/2026, das 12:00 às 12:30/);
+}]).mensagem, /07\/11\/2026, das 12:00 às 12:30/);
 
 const primeiro = await varrerOportunidades({ pool, db, agora, consultar });
 assert.equal(primeiro.inicializado, true);
