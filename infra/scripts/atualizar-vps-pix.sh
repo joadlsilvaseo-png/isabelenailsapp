@@ -1255,46 +1255,8 @@ esac
 # Preflight 022: a grade administrativa aceita intervalos antigos de 30
 # minutos e novos de 15. Abortamos se a constraint nao corresponder
 # exatamente a um dos dois estados previstos (nada de 'corrigir' producao).
-MIGRATION_022_STATE_SQL="$BACKUP_DIR/migration-022-state.sql"
-cat >"$MIGRATION_022_STATE_SQL" <<'SQL'
-WITH estados AS (
-  SELECT
-    to_regclass('public.agenda_bloqueios') AS tabela,
-    EXISTS (
-      SELECT 1 FROM pg_constraint
-      WHERE conrelid = to_regclass('public.agenda_bloqueios')
-        AND conname = 'agenda_bloqueios_sem_sobreposicao'
-        AND contype = 'x'
-        AND pg_get_constraintdef(oid) LIKE '%int4range%'
-    ) AS exclusao_15,
-    EXISTS (
-      SELECT 1 FROM pg_constraint
-      WHERE conrelid = to_regclass('public.agenda_bloqueios')
-        AND contype = 'x'
-    ) AS existe_exclusao,
-    EXISTS (
-      SELECT 1 FROM pg_constraint
-      WHERE conrelid = to_regclass('public.agenda_bloqueios')
-        AND conname = 'agenda_bloqueio_intervalo' AND contype = 'c'
-        AND pg_get_constraintdef(oid) LIKE '%inicio_minuto % 15%'
-        AND pg_get_constraintdef(oid) LIKE '%fim_minuto = (inicio_minuto + 15)%'
-    ) AS check_15,
-    EXISTS (
-      SELECT 1 FROM pg_constraint
-      WHERE conrelid = to_regclass('public.agenda_bloqueios')
-        AND conname = 'agenda_bloqueio_intervalo' AND contype = 'c'
-        AND pg_get_constraintdef(oid) LIKE '%inicio_minuto % 30%'
-        AND pg_get_constraintdef(oid) LIKE '%fim_minuto = (inicio_minuto + 30)%'
-    ) AS check_30
-)
-SELECT CASE
-  WHEN tabela IS NULL THEN 'pending'
-  WHEN exclusao_15 AND check_15 THEN 'applied'
-  WHEN NOT existe_exclusao AND check_30 AND NOT check_15 THEN 'pending'
-  ELSE 'partial'
-END FROM estados;
-SQL
-chmod 600 "$MIGRATION_022_STATE_SQL"
+MIGRATION_022_STATE_SQL="$RELEASE_DIR/infra/scripts/agenda-grade15-state.sql"
+[[ -f "$MIGRATION_022_STATE_SQL" ]] || die "Preflight SQL da migracao 022 nao encontrado no commit alvo."
 MIGRATION_022_STATE="$(compose_snapshot exec -T "$DB_SERVICE" sh -lc 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At' <"$MIGRATION_022_STATE_SQL" | tr -d '\r\n')"
 case "$MIGRATION_022_STATE" in
   pending) echo "Migracao 022 pendente; sera aplicada apos backup e antes da nova API." ;;
