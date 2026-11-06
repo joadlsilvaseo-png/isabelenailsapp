@@ -11,7 +11,7 @@ function simular({ reservas = [], docs = [] } = {}) {
     conexao: { async query(texto, args) {
       sql.push({ texto, args });
       assert.match(texto, /cliente_uid/);
-      assert.match(texto, /estado IN \\('reservada', 'confirmada'\\)/);
+      assert.ok(texto.includes("estado IN ('reservada', 'confirmada')"));
       return { rows: reservas };
     } },
     db: { collection(nome) {
