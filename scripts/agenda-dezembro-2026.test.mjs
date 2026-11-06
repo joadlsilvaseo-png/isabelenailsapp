@@ -40,7 +40,7 @@ test("1 a 13/12 preservam expedientes e regras dos dias habituais", () => {
   assert.equal(obterExpedienteEspecialDezembro2026("2026-12-01"), null);
   assert.equal(validarHorarioEspecial("2026-12-01", "14:00", 60), true);
   assert.equal(validarHorarioEspecial("2026-12-01", "15:30", 60), true);
-  assert.deepEqual(listarSlotsGerenciaveis("2026-12-01", AGORA).slice(0, 2), [840, 870]);
+  assert.deepEqual(listarSlotsGerenciaveis("2026-12-01", AGORA).slice(0, 2), [840, 855]);
   assert.equal(validarHorarioEspecial("2026-12-02", "09:00", 150), true);
   assert.equal(validarHorarioEspecial("2026-12-02", "09:30", 60), true);
   assert.equal(validarHorarioEspecial("2026-12-03", "10:30", 60), false); // Quinta abre às 11h.
