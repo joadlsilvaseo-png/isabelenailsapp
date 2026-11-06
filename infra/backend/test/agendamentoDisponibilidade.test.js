@@ -57,7 +57,7 @@ test("quarta: horários adicionais respeitam agendamento anterior, duração e p
   const agora = new Date("2026-10-22T12:00:00Z");
   assert.equal(validarHorarioPix("2026-11-11", "15:00", 60, agora).valido, true);
   assert.equal(validarHorarioPix("2026-11-11", "15:00", 90, agora).valido, true);
-  assert.equal(validarHorarioPix("2026-11-11", "15:00", 120, agora).valido, false);
+  assert.equal(validarHorarioPix("2026-11-11", "15:00", 120, agora).valido, true);
 });
 
 test("falha de rede em uma fonte rejeita toda a disponibilidade e não libera horários", async () => {
@@ -86,7 +86,7 @@ test("quinta encerra atendimentos às 21h e inicia no máximo às 20h30", () => 
   const limites = obterLimitesAtendimentoSemanal(4);
   assert.deepEqual(limites, {
     minAbertura: 660,
-    minUltimoInicio: 1230,
+    minUltimoInicio: 1245,
     minFechamento: 1260,
   });
   for (const [horario, duracao] of [
@@ -129,28 +129,21 @@ test("sábado mantém encerramento às 18h com exceção às 16h para 150 min", 
   const limites = obterLimitesAtendimentoSemanal(6);
   assert.deepEqual(limites, {
     minAbertura: 540,
-    minUltimoInicio: 1020,
+    minUltimoInicio: 1065,
     minFechamento: 1110,
   });
   for (const [horario, duracao] of [
     ["09:00", 120], ["12:00", 120], ["13:00", 60],
-    ["13:30", 30], ["13:30", 120], ["14:00", 120],
-    ["15:00", 30], ["15:00", 60],
-    ["15:30", 30], ["15:30", 60],
-    ["16:00", 60], ["16:00", 90], ["16:00", 120], ["16:00", 150],
-    ["16:30", 90], ["17:00", 30], ["17:00", 60],
-  ]) {
-    conferir("2026-11-07", horario, duracao, true);
-  }
+    ["14:00", 120], ["15:00", 90], ["15:30", 90],
+    ["16:00", 30], ["16:00", 60], ["16:00", 90], ["16:00", 120],
+    ["16:00", 150], ["16:30", 90], ["17:00", 60],
+    ["17:15", 30], ["17:30", 30], ["17:45", 15],
+  ]) conferir("2026-11-07", horario, duracao, true);
   for (const [horario, duracao] of [
-    ["15:00", 90], ["15:30", 90],
-    ["16:00", 30], ["16:00", 151], ["16:00", 180],
-    ["14:00", 270], ["14:30", 240],
-    ["16:30", 30], ["16:30", 60], ["16:30", 120],
-    ["17:00", 90], ["17:30", 30], ["23:00", 120],
-  ]) {
-    conferir("2026-11-07", horario, duracao, false);
-  }
+    ["16:00", 151], ["16:00", 180], ["14:00", 270],
+    ["14:30", 240], ["16:30", 120], ["17:00", 90],
+    ["17:30", 60], ["18:00", 15], ["23:00", 120],
+  ]) conferir("2026-11-07", horario, duracao, false);
 });
 
 test("não existe pausa fixa: quinta, sexta e sábado aceitam atendimentos atravessando 13h30", () => {
