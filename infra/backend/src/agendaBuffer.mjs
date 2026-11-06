@@ -15,6 +15,24 @@ export function atendimentosConflitamComBuffer(
   return inicio < fimExistente + buffer && fim > inicioExistente - buffer;
 }
 
+/**
+ * A exceção aceita SOMENTE o encaixe exatamente consecutivo de agendamentos
+ * confirmados da mesma conta (sinal calculado pelo servidor ou Firestore).
+ * Bloqueios nunca são dispensados. Status pendente e outras clientes não elegíveis.
+ * A sobreposição física jamais é permitida.
+ */
+export function indisponivelComBufferSequencial(inicio, fim, intervalos, buffer = BUFFER_ENTRE_ATENDIMENTOS_MINUTOS) {
+  if (!Array.isArray(intervalos)) throw new TypeError("Lista de intervalos inválida");
+  return intervalos.some((item) => {
+    if (item.tipo === "bloqueio") {
+      return inicio < item.fimMinuto && fim > item.inicioMinuto;
+    }
+    if (!atendimentosConflitamComBuffer(inicio, fim, item.inicioMinuto, item.fimMinuto, buffer)) return false;
+    const consecutivo = inicio === item.fimMinuto || fim === item.inicioMinuto;
+    return !(item.sequencialMesmaCliente === true && consecutivo);
+  });
+}
+
 export function indisponivelComBuffer(inicio, fim, intervalos) {
   if (!Array.isArray(intervalos)) throw new TypeError("Lista de intervalos inválida");
   return intervalos.some((intervalo) => intervalo.tipo === "bloqueio"

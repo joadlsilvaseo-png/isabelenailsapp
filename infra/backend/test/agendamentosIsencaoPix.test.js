@@ -39,7 +39,20 @@ function criarFixture({ isenta = true, reservas = [], documentos = {}, falharCom
             async get() { return snapshot(state.documentos, path); },
           };
         },
-        where(campo, operador, valor) { return { nome, campo, operador, valor }; },
+        where(campo, operador, valor) {
+          return {
+            nome, campo, operador, valor,
+            async get() {
+              const docs = [...state.documentos.entries()]
+                .filter(([path]) => path.startsWith(`${nome}/`))
+                .map(([path, dados]) => ({
+                  id: path.slice(nome.length + 1), data: () => structuredClone(dados),
+                }))
+                .filter((doc) => doc.data()?.[campo] === valor);
+              return { docs };
+            },
+          };
+        },
       };
     },
     async runTransaction(callback) {
@@ -147,10 +160,17 @@ function criarFixture({ isenta = true, reservas = [], documentos = {}, falharCom
             const [data, inicio, fim] = params;
             const lista = [...state.reservas, ...(pendingReservations || []).filter((r) => r.tipo === "insert").map((r) => r.registro)];
             const excluido = params[3];
+            const temExcecao = sql.includes("AND NOT (");
+            const uid = temExcecao ? params[3] : null;
             const encontrados = lista.filter((reserva) => reserva.data === data &&
               ["reservada", "confirmada"].includes(reserva.estado) &&
-              (excluido === undefined || (reserva.agendamentoId || reserva.agendamento_id) !== excluido) &&
-              inicio < reserva.fim && fim > reserva.inicio);
+              (!temExcecao && excluido !== undefined
+                ? (reserva.agendamentoId || reserva.agendamento_id) !== excluido : true) &&
+              inicio < reserva.fim + 15 && fim > reserva.inicio - 15 &&
+              !(temExcecao && reserva.estado === "confirmada" &&
+                (reserva.clienteUid || reserva.cliente_uid) === uid &&
+                Boolean(reserva.agendamentoId || reserva.agendamento_id) &&
+                (reserva.fim === inicio || reserva.inicio === fim)));
             return { rows: encontrados, rowCount: encontrados.length };
           }
           if (sql.includes("INSERT INTO public.pix_reservas")) {
@@ -365,4 +385,63 @@ test("agendamento isento gera notificações push para cliente e administradora"
   assert.deepEqual(eventos.map((evento) => evento.destinatario), ["cliente", "admin"]);
   assert.equal(eventos[0].tipo, "confirmacao_isencao_cliente");
   assert.match(eventos[0].mensagem, /pagar sinal PIX/);
+});
+
+test("isenta agenda serviço exatamente após outro confirmado da mesma conta", async () => {
+  const f = criarFixture({ reservas: [{
+    data: DATA, inicio: 840, fim: 900, estado: "confirmada",
+    clienteUid: UID, agendamentoId: "anterior", cobrancaId: null,
+  }], documentos: {
+    "agendamentos/anterior": {
+      clienteId: UID, data: DATA, horario: "14:00", duracao: 60, status: "confirmado",
+    },
+  } });
+  const resultado = await criarAgendamentoIsento({
+    pool: f.pool, db: f.firestore, uid: UID, dados: payload(CHAVE, "15:00"),
+    dependencies: f.dependencies,
+  });
+  assert.equal(resultado.agendamentoConfirmado, true);
+  assert.equal(f.state.documentos.get("agendamentos/anterior").horario, "14:00");
+  assert.equal(f.state.reservas.length, 2);
+});
+
+test("isenta não ignora buffer de outra cliente nem reserva pendente da própria conta", async () => {
+  for (const reserva of [
+    { clienteUid: "outra", estado: "confirmada" },
+    { clienteUid: UID, estado: "reservada" },
+  ]) {
+    const f = criarFixture({ reservas: [{
+      data: DATA, inicio: 840, fim: 900, agendamentoId: "anterior", ...reserva,
+    }] });
+    await assert.rejects(criarAgendamentoIsento({
+      pool: f.pool, db: f.firestore, uid: UID, dados: payload(CHAVE, "15:00"),
+      dependencies: f.dependencies,
+    }), (erro) => erro.codigo === "HORARIO_RESERVADO_PIX");
+  }
+});
+
+test("isenta não permite sobreposição mesmo entre serviços da mesma cliente", async () => {
+  const f = criarFixture({ reservas: [{
+    data: DATA, inicio: 840, fim: 900, estado: "confirmada",
+    clienteUid: UID, agendamentoId: "anterior",
+  }], documentos: {
+    "agendamentos/anterior": {
+      clienteId: UID, data: DATA, horario: "14:00", duracao: 60, status: "confirmado",
+    },
+  } });
+  await assert.rejects(criarAgendamentoIsento({
+    pool: f.pool, db: f.firestore, uid: UID, dados: payload(CHAVE, "14:45"),
+    dependencies: f.dependencies,
+  }), (erro) => ["HORARIO_RESERVADO_PIX", "HORARIO_OCUPADO", "ENCAIXE_INDISPONIVEL"].includes(erro.codigo));
+});
+
+test("reserva sem agendamento vinculado não concede exceção mesmo se estiver confirmada", async () => {
+  const f = criarFixture({ reservas: [{
+    data: DATA, inicio: 840, fim: 900, estado: "confirmada",
+    clienteUid: UID, agendamentoId: null,
+  }] });
+  await assert.rejects(criarAgendamentoIsento({
+    pool: f.pool, db: f.firestore, uid: UID, dados: payload(CHAVE, "15:00"),
+    dependencies: f.dependencies,
+  }), (erro) => erro.codigo === "HORARIO_RESERVADO_PIX");
 });

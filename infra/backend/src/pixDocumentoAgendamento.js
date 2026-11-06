@@ -1,4 +1,4 @@
-import { atendimentosConflitamComBuffer, BUFFER_ENTRE_ATENDIMENTOS_MINUTOS } from "./agendaBuffer.mjs";
+import { indisponivelComBufferSequencial, BUFFER_ENTRE_ATENDIMENTOS_MINUTOS } from "./agendaBuffer.mjs";
 
 const STATUS_OCUPADOS = new Set([
   "agendado", "reagendado", "confirmado"
@@ -16,7 +16,7 @@ export function obterDuracaoAgendamentoPix(valor) {
 }
 
 export function encontrarConflitoAgendamentoPix(
-  registros, inicio, fim, buffer = BUFFER_ENTRE_ATENDIMENTOS_MINUTOS,
+  registros, inicio, fim, buffer = BUFFER_ENTRE_ATENDIMENTOS_MINUTOS, clienteUid = null,
 ) {
   for (const registro of registros) {
     if (!STATUS_OCUPADOS.has(registro.status)) continue;
@@ -31,9 +31,13 @@ export function encontrarConflitoAgendamentoPix(
     const comeco = h * 60 + m;
     const duracao = obterDuracaoAgendamentoPix(registro.duracao);
 
-    if (atendimentosConflitamComBuffer(inicio, fim, comeco, comeco + duracao, buffer)) {
-      return true;
-    }
+    const mesmaCliente = buffer === BUFFER_ENTRE_ATENDIMENTOS_MINUTOS &&
+      typeof clienteUid === "string" && clienteUid.length > 0 &&
+      registro.clienteId === clienteUid && registro.status === "confirmado";
+    if (indisponivelComBufferSequencial(inicio, fim, [{
+      inicioMinuto: comeco, fimMinuto: comeco + duracao,
+      sequencialMesmaCliente: mesmaCliente,
+    }], buffer)) return true;
   }
 
   return false;

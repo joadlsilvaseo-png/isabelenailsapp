@@ -71,7 +71,8 @@ test("PIX, isenção, reagendamento pago e Alterar Serviço validam buffer no ba
   ]) {
     assert.match(ler(path), /BUFFER_ENTRE_ATENDIMENTOS_MINUTOS/);
   }
-  assert.match(ler("pixAgendaFirestore.js"), /BUFFER_ENTRE_ATENDIMENTOS_MINUTOS/);
+  assert.match(ler("pixAgendaFirestore.js"), /indisponivelComBufferSequencial/);
+  assert.match(ler("agendaBuffer.mjs"), /atendimentosConflitamComBuffer/);
   assert.match(ler("pixConfirmacaoFirestore.js"), /reserva\.fim_minuto,\s*0,/);
   assert.match(ler("pixDisponibilidadeApi.js"), /'bloqueio'::text AS tipo/);
 });
@@ -136,4 +137,36 @@ test("servidor revalida encaixe com reservas, Firestore, bloqueios e exclusão d
   items.push({ inicio_minuto: 1140, fim_minuto: 1230, tipo: "reserva" });
   items.push({ inicio_minuto: 1080, fim_minuto: 1110, tipo: "bloqueio" });
   assert.equal(await verificarEncaixeNoBanco(params), false); // fechamento manual
+});
+
+test("mesma cliente pode emendar serviços confirmados, sem liberar sobreposições", () => {
+  const cliente = [{
+    inicioMinuto: 960, fimMinuto: 1020, tipo: "agendamento", sequencialMesmaCliente: true,
+  }];
+  assert.equal(intervaloSobrepoeDisponibilidade(1020, 1140, cliente), false);
+  assert.equal(intervaloSobrepoeDisponibilidade(900, 960, cliente), false);
+  assert.equal(intervaloSobrepoeDisponibilidade(1005, 1065, cliente), true);
+  assert.equal(intervaloSobrepoeDisponibilidade(945, 1005, cliente), true);
+  assert.equal(intervaloSobrepoeDisponibilidade(1010, 1070, cliente), true);
+  assert.equal(intervaloSobrepoeDisponibilidade(1020, 1140,
+    [{ ...cliente[0], sequencialMesmaCliente: false }]), true);
+  assert.equal(intervaloSobrepoeDisponibilidade(1020, 1140,
+    [{ ...cliente[0], tipo: "bloqueio" }]), false); // bloqueio anterior não se estende além da duração
+  assert.equal(intervaloSobrepoeDisponibilidade(990, 1080,
+    [{ inicioMinuto: 1020, fimMinuto: 1035, tipo: "bloqueio" }]), true);
+  assert.equal(encontrarConflitoAgendamentoPix([
+    { status: "confirmado", clienteId: "uid-1", horario: "16:00", duracao: 60 },
+  ], 1020, 1140, 15, "uid-1"), false);
+  assert.equal(encontrarConflitoAgendamentoPix([
+    { status: "confirmado", clienteId: "uid-2", horario: "16:00", duracao: 60 },
+  ], 1020, 1140, 15, "uid-1"), true);
+  assert.equal(encontrarConflitoAgendamentoPix([
+    { status: "agendado", clienteId: "uid-1", horario: "16:00", duracao: 60 },
+  ], 1020, 1140, 15, "uid-1"), true);
+  assert.equal(encontrarConflitoAgendamentoPix([
+    { status: "confirmado", clienteId: "uid-1", horario: "16:00", duracao: 60 },
+  ], 1020, 1140), true); // clientes não autenticados não recebem exceção
+  assert.equal(encontrarConflitoAgendamentoPix([
+    { status: "confirmado", clienteId: "uid-1", horario: "16:00", duracao: 60 },
+  ], 1020, 1140, 0), false); // lógica antiga do pagamento, sem buffer
 });
