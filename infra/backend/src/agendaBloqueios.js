@@ -1,5 +1,6 @@
 import { validarDataGerenciavel, listarSlotsGerenciaveis } from "./agendamentoRegras.mjs";
 import { verificarUsuario } from "./pushSubscriptions.js";
+import { DURACAO_BLOQUEIO_MINUTOS, planejarAlteracaoBloqueios, ConflitoBloqueio } from "./agendaBloqueiosGrade.mjs";
 
 const DATA_ISO = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_CORPO = 32768;
@@ -102,11 +103,30 @@ function validarData(data, agora) {
 function validarSelecao(data, horas, agora) {
   validarData(data, agora);
   const permitidos = new Set(listarSlotsGerenciaveis(data, agora));
-  if (!Array.isArray(horas) || horas.length === 0 || horas.length > 48
+  if (!Array.isArray(horas) || horas.length === 0 || horas.length > 96
     || horas.some((m) => !Number.isInteger(m) || !permitidos.has(m))
     || new Set(horas).size !== horas.length) {
     throw new ErroCalendario(400, "Seleção de horários inválida");
   }
+}
+
+/**
+ * Compatibilidade com páginas administrativas antigas que selecionam blocos
+ * de 30 min. Sem marcador de versão, jamais transformar 30 em 15 silenciosamente.
+ * O frontend novo envia resolucaoMinutos=15 e usa cada quarto diretamente.
+ */
+export function normalizarHorariosDaRequisicao(horas, resolucaoMinutos, data, agora) {
+  if (resolucaoMinutos === 15) return horas;
+  if (resolucaoMinutos !== undefined && resolucaoMinutos !== 30) {
+    throw new ErroCalendario(400, "Resolução de horários inválida");
+  }
+  const permitidos = new Set(listarSlotsGerenciaveis(data, agora));
+  if (!Array.isArray(horas) || !horas.length || horas.length > 48 ||
+      horas.some((minuto) => !Number.isInteger(minuto) || minuto % 30 !== 0 ||
+        !permitidos.has(minuto) || !permitidos.has(minuto + 15))) {
+    throw new ErroCalendario(409, "Atualize o calendário para utilizar a nova grade de 15 minutos.");
+  }
+  return horas.flatMap((inicio) => [inicio, inicio + 15]);
 }
 
 async function consultarDia(pool, db, data) {
@@ -127,6 +147,46 @@ async function consultarDia(pool, db, data) {
     ocupados: [...reservas.rows.map(({ inicio_minuto, fim_minuto }) =>
       ({ inicioMinuto: Number(inicio_minuto), fimMinuto: Number(fim_minuto) })), ...firestore],
   };
+}
+
+/**
+ * Aplicação de bloqueios 15/30 sob lock por data.
+ * Os 30 minutos legados permanecem intactos até alguém decidir reabrir
+ * somente um dos dois quartos. Nesse caso, a metade não selecionada
+ * continua fechada e com metadados originais.
+ */
+async function aplicarBloqueiosNaData(conexao, data, horas, acao, uid) {
+  const registros = await conexao.query(`
+    SELECT inicio_minuto, fim_minuto, alterado_por_uid, criado_em
+    FROM public.agenda_bloqueios
+    WHERE data_servico = $1
+    ORDER BY inicio_minuto
+    FOR UPDATE
+  `, [data]);
+  let plano;
+  try {
+    plano = planejarAlteracaoBloqueios(registros.rows, horas, acao, uid);
+  } catch (erro) {
+    if (erro instanceof ConflitoBloqueio) throw new ErroCalendario(409, erro.message);
+    throw erro;
+  }
+
+  for (const item of plano.excluir) {
+    const removido = await conexao.query(`
+      DELETE FROM public.agenda_bloqueios
+      WHERE data_servico = $1 AND inicio_minuto = $2 AND fim_minuto = $3
+    `, [data, item.inicioMinuto, item.fimMinuto]);
+    if (removido.rowCount !== 1) {
+      throw new ErroCalendario(409, "Bloqueio alterado durante a operação. Tente atualizar o calendário.");
+    }
+  }
+  for (const item of plano.incluir) {
+    await conexao.query(`
+      INSERT INTO public.agenda_bloqueios
+        (data_servico, inicio_minuto, fim_minuto, alterado_por_uid, criado_em)
+      VALUES ($1, $2, $3, $4, COALESCE($5::timestamptz, NOW()))
+    `, [data, item.inicioMinuto, item.fimMinuto, item.uid, item.criadoEm ?? null]);
+  }
 }
 
 export async function alterarHorarios({ pool, db, uid, data, horas, acao, agora = new Date() }) {
@@ -152,23 +212,11 @@ export async function alterarHorarios({ pool, db, uid, data, horas, acao, agora 
         ({ inicioMinuto: Number(inicio_minuto), fimMinuto: Number(fim_minuto) })), ...doDia];
       if (horas.some((inicio) =>
         ocupados.some(({ inicioMinuto, fimMinuto }) =>
-          sobrepoe(inicio, inicio + 30, inicioMinuto, fimMinuto)))) {
+          sobrepoe(inicio, inicio + DURACAO_BLOQUEIO_MINUTOS, inicioMinuto, fimMinuto)))) {
         throw new ErroCalendario(409, "Existem reservas nesses horários. Nenhum horário foi fechado.");
       }
-      for (const inicio of horas) {
-        await client.query(`
-          INSERT INTO public.agenda_bloqueios
-            (data_servico, inicio_minuto, fim_minuto, alterado_por_uid)
-          VALUES ($1, $2, $3, $4)
-          ON CONFLICT (data_servico, inicio_minuto) DO NOTHING
-        `, [data, inicio, inicio + 30, uid]);
-      }
-    } else {
-      await client.query(`
-        DELETE FROM public.agenda_bloqueios
-        WHERE data_servico = $1 AND inicio_minuto = ANY($2::integer[])
-      `, [data, horas]);
     }
+    await aplicarBloqueiosNaData(client, data, horas, acao, uid);
     await client.query("COMMIT");
     return { data, acao, quantidade: horas.length };
   } catch (erro) {
@@ -242,32 +290,22 @@ export async function alterarHorariosLote({
         ];
         const conflito = horas.find((inicio) =>
           ocupados.some(({ inicioMinuto, fimMinuto }) =>
-            sobrepoe(inicio, inicio + 30, inicioMinuto, fimMinuto)));
+            sobrepoe(inicio, inicio + DURACAO_BLOQUEIO_MINUTOS, inicioMinuto, fimMinuto)));
         if (conflito !== undefined) {
           throw new ErroCalendario(
             409,
-            `Conflito em ${formatarData(data)}, ${formatarMinuto(conflito)}–${formatarMinuto(conflito + 30)}. Nenhum horário do lote foi alterado.`,
+            `Conflito em ${formatarData(data)}, ${formatarMinuto(conflito)}–${formatarMinuto(conflito + DURACAO_BLOQUEIO_MINUTOS)}. Nenhum horário do lote foi alterado.`,
           );
         }
       }
 
       // Só grava depois que todas as datas passaram pela revalidação.
       for (const { data, horas } of lote) {
-        for (const inicio of horas) {
-          await client.query(`
-            INSERT INTO public.agenda_bloqueios
-              (data_servico, inicio_minuto, fim_minuto, alterado_por_uid)
-            VALUES ($1, $2, $3, $4)
-            ON CONFLICT (data_servico, inicio_minuto) DO NOTHING
-          `, [data, inicio, inicio + 30, uid]);
-        }
+        await aplicarBloqueiosNaData(client, data, horas, acao, uid);
       }
     } else {
       for (const { data, horas } of lote) {
-        await client.query(`
-          DELETE FROM public.agenda_bloqueios
-          WHERE data_servico = $1 AND inicio_minuto = ANY($2::integer[])
-        `, [data, horas]);
+        await aplicarBloqueiosNaData(client, data, horas, acao, uid);
       }
     }
 
@@ -315,10 +353,22 @@ export async function atenderGerenciarCalendario(req, res, pool, dependencies = 
       const corpo = await lerCorpo(req);
       const resultado = rotaLote
         ? await alterarHorariosLote({
-            pool, db, uid, datas: corpo.datas, acao: corpo.acao, agora,
+            pool, db, uid,
+            datas: Array.isArray(corpo.datas)
+              ? corpo.datas.map((item) => ({
+                  data: item?.data,
+                  horas: normalizarHorariosDaRequisicao(
+                    item?.horas, corpo.resolucaoMinutos, item?.data, agora,
+                  ),
+                }))
+              : corpo.datas,
+            acao: corpo.acao, agora,
           })
         : await alterarHorarios({
-            pool, db, uid, data: corpo.data, horas: corpo.horas,
+            pool, db, uid, data: corpo.data,
+            horas: normalizarHorariosDaRequisicao(
+              corpo.horas, corpo.resolucaoMinutos, corpo.data, agora,
+            ),
             acao: corpo.acao, agora,
           });
       resposta(res, 200, resultado);

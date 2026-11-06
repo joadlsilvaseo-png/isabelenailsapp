@@ -563,6 +563,8 @@ MIGRATION_020="$RELEASE_DIR/infra/migrations/020_agendamento_alteracoes_servico.
 [[ -f "$MIGRATION_020" ]] || die "Migracao 020 nao encontrada no commit alvo."
 MIGRATION_021="$RELEASE_DIR/infra/migrations/021_pix_reagendamentos_pagos.sql"
 [[ -f "$MIGRATION_021" ]] || die "Migracao 021 nao encontrada no commit alvo."
+MIGRATION_022="$RELEASE_DIR/infra/migrations/022_agenda_bloqueios_grade_15.sql"
+[[ -f "$MIGRATION_022" ]] || die "Migracao 022 nao encontrada no commit alvo."
 
 UPDATE_OVERRIDE="$BACKUP_DIR/update-compose.yaml"
 TARGET_IMAGE_TAG="isabele-nails-api:release-${TARGET_COMMIT}"
@@ -1250,6 +1252,19 @@ case "$MIGRATION_021_STATE" in
   *) die "Preflight da migracao 021 falhou." ;;
 esac
 
+# Preflight 022: a grade administrativa aceita intervalos antigos de 30
+# minutos e novos de 15. Abortamos se a constraint nao corresponder
+# exatamente a um dos dois estados previstos (nada de 'corrigir' producao).
+MIGRATION_022_STATE_SQL="$RELEASE_DIR/infra/scripts/agenda-grade15-state.sql"
+[[ -f "$MIGRATION_022_STATE_SQL" ]] || die "Preflight SQL da migracao 022 nao encontrado no commit alvo."
+MIGRATION_022_STATE="$(compose_snapshot exec -T "$DB_SERVICE" sh -lc 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At' <"$MIGRATION_022_STATE_SQL" | tr -d '\r\n')"
+case "$MIGRATION_022_STATE" in
+  pending) echo "Migracao 022 pendente; sera aplicada apos backup e antes da nova API." ;;
+  applied) echo "Migracao 022 ja aplicada; preservando bloqueios 15/30." ;;
+  partial) die "Migracao 022 parcial/inconsistente; API e dados preservados." ;;
+  *) die "Preflight da migracao 022 falhou." ;;
+esac
+
 printf '%s\n' "$DB_CONTAINER" >"$BACKUP_DIR/db-container-id"
 compose_snapshot exec -T "$DB_SERVICE" sh -lc 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' >"$BACKUP_DIR/postgres-before.dump"
 [[ -s "$BACKUP_DIR/postgres-before.dump" ]] || die "Backup PostgreSQL vazio; atualizacao cancelada."
@@ -1272,6 +1287,7 @@ MIGRATION_018_APPLIED=false
 MIGRATION_019_APPLIED=false
 MIGRATION_020_APPLIED=false
 MIGRATION_021_APPLIED=false
+MIGRATION_022_APPLIED=false
 NEW_API_STARTED=false
 restore_old_api_on_error() {
   local rc=$?
@@ -1294,7 +1310,7 @@ EOF
     elif [[ "$API_STOPPED" == true ]]; then
       docker start "$API_CONTAINER" >/dev/null || true
     fi
-    if [[ "$MIGRATION_APPLIED" == true || "$MIGRATION_STATE" == applied || "$MIGRATION_011_APPLIED" == true || "$MIGRATION_011_STATE" == applied || "$MIGRATION_012_APPLIED" == true || "$MIGRATION_012_STATE" == applied || "$MIGRATION_016_APPLIED" == true || "$MIGRATION_016_STATE" == applied || "$MIGRATION_018_APPLIED" == true || "$MIGRATION_018_STATE" == applied || "$MIGRATION_019_APPLIED" == true || "$MIGRATION_019_STATE" == applied || "$MIGRATION_020_APPLIED" == true || "$MIGRATION_020_STATE" == applied || "$MIGRATION_021_APPLIED" == true || "$MIGRATION_021_STATE" == applied ]]; then
+    if [[ "$MIGRATION_APPLIED" == true || "$MIGRATION_STATE" == applied || "$MIGRATION_011_APPLIED" == true || "$MIGRATION_011_STATE" == applied || "$MIGRATION_012_APPLIED" == true || "$MIGRATION_012_STATE" == applied || "$MIGRATION_016_APPLIED" == true || "$MIGRATION_016_STATE" == applied || "$MIGRATION_018_APPLIED" == true || "$MIGRATION_018_STATE" == applied || "$MIGRATION_019_APPLIED" == true || "$MIGRATION_019_STATE" == applied || "$MIGRATION_020_APPLIED" == true || "$MIGRATION_020_STATE" == applied || "$MIGRATION_021_APPLIED" == true || "$MIGRATION_021_STATE" == applied || "$MIGRATION_022_APPLIED" == true || "$MIGRATION_022_STATE" == applied ]]; then
       echo "Migracoes aplicadas (incluindo 016, 018 e 019, se executadas) permanecem preservadas; nenhum dado foi removido."
     fi
     echo "Backup e configuracao efetiva anterior: $BACKUP_DIR"
@@ -1367,6 +1383,13 @@ if [[ "$MIGRATION_021_STATE" == pending ]]; then
   echo "Migracao 021 aplicada com sucesso; PIX e reservas existentes preservados."
 else
   echo "Pulando migracao 021 ja aplicada; operacoes existentes serao mantidas."
+fi
+if [[ "$MIGRATION_022_STATE" == pending ]]; then
+  compose_snapshot exec -T "$DB_SERVICE" sh -lc 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <"$MIGRATION_022"
+  MIGRATION_022_APPLIED=true
+  echo "Migracao 022 aplicada: bloqueios antigos mantidos e novos intervalos de 15 min permitidos."
+else
+  echo "Pulando migracao 022 ja aplicada; bloqueios existentes preservados."
 fi
 NEW_API_STARTED=true
 compose_snapshot up -d --no-deps "$API_SERVICE"

@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="base.css?v=1.0.4">
-  <link rel="stylesheet" href="agendamento.css?v=2.0.0">
+  <link rel="stylesheet" href="agendamento.css?v=2.1.0">
   <link rel="stylesheet" href="admin-calendario.css?v=2.0.1">
 </head>
 <body data-page="admin-calendario">
@@ -89,9 +89,9 @@
             <span><i class="calendario-legenda-inicio-limitado"></i> Com regra</span>
           </div>
 
-          <div class="agendamento-times" role="group" aria-label="Selecionar intervalos de 30 minutos" aria-live="polite"></div>
+          <div class="agendamento-times" role="group" aria-label="Selecionar intervalos de 15 minutos" aria-live="polite"></div>
           <button id="calendario-tentar-novamente" class="calendario-tentar-novamente" type="button" hidden>Tentar novamente</button>
-          <p class="calendario-ajuda">Cada seleção corresponde a 30 minutos. <strong>Sem início</strong> significa que a cliente não pode começar um atendimento naquele horário; <strong>Com regra</strong> indica restrições de duração. Esses intervalos podem ser fechados normalmente, inclusive quando fazem parte de um serviço mais longo. A disponibilidade final depende também das reservas e dos bloqueios existentes.</p>
+          <p class="calendario-ajuda">Cada seleção corresponde a 15 minutos. Bloqueios antigos de 30 minutos continuam protegidos e podem ser reabertos pela metade. <strong>Sem início</strong> significa que a cliente não pode começar um atendimento naquele horário; <strong>Com regra</strong> indica restrições de duração. Esses intervalos podem ser fechados normalmente, inclusive quando fazem parte de um serviço mais longo. A disponibilidade final depende também das reservas e dos bloqueios existentes.</p>
         </section>
 
         <footer class="agendamento-footer calendario-footer">
@@ -111,6 +111,6 @@
     </main>
     <section id="calendario-acesso" class="calendario-acesso" role="status" aria-live="polite">Conferindo acesso administrativo...</section>
   </div>
-  <script type="module" src="admin-calendario.js?v=2.0.4"></script>
+  <script type="module" src="admin-calendario.js?v=2.2.0"></script>
 </body>
 </html>

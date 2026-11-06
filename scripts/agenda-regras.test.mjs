@@ -56,60 +56,47 @@ test("janela administrativa cruza dezembro e janeiro sem ano fixo", () => {
   assert.equal(validarDataGerenciavel("2027-01-01", new Date("2026-12-31T15:00:00Z")).valido, true);
 });
 
-test("terça oferece apenas 14:00, 14:30 e 15:00, com término até 17:30", () => {
-  const date = dataDoDia(2);
-  for (const time of ["14:00", "14:30", "15:00"]) assert.equal(validarHorarioEspecial(date, time, 60), true, time);
-  for (const time of ["13:30", "15:30", "16:00"]) assert.equal(validarHorarioEspecial(date, time, 60), false, time);
-  for (const duracao of [30, 60, 90, 120]) assert.equal(validarHorarioEspecial(date, "15:30", duracao), false, `${duracao} min`);
-  assert.equal(validarHorarioEspecial(date, "15:00", 150), true);
-  assert.equal(validarHorarioEspecial(date, "15:00", 151), false);
+test("terça aceita inícios a cada 15 min dentro da janela 14h–17h30", () => {
+  const data = dataDoDia(2);
+  for (const h of ["14:00", "14:15", "15:30", "16:15", "16:30"]) {
+    assert.equal(validarHorarioEspecial(data, h, 60), true, h);
+  }
+  for (const h of ["13:45", "16:45", "17:00", "17:30"]) {
+    assert.equal(validarHorarioEspecial(data, h, 60), false, h);
+  }
+  assert.equal(validarHorarioEspecial(data, "15:00", 150), true);
+  assert.equal(validarHorarioEspecial(data, "15:00", 151), false);
+  assert.equal(validarHorarioEspecial(data, "14:10", 60), false);
 });
 
-test("quartas liberam apenas os horários e durações autorizados pela manhã e às 15h", () => {
-  // Regras semanais: todas as quartas, não somente a quarta do teste.
-  for (const date of ["2026-11-04", "2026-11-11", "2026-11-18", "2026-11-25", "2027-01-06"]) {
-    for (const [horario, duracoes] of [
-      ["09:00", [60, 90, 120, 150]],
-      ["10:00", [60, 90, 120]],
-      ["10:30", [60, 90]],
-      ["11:00", [30, 60]],
-      ["15:00", [60, 90]],
-    ]) {
-      for (const duracao of duracoes) {
-        assert.equal(validarHorarioEspecial(date, horario, duracao), true, `${date} ${horario} ${duracao} min`);
-      }
+test("quarta utiliza duas janelas reais e permite início :15/:45 sem exceções", () => {
+  for (const data of ["2026-11-04", "2026-11-11", "2026-11-18", "2026-11-25", "2027-01-06"]) {
+    for (const hora of ["09:00","09:15","09:30","10:45","11:30","14:00","14:15","15:15","16:30"]) {
+      assert.equal(validarHorarioEspecial(data, hora, 60), true, hora);
     }
-    // A tarde às 14h preserva o limite existente de 17h30.
-    assert.equal(validarHorarioEspecial(date, "14:00", 210), true);
-    assert.equal(validarHorarioEspecial(date, "14:00", 211), false);
-    for (const [horario, duracoes] of [
-      ["09:00", [30, 180, 210]],
-      ["10:00", [30, 150, 180]],
-      ["10:30", [30, 120, 150]],
-      ["11:00", [90, 120]],
-      ["15:00", [30, 120, 150]],
-    ]) {
-      for (const duracao of duracoes) {
-        assert.equal(validarHorarioEspecial(date, horario, duracao), false, `${date} ${horario} ${duracao} min`);
-      }
+    for (const hora of ["08:45","11:45","12:15","13:45","16:45","17:00"]) {
+      assert.equal(validarHorarioEspecial(data, hora, 60), false, hora);
     }
-    for (const horario of ["08:30", "09:30", "11:30", "12:00", "13:30", "14:30", "15:30", "16:00"]) {
-      assert.equal(validarHorarioEspecial(date, horario, 60), false, `${date} ${horario}`);
-    }
+    assert.equal(validarHorarioEspecial(data, "09:00", 210), true);
+    assert.equal(validarHorarioEspecial(data, "09:00", 211), false);
+    assert.equal(validarHorarioEspecial(data, "14:00", 210), true);
+    assert.equal(validarHorarioEspecial(data, "14:00", 211), false);
   }
 });
 
-test("a grade de quarta no cliente inclui os novos inícios sem exibir horários intermediários", async () => {
+test("frontend usa janelas compartilhadas com a API e resolução de 15 minutos", async () => {
   const raiz = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
   const frontend = await readFile(path.join(raiz, "agendamento.js"), "utf8");
-  assert.match(frontend, /\["09:00", "10:00", "10:30", "11:00", "14:00", "15:00"\]\.map\(timeToMins\)/);
+  assert.match(frontend, /obterJanelasAtendimento\(dataIso\)/);
+  assert.match(frontend, /minuto \+= 15/);
   assert.match(frontend, /intervaloSobrepoeDisponibilidade\(atual, fimServico, intervalosIndisponiveis\)/);
+  assert.doesNotMatch(frontend, /listarIniciosEncaixe/);
 });
 
 test("terça, quarta, quinta, sexta e sábado mantêm os slots administrativos", () => {
   const agora = new Date("2026-10-22T12:00:00Z");
-  assert.deepEqual(listarSlotsGerenciaveis(dataDoDia(2), agora).slice(0, 2), [840, 870]);
-  assert.deepEqual(listarSlotsGerenciaveis(dataDoDia(3), agora).slice(0, 2), [540, 570]);
+  assert.deepEqual(listarSlotsGerenciaveis(dataDoDia(2), agora).slice(0, 2), [840, 855]);
+  assert.deepEqual(listarSlotsGerenciaveis(dataDoDia(3), agora).slice(0, 2), [540, 555]);
   for (const weekday of [4, 5, 6]) assert.equal(validarHorarioEspecial(dataDoDia(weekday), "16:00", 60), true);
   assert.equal(listarSlotsGerenciaveis(dataDoDia(6), agora).includes(960), true);
   for (const dia of [4, 5]) {
@@ -129,51 +116,36 @@ test("terça, quarta, quinta, sexta e sábado mantêm os slots administrativos",
 
 import { validarHorarioPix } from "../infra/backend/src/pixDisponibilidade.js";
 
-test("validador backend PIX aplica terça, quarta, fechamento e bloqueio de dezembro", () => {
+test("validador backend aceita grade de 15 e aplica fechamento real dos períodos", () => {
   const now = new Date("2026-10-22T12:00:00Z");
-  for (const horario of ["14:00", "14:30", "15:00"]) assert.equal(validarHorarioPix("2026-11-03", horario, 60, now).valido, true, horario);
-  assert.equal(validarHorarioPix("2026-11-03", "13:30", 60, now).valido, false);
-  assert.equal(validarHorarioPix("2026-11-03", "15:30", 60, now).valido, false);
-  assert.equal(validarHorarioPix("2026-11-03", "15:30", 121, now).valido, false);
-  assert.equal(validarHorarioPix("2026-11-04", "09:00", 150, now).valido, true);
-  assert.equal(validarHorarioPix("2026-11-04", "09:00", 180, now).valido, false);
-  assert.equal(validarHorarioPix("2026-11-04", "10:00", 120, now).valido, true);
-  assert.equal(validarHorarioPix("2026-11-04", "10:00", 150, now).valido, false);
-  assert.equal(validarHorarioPix("2026-11-04", "10:30", 90, now).valido, true);
-  assert.equal(validarHorarioPix("2026-11-04", "10:30", 120, now).valido, false);
-  assert.equal(validarHorarioPix("2026-11-04", "11:00", 60, now).valido, true);
-  assert.equal(validarHorarioPix("2026-11-04", "11:00", 90, now).valido, false);
-  assert.equal(validarHorarioPix("2026-11-04", "14:00", 210, now).valido, true);
-  assert.equal(validarHorarioPix("2026-11-04", "14:30", 60, now).valido, false);
-  assert.equal(validarHorarioPix("2026-11-04", "15:00", 60, now).valido, true);
-  assert.equal(validarHorarioPix("2026-11-04", "15:00", 90, now).valido, true);
-  assert.equal(validarHorarioPix("2026-11-04", "15:00", 120, now).valido, false);
-  assert.equal(validarHorarioPix("2026-12-02", "14:00", 60, now).valido, false);
+  const v=(dia,hora,duracao)=>validarHorarioPix(dia,hora,duracao,now).valido;
+  for(const hora of ["14:00","14:15","15:00","15:30","16:30"]) assert.equal(v("2026-11-03",hora,60),true,hora);
+  assert.equal(v("2026-11-03","16:45",60),false);
+  assert.equal(v("2026-11-03","15:30",121),false);
+  assert.equal(v("2026-11-03","14:10",60),false);
+  for(const [hora,duracao] of [["09:00",210],["10:00",150],["10:30",120],["11:00",90],["14:30",60],["15:00",120]]) {
+    assert.equal(v("2026-11-04",hora,duracao),true,hora);
+  }
+  for(const [hora,duracao] of [["09:00",211],["11:45",60],["13:30",60],["16:45",60]]) {
+    assert.equal(v("2026-11-04",hora,duracao),false,hora);
+  }
+  assert.equal(v("2026-12-02","14:00",60),false);
 });
 
-test("backend PIX respeita os novos limites e horários especiais de sábado", () => {
+test("PIX preserva 21h quinta/sexta e exceção exata de sábado", () => {
   const now = new Date("2026-10-22T12:00:00Z");
-  for (const data of ["2026-11-05", "2026-11-06"]) {
-    assert.equal(validarHorarioPix(data, "18:00", 120, now).valido, true);
-    assert.equal(validarHorarioPix(data, "18:30", 120, now).valido, true);
-    assert.equal(validarHorarioPix(data, "19:00", 120, now).valido, true);
-    assert.equal(validarHorarioPix(data, "19:30", 90, now).valido, true);
-    assert.equal(validarHorarioPix(data, "19:30", 120, now).valido, false);
-    assert.equal(validarHorarioPix(data, "20:00", 60, now).valido, true);
-    assert.equal(validarHorarioPix(data, "20:00", 90, now).valido, false);
-    assert.equal(validarHorarioPix(data, "20:30", 30, now).valido, true);
-    assert.equal(validarHorarioPix(data, "20:30", 60, now).valido, false);
-    assert.equal(validarHorarioPix(data, "21:00", 30, now).valido, false);
+  const v=(dia,hora,duracao)=>validarHorarioPix(dia,hora,duracao,now).valido;
+  for(const dia of ["2026-11-05","2026-11-06"]) {
+    for(const [h,d] of [["18:00",120],["19:15",90],["20:15",45],["20:30",30]]) assert.equal(v(dia,h,d),true,h);
+    for(const [h,d] of [["20:15",60],["20:45",30],["21:00",15]]) assert.equal(v(dia,h,d),false,h);
   }
-  for (const [horario, duracao] of [["13:30", 90], ["15:00", 60], ["15:30", 60], ["16:00", 60], ["16:00", 90], ["16:00", 120], ["16:00", 150], ["16:30", 90], ["17:00", 60]]) {
-    assert.equal(validarHorarioPix("2026-11-07", horario, duracao, now).valido, true, horario);
+  for(const [h,d] of [["15:00",90],["15:30",90],["16:00",30],["16:00",150],["16:30",60],["17:30",30],["17:45",15]]) {
+    assert.equal(v("2026-11-07",h,d),true,h);
   }
-  for (const [horario, duracao] of [["15:00", 90], ["15:30", 90], ["16:00", 30], ["16:00", 180], ["14:00", 270], ["16:30", 60], ["17:00", 90], ["17:30", 30]]) {
-    assert.equal(validarHorarioPix("2026-11-07", horario, duracao, now).valido, false, horario);
+  for(const [h,d] of [["16:15",150],["16:30",120],["17:30",60],["18:00",15]]) {
+    assert.equal(v("2026-11-07",h,d),false,h);
   }
 });
-
-
 
 test("API de disponibilidade bloqueia datas fora da janela antes de consultar o banco", async () => {
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");

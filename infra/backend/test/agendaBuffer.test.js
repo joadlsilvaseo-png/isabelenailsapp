@@ -98,23 +98,18 @@ test("encaixe 17h45–18h45 é seguro entre 17h30 e 19h, sem abrir :15 desnecess
   ]), false);
 });
 
-test("PIX aceita encaixe só após revalidação, sem abrir datas fechadas ou quarta comum", () => {
+test("PIX valida inícios de 15 minutos sem exigir vizinhos dos dois lados", () => {
   const agora = new Date("2026-11-05T12:00:00-03:00");
-  const intervalos = [
-    { inicioMinuto: 960, fimMinuto: 1050, tipo: "reserva" },
-    { inicioMinuto: 1140, fimMinuto: 1230, tipo: "agendamento" },
-  ];
-  const validar = (data, horario, opcoes) => validarHorarioPix(data, horario, 60, agora, opcoes);
-  assert.equal(validar("2026-12-23", "17:45").valido, false);
-  assert.equal(validar("2026-12-23", "17:45", { encaixePendente: true }).valido, true);
-  assert.equal(validar("2026-12-23", "17:45", { intervalosEncaixe: intervalos }).valido, true);
-  assert.equal(validar("2026-12-23", "17:45", { intervalosEncaixe: [intervalos[0]] }).valido, false);
-  assert.equal(validar("2026-12-23", "18:15", { intervalosEncaixe: intervalos }).valido, false);
-  assert.equal(validar("2026-12-15", "17:45", { intervalosEncaixe: intervalos }).valido, false);
-  assert.equal(validar("2026-11-04", "15:15", { encaixePendente: true }).valido, false);
-  assert.equal(validar("2026-11-03", "14:15", { encaixePendente: true }).valido, false);
-  assert.equal(validar("2026-11-07", "16:45", { encaixePendente: true }).valido, true);
-  assert.equal(validar("2026-11-07", "17:15", { encaixePendente: true }).valido, false);
+  const validar = (data, horario) => validarHorarioPix(data, horario, 60,
+    data.startsWith("2026-11-") ? new Date("2026-10-22T12:00:00Z") : agora);
+  assert.equal(validar("2026-12-23", "17:45").valido, true);
+  assert.equal(validar("2026-12-23", "18:15").valido, true);
+  assert.equal(validar("2026-12-15", "17:45").valido, false);
+  assert.equal(validar("2026-11-04", "15:15").valido, true);
+  assert.equal(validar("2026-11-03", "14:15").valido, true);
+  assert.equal(validar("2026-11-07", "16:45").valido, true);
+  assert.equal(validar("2026-11-07", "17:15").valido, false);
+  assert.equal(validar("2026-11-03", "14:10").valido, false);
 });
 
 // Este teste simula as duas leituras efetivas do backend dentro de uma
@@ -137,7 +132,7 @@ test("servidor revalida encaixe com reservas, Firestore, bloqueios e exclusão d
   assert.equal(await verificarEncaixeNoBanco(params), true);
   assert.equal(await verificarEncaixeNoBanco({ ...params, fim: 1140 }), false);
   items.splice(1, 1);
-  assert.equal(await verificarEncaixeNoBanco(params), false); // falta segunda borda
+  assert.equal(await verificarEncaixeNoBanco(params), true); // basta haver buffer de 15 min
   items.push({ inicio_minuto: 1140, fim_minuto: 1230, tipo: "reserva" });
   items.push({ inicio_minuto: 1080, fim_minuto: 1110, tipo: "bloqueio" });
   assert.equal(await verificarEncaixeNoBanco(params), false); // fechamento manual

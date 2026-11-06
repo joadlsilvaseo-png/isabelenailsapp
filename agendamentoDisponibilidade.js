@@ -1,19 +1,21 @@
 import { indisponivelComBuffer, encaixeInteligenteDisponivel } from "./infra/backend/src/agendaBuffer.mjs";
+import { obterJanelasAtendimentoSemanal } from "./infra/backend/src/agendamentoRegras.mjs?v=2.1.0";
 
 /**
- * Limites dos horários de início e término exibidos na agenda.
- * Terça e quarta mantêm suas regras especiais em agendamento.js.
- * Quinta e sexta encerram os atendimentos às 21h (último início 20h30).
- * Sábado: inícios até 17h, término às 18h, salvo 16h/150 min (18h30).
- * Sem pausa fixa de almoço: intervalos são gerenciados manualmente no calendário.
+ * Resumo visual dos limites semanais. A validação definitiva usa
+ * obterJanelasAtendimento(data) para respeitar manhã/tarde separadas
+ * e a duração real de cada serviço.
  */
 export function obterLimitesAtendimentoSemanal(diaSemana) {
-  const horarioEstendido = diaSemana === 4 || diaSemana === 5;
-  const sabado = diaSemana === 6;
+  const janelas = obterJanelasAtendimentoSemanal(diaSemana);
+  if (!janelas.length) return { minAbertura: null, minUltimoInicio: null, minFechamento: null };
+  const abertura = Math.min(...janelas.map((j) => j.inicioMinuto));
+  const encerramento = Math.max(...janelas.map((j) => j.encerramentoMinuto));
   return {
-    minAbertura: diaSemana === 4 ? 660 : 540,
-    minUltimoInicio: sabado ? 1020 : horarioEstendido ? 1230 : 1080,
-    minFechamento: sabado ? 1110 : horarioEstendido ? 1260 : 1200,
+    minAbertura: abertura,
+    minUltimoInicio: encerramento - 15,
+    // Exceção de sábado: a gestão permite fechar até 18h30 (16h/150 min).
+    minFechamento: diaSemana === 6 ? 1110 : encerramento,
   };
 }
 

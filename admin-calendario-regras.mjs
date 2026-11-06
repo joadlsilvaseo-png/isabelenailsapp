@@ -3,14 +3,14 @@ import { obterLimitesAtendimentoSemanal } from "./agendamentoDisponibilidade.js"
 
 /**
  * Orientação visual da grade administrativa, não uma verificação de vagas.
- * A grade reúne intervalos de 30 min; um intervalo sem início válido ainda
+ * A grade reúne intervalos de 15 min; um intervalo sem início válido ainda
  * pode ser ocupado pelo restante de um atendimento já iniciado.
  * Não interfere nas permissões de fechar/reabrir ou nas regras do backend.
  */
 export function obterRegraVisualDoIntervalo(dataIso, inicioMinuto) {
   if (typeof dataIso !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(dataIso)
       || !Number.isInteger(inicioMinuto) || inicioMinuto < 0 || inicioMinuto >= 1440
-      || inicioMinuto % 30 !== 0) {
+      || inicioMinuto % 15 !== 0) {
     return { tipo: "sem-inicio", detalhe: "Intervalo inválido para início de atendimento." };
   }
 
@@ -30,7 +30,7 @@ export function obterRegraVisualDoIntervalo(dataIso, inicioMinuto) {
   const limites = obterLimitesAtendimentoSemanal(diaSemana);
   const minAbertura = especial?.inicioMinuto ?? limites.minAbertura;
   const minFechamento = especial?.encerramentoMinuto ?? limites.minFechamento;
-  const minUltimoInicio = especial ? minFechamento - 30 : limites.minUltimoInicio;
+  const minUltimoInicio = especial ? minFechamento - 15 : limites.minUltimoInicio;
   const maxDuracao = Math.min(600, minFechamento - inicioMinuto);
   if (inicioMinuto < minAbertura || inicioMinuto > minUltimoInicio || maxDuracao < 1) {
     return {

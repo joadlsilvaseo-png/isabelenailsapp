@@ -157,39 +157,42 @@ export function validarServicoDezembro2026(dataIso, servico) {
     : { valido: true };
 }
 
+/**
+ * Janelas de atividade originalmente aprovadas pela profissional.
+ * Encerramento é o fim do serviço, não o último início.
+ * A resolução dos inícios é nativamente de 15 minutos.
+ */
+export const RESOLUCAO_GRADE_MINUTOS = 15;
+export function obterJanelasAtendimentoSemanal(diaSemana) {
+  const janelas = {
+    2: [[840, 1050]],                    // Terça 14:00–17:30.
+    3: [[540, 750], [840, 1050]],       // Quarta 09:00–12:30 e 14:00–17:30.
+    4: [[660, 1260]],                   // Quinta 11:00–21:00.
+    5: [[540, 1260]],                   // Sexta 09:00–21:00.
+    6: [[540, 1080]],                   // Sábado 09:00–18:00.
+  };
+  return (janelas[diaSemana] || []).map(([inicioMinuto, encerramentoMinuto]) =>
+    ({ inicioMinuto, encerramentoMinuto }));
+}
+
+export function obterJanelasAtendimento(dataIso) {
+  const partes = partesDataISO(dataIso);
+  if (!partes) return [];
+  const especial = obterExpedienteEspecialDezembro2026(dataIso);
+  if (especial) return especial.aberto
+    ? [{ inicioMinuto: especial.inicioMinuto, encerramentoMinuto: especial.encerramentoMinuto }]
+    : [];
+  return obterJanelasAtendimentoSemanal(partes.data.getUTCDay());
+}
+
 export function validarHorarioEspecialSemanal(diaSemana, inicioMinuto, duracao, opcoes = {}) {
-  if (!Number.isInteger(inicioMinuto) || !Number.isInteger(duracao) || duracao <= 0) return false;
-  const fim = inicioMinuto + duracao;
-  if (inicioMinuto % 30 === 15) {
-    // Terça e quarta semanais mantêm apenas os inícios autorizados.
-    if (opcoes.permitirEncaixe !== true || ![4, 5, 6].includes(diaSemana)) return false;
-    // Sábado: encaixes nunca ultrapassam 18h; a exceção de 18h30 continua exclusiva de 16h/150min.
-    if (diaSemana === 6) return inicioMinuto >= 540 && inicioMinuto <= 1020 && fim <= 1080;
-    return true;
-  }
-  if (inicioMinuto % 30 !== 0) return false;
-  if (diaSemana === 2) return [840, 870, 900].includes(inicioMinuto) && fim <= 1050;
-  if (diaSemana === 3) {
-    // Quarta de manhã: janelas comerciais autorizadas, com duração real.
-    if (inicioMinuto === 540) return [60, 90, 120, 150].includes(duracao); // 09:00
-    if (inicioMinuto === 600) return [60, 90, 120].includes(duracao);      // 10:00
-    if (inicioMinuto === 630) return [60, 90].includes(duracao);           // 10:30
-    if (inicioMinuto === 660) return duracao <= 60;                         // 11:00
-    // À tarde, preserva 14:00 e abre 15:00 apenas para 1h e 1h30.
-    if (inicioMinuto === 840) return fim <= 1050;                           // 14:00
-    if (inicioMinuto === 900) return [60, 90].includes(duracao);           // 15:00
-    return false;
-  }
-  if (diaSemana === 6) {
-    // Exceção única: serviço iniciado às 16h com 150 min termina às 18h30.
-    const excecao16h = inicioMinuto === 960 && duracao === 150;
-    if (inicioMinuto < 540 || inicioMinuto > 1020 || inicioMinuto % 30 !== 0 || (fim > 1080 && !excecao16h)) return false;
-    if (inicioMinuto === 900 || inicioMinuto === 930) return duracao <= 60;
-    if (inicioMinuto === 960) return [60, 90, 120, 150].includes(duracao);
-    if (inicioMinuto === 990) return duracao === 90;
-    if (inicioMinuto === 1020) return duracao <= 60;
-  }
-  return true;
+  if (!Number.isInteger(inicioMinuto) || !Number.isInteger(duracao) || duracao <= 0
+      || inicioMinuto % RESOLUCAO_GRADE_MINUTOS !== 0) return false;
+  // Exceção aprovada: sábado às 16:00 com 150 min até 18:30;
+  // não libera outros inícios além de 18:00.
+  if (diaSemana === 6 && inicioMinuto === 960 && duracao === 150) return true;
+  return obterJanelasAtendimentoSemanal(diaSemana).some(({ inicioMinuto: abre, encerramentoMinuto: fecha }) =>
+    inicioMinuto >= abre && inicioMinuto + duracao <= fecha);
 }
 
 export function validarHorarioEspecial(dataIso, horario, duracao, opcoes = {}) {
@@ -198,20 +201,20 @@ export function validarHorarioEspecial(dataIso, horario, duracao, opcoes = {}) {
   const [hora, minuto] = horario.split(":").map(Number);
   const inicioMinuto = hora * 60 + minuto;
   const duracaoMinutos = Number(duracao);
+  if (!Number.isInteger(duracaoMinutos) || duracaoMinutos <= 0 || duracaoMinutos > 600
+      || inicioMinuto % RESOLUCAO_GRADE_MINUTOS !== 0) return false;
   const especial = obterExpedienteEspecialDezembro2026(dataIso);
   if (especial) {
-    return especial.aberto && Number.isInteger(duracaoMinutos) && duracaoMinutos > 0
-      && duracaoMinutos <= 600
-      && (inicioMinuto % 30 === 0 || (opcoes.permitirEncaixe === true && inicioMinuto % 30 === 15))
+    return especial.aberto
       && inicioMinuto >= especial.inicioMinuto
       && inicioMinuto + duracaoMinutos <= especial.encerramentoMinuto;
   }
-  return validarHorarioEspecialSemanal(partes.data.getUTCDay(), inicioMinuto, duracaoMinutos, opcoes);
+  return validarHorarioEspecialSemanal(partes.data.getUTCDay(), inicioMinuto, duracaoMinutos);
 }
 
-// Horários de 30 minutos que a administradora pode fechar/reabrir.
+// Horários de 15 minutos que a administradora pode fechar/reabrir.
 // Engloba também partes de serviços já iniciados: na quarta, por exemplo,
-// fechar 09:30 bloqueia um atendimento iniciado às 09:00 que avance até 10:00.
+// fechar 09:15 bloqueia um atendimento iniciado às 09:00 que avance até 10:00.
 // NÃO muda os horários de início disponíveis para as clientes.
 export function listarSlotsGerenciaveis(dataIso, agora = new Date()) {
   const validacao = validarDataGerenciavel(dataIso, agora);
@@ -230,7 +233,7 @@ export function listarSlotsGerenciaveis(dataIso, agora = new Date()) {
   const slots = [];
   const periodos = especial ? [[especial.inicioMinuto, especial.encerramentoMinuto]] : (limites[dia] || []);
   for (const [inicio, fim] of periodos) {
-    for (let minuto = inicio; minuto + 30 <= fim; minuto += 30) {
+    for (let minuto = inicio; minuto + 15 <= fim; minuto += 15) {
       // A administradora pode fechar qualquer intervalo dentro da
       // janela de atendimento, inclusive 13h30–14h quando houver expediente.
       slots.push(minuto);

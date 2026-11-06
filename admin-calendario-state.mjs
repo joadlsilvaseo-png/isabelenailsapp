@@ -15,7 +15,7 @@ export function removerIntervalos(selecoes, data, inicios) {
   return selecoes;
 }
 
-export function agruparIntervalos(inicios, duracao = 30) {
+export function agruparIntervalos(inicios, duracao = 15) {
   const ordenados = [...new Set(inicios)].sort((a, b) => a - b);
   const grupos = [];
   for (const inicio of ordenados) {
@@ -49,6 +49,7 @@ export function resumirSelecoes(selecoes) {
 export function criarPayloadLote(selecoes, acao) {
   return {
     acao,
+    resolucaoMinutos: 15,
     datas: resumirSelecoes(selecoes).datas.map(({ data }) => ({
       data,
       horas: [...selecoes.get(data)].sort((a, b) => a - b),
