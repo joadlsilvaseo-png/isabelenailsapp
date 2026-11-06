@@ -36,21 +36,20 @@ test("dias marcados com X e terça 15/12 não possuem expediente nem slots admin
   }
 });
 
-test("1 a 13/12 preservam expedientes e regras dos dias habituais", () => {
+test("1 a 13/12 mantêm expedientes, com início a cada 15min", () => {
   assert.equal(obterExpedienteEspecialDezembro2026("2026-12-01"), null);
   assert.equal(validarHorarioEspecial("2026-12-01", "14:00", 60), true);
-  assert.equal(validarHorarioEspecial("2026-12-01", "15:30", 60), false);
+  assert.equal(validarHorarioEspecial("2026-12-01", "15:30", 60), true);
   assert.deepEqual(listarSlotsGerenciaveis("2026-12-01", AGORA).slice(0, 2), [840, 870]);
   assert.equal(validarHorarioEspecial("2026-12-02", "09:00", 150), true);
-  assert.equal(validarHorarioEspecial("2026-12-02", "09:30", 60), false);
-  assert.equal(validarHorarioEspecial("2026-12-03", "10:30", 60), true); // Quinta inicia às 11h no PIX.
+  assert.equal(validarHorarioEspecial("2026-12-02", "09:30", 60), true);
+  assert.equal(validarHorarioEspecial("2026-12-03", "10:30", 60), false); // Quinta abre 11h.
   assert.equal(validarHorarioEspecial("2026-12-05", "16:00", 150), true);
-  assert.equal(validarHorarioEspecial("2026-12-05", "16:30", 60), false);
+  assert.equal(validarHorarioEspecial("2026-12-05", "16:30", 60), true);
   assert.equal(validarHorarioEspecial("2026-12-08", "14:30", 120), true);
   assert.equal(validarHorarioEspecial("2026-12-09", "10:30", 90), true);
-  assert.equal(validarHorarioEspecial("2026-12-12", "17:30", 30), false);
-  // Regras semanais não foram alteradas para outros meses.
-  assert.equal(validarHorarioEspecial("2026-11-03", "15:30", 60), false);
+  assert.equal(validarHorarioEspecial("2026-12-12", "17:30", 30), true);
+  assert.equal(validarHorarioEspecial("2026-11-03", "15:30", 60), true);
   assert.equal(validarHorarioEspecial("2027-01-06", "10:00", 120), true);
 });
 
