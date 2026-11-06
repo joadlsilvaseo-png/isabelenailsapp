@@ -606,6 +606,20 @@ YAML
 YAML
   echo "Alteração de serviço: opt-in no novo container."
 fi
+# Opt-in isolado para o assistente. A sobreposicao de ambiente do Compose
+# acrescenta apenas esta chave e preserva PIX, Calendar e flags existentes.
+if [[ "${ENABLE_ASSISTENTE_ENCAIXES_NOTIFICACOES:-false}" == "true" ]]; then
+  if [[ "${ENABLE_PIX_PAID_RESCHEDULE:-false}" != "true" &&
+        "${ENABLE_ALTERAR_SERVICO:-false}" != "true" ]]; then
+    cat >>"$UPDATE_OVERRIDE" <<'YAML'
+    environment:
+YAML
+  fi
+  cat >>"$UPDATE_OVERRIDE" <<'YAML'
+      ASSISTENTE_ENCAIXES_NOTIFICACOES_ENABLED: "true"
+YAML
+  echo "Assistente de Agenda: notificacoes automáticas habilitadas no novo container."
+fi
 chmod 600 "$UPDATE_OVERRIDE"
 
 compose_snapshot() {

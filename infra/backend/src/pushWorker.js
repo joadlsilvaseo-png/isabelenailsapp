@@ -70,9 +70,11 @@ async function enviarNotificacao(entrega, pool, inicioAgendamento = null) {
     title: entrega.titulo,
     body: entrega.mensagem,
     url: entrega.destino,
-    tag: TIPOS_LEMBRETE.has(entrega.tipo)
-      ? `agendamento-${entrega.agendamento_id}-${entrega.tipo}`
-      : `agendamento-${entrega.agendamento_id}`,
+    tag: entrega.tipo === "oportunidade_encaixe"
+      ? `assistente-${entrega.id}`
+      : TIPOS_LEMBRETE.has(entrega.tipo)
+        ? `agendamento-${entrega.agendamento_id}-${entrega.tipo}`
+        : `agendamento-${entrega.agendamento_id}`,
   });
 
   let ttl = 3600;

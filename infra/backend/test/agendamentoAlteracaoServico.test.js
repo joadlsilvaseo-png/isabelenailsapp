@@ -269,6 +269,8 @@ function criarFixture(options = {}) {
   };
 
   const dependencies = {
+    // Congela o relógio: o cenário 2026-11-05 deve continuar futuro após essa data.
+    now: new Date("2026-11-04T12:00:00-03:00"),
     // Somente os testes habilitam a feature antes da validação na VPS.
     alteracaoServicoHabilitada: true,
     appsScriptAtualizarUrl: "https://script.google.com/macros/s/TESTE_VALIDO_12345/exec",

@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { consultarDisponibilidadePix } from "../src/pixDisponibilidadeApi.js";
+import { consultarDisponibilidadePix as consultarDisponibilidadePixOriginal } from "../src/pixDisponibilidadeApi.js";
+// Fixar o relógio da fixture: novembro de 2026 não deve se tornar passado ao executar o CI.
+const FIXTURE_AGORA = new Date("2026-11-04T15:00:00-03:00");
+const consultarDisponibilidadePix = (req, res, pool, dependencias = {}) =>
+  consultarDisponibilidadePixOriginal(req, res, pool, { now: FIXTURE_AGORA, ...dependencias });
 
 function criarResposta() {
   return {

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="description" content="Assistente de Agenda da Isabele Mariana Nails">
+  <meta name="theme-color" content="#591c31">
+  <title>Assistente de Agenda | Isabele Mariana Nails</title>
+  <link rel="manifest" href="./manifest.json">
+  <link rel="icon" type="image/png" href="./assets/favicon.png">
+  <link rel="apple-touch-icon" href="./assets/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./base.css?v=1.0.4">
+  <link rel="stylesheet" href="./admin-assistente.css?v=1">
+</head>
+<body data-page="admin-assistente" data-access-state="loading">
+  <div class="app-container assistente-layout">
+    <header class="assistente-header">
+      <a href="./principal.html" class="assistente-voltar" aria-label="Voltar à gestão">←</a>
+      <div>
+        <p class="assistente-eyebrow">Gestão profissional</p>
+        <h1>Assistente de Agenda</h1>
+      </div>
+      <span aria-hidden="true" class="assistente-avatar">✦</span>
+    </header>
+
+    <section id="assistente-acesso" class="assistente-estado" role="status" aria-live="polite">
+      Verificando acesso administrativo...
+    </section>
+
+    <main id="assistente-conteudo" hidden>
+      <section class="assistente-intro">
+        <h2>Descubra oportunidades de encaixe</h2>
+        <p>Encontre intervalos entre atendimentos onde um serviço cabe, mas o buffer habitual de 15 minutos impede um agendamento normal.</p>
+        <p class="assistente-aviso">Somente sugestões para avaliação. Nenhum agendamento ou cobrança será criado pelo assistente.</p>
+      </section>
+
+      <section class="assistente-chat" aria-label="Conversa com o assistente">
+        <div class="assistente-dialogo" id="assistente-dialogo" role="log" aria-live="polite" aria-relevant="additions">
+          <article class="assistente-bolha assistente-bolha--bot">
+            Olá, Isabele! Posso analisar oportunidades de encaixe para um dia ou mês. Por exemplo: <strong>“Quais encaixes temos em dezembro?”</strong>
+          </article>
+        </div>
+        <form id="assistente-form" class="assistente-form">
+          <label class="assistente-label" for="assistente-pergunta">Pergunte sobre sua agenda</label>
+          <div class="assistente-controles">
+            <input id="assistente-pergunta" name="pergunta" maxlength="220" autocomplete="off" required
+                   placeholder="Ex.: Quais encaixes temos em dezembro?">
+            <button id="assistente-enviar" type="submit">Consultar</button>
+          </div>
+        </form>
+      </section>
+      <section class="assistente-atalhos" aria-label="Consultas rápidas">
+        <button type="button" data-consulta="hoje">Hoje</button>
+        <button type="button" data-consulta="amanha">Amanhã</button>
+        <button type="button" data-consulta="mes">Este mês</button>
+        <button type="button" data-consulta="proximo">Próximo mês</button>
+      </section>
+      <p class="assistente-rodape">Os dados são consultados em tempo real no sistema. Confirme a disponibilidade antes de negociar encaixes manualmente.</p>
+    </main>
+  </div>
+  <script type="module" src="./admin-assistente.js?v=1"></script>
+</body>
+</html>

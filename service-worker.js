@@ -4,7 +4,7 @@
 // ======================================================
 
 const CACHE_PREFIX = "im-nails";
-const CACHE_VERSION = "v22";
+const CACHE_VERSION = "v23";
 const STATIC_CACHE = `${CACHE_PREFIX}-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `${CACHE_PREFIX}-runtime-${CACHE_VERSION}`;
 
@@ -21,6 +21,7 @@ const APP_SHELL = [
   "./admin-clientes.html",
   "./admin-agendamentos.html",
   "./admin-calendario.html",
+  "./admin-assistente.html",
   "./agendamento.html",
   "./categoria.html",
 
@@ -40,6 +41,7 @@ const APP_SHELL = [
   "./admin-clientes-isabele.css",
   "./admin-agendamentos.css",
   "./admin-calendario.css",
+  "./admin-assistente.css",
   "./agendamento.css",
 
   "./index.js",
@@ -54,6 +56,7 @@ const APP_SHELL = [
   "./admin-agendamentos.js",
   "./admin-clientes-listagem.mjs",
   "./admin-calendario.js",
+  "./admin-assistente.js",
   "./admin-calendario-regras.mjs",
   "./agendamento.js",
   "./agendamentoDisponibilidade.js",

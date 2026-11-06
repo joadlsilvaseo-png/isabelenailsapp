@@ -49,6 +49,7 @@ function destinoSeguro(destino) {
 
     const paginasPermitidas = [
       "/admin-agendamentos.html",
+      "/admin-assistente.html",
       "/meu-perfil.html",
       "/principal.html",
     ];
