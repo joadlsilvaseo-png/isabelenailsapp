@@ -1,4 +1,4 @@
-import { encaixeInteligenteDisponivel } from "./agendaBuffer.mjs";
+import { indisponivelComBuffer } from "./agendaBuffer.mjs";
 import { obterDuracaoAgendamentoPix } from "./pixDocumentoAgendamento.js";
 import { validarHorarioPix } from "./pixDisponibilidade.js";
 
@@ -6,8 +6,9 @@ const STATUS_OCUPADOS = new Set(["agendado", "reagendado", "confirmado"]);
 const HORARIO = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 /**
- * Verificação obrigatória sob o advisory lock por data, antes de gravar
- * reservas PIX, isenções, reagendamentos e alterações de serviço.
+ * Revalidação sob advisory lock por data dos inícios :15/:45.
+ * Na grade nativa de 15 minutos NÃO exigimos um atendimento anterior
+ * e posterior como âncoras: basta respeitar buffer, ocupação e bloqueios.
  * Consulta PG + Firestore + bloqueios manuais, e falha fechada.
  */
 export async function verificarEncaixeNoBanco({
@@ -47,11 +48,5 @@ export async function verificarEncaixeNoBanco({
       tipo: "agendamento",
     });
   }
-  const duracao = fim - inicio;
-  const validoPadrao = (candidato) => {
-    const horario = String(Math.floor(candidato / 60)).padStart(2, "0") + ":" +
-      String(candidato % 60).padStart(2, "0");
-    return validarHorarioPix(data, horario, duracao, agora).valido;
-  };
-  return encaixeInteligenteDisponivel(inicio, fim, intervalos, validoPadrao);
+  return !indisponivelComBuffer(inicio, fim, intervalos);
 }
