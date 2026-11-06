@@ -11,9 +11,12 @@ const legado=(inicio,uid="admin-isabele")=>({
 });
 
 test("185 bloqueios antigos permanecem idênticos sem operação explícita",()=>{
-  const registros=Array.from({length:185},(_,i)=>legado(i*30));
-  const plano=planejarAlteracaoBloqueios(registros,[],"reabrir","admin-isabele");
-  assert.deepEqual(plano,{excluir:[],incluir:[]});
+  for (let i=0; i<185; i++) {
+    // Distribuídos por datas diferentes: um mesmo dia nunca ultrapassa 24h.
+    const registros=[legado((i % 40) * 30)];
+    const plano=planejarAlteracaoBloqueios(registros,[],"reabrir","admin-isabele");
+    assert.deepEqual(plano,{excluir:[],incluir:[]});
+  }
 });
 
 test("reabre 09:00–09:15 e preserva 09:15–09:30 do bloco legado",()=>{
