@@ -18,30 +18,24 @@ test("domingo e segunda não oferecem intervalos administráveis", () => {
   }
 });
 
-test("terça separa novos inícios dos intervalos que podem ser ocupados por serviços", () => {
-  const data = "2026-11-03";
-  for (const horario of ["14:00", "14:30", "15:00"]) {
-    assert.equal(tipo(data, inicio(horario)), "inicio-limitado", horario);
+test("terça permite início de 15 min durante a janela comercial, sem criar novos períodos",()=>{
+  const data="2026-11-03";
+  for(const h of ["14:00","14:30","15:00","15:30","16:00","17:00"]) {
+    assert.equal(tipo(data,inicio(h)),"inicio-limitado",h);
   }
-  for (const horario of ["15:30", "16:00", "17:00"]) {
-    assert.equal(tipo(data, inicio(horario)), "sem-inicio", horario);
-    assert.ok(listarSlotsGerenciaveis(data, AGORA).includes(inicio(horario)), horario);
-  }
+  for(const h of ["13:30","17:30"]) assert.equal(tipo(data,inicio(h)),"sem-inicio",h);
+  assert.ok(listarSlotsGerenciaveis(data,AGORA).includes(inicio("16:00")));
 });
 
-test("quarta distingue inícios e intervalos intermediários", () => {
-  const data = "2026-11-04";
-  for (const horario of ["09:00", "10:00", "10:30", "11:00", "14:00", "15:00"]) {
-    assert.equal(tipo(data, inicio(horario)), "inicio-limitado", horario);
+test("quarta preserva duas janelas e valida inícios de hora e meia hora no painel",()=>{
+  const data="2026-11-04";
+  for(const h of ["09:00","09:30","10:00","10:30","11:00","11:30","12:00","14:00","14:30","15:00","15:30","17:00"]) {
+    assert.equal(tipo(data,inicio(h)),"inicio-limitado",h);
+    assert.ok(listarSlotsGerenciaveis(data,AGORA).includes(inicio(h)),h);
   }
-  for (const horario of ["09:30", "11:30", "12:00", "14:30", "15:30", "17:00"]) {
-    assert.equal(tipo(data, inicio(horario)), "sem-inicio", horario);
-    assert.ok(listarSlotsGerenciaveis(data, AGORA).includes(inicio(horario)), horario);
-  }
-  assert.deepEqual(obterRegraVisualDoIntervalo(data, inicio("09:00")).duracoesPermitidas,
-    [60, 90, 120, 150]);
-  assert.deepEqual(obterRegraVisualDoIntervalo(data, inicio("10:30")).duracoesPermitidas,
-    [60, 90]);
+  for(const h of ["08:30","12:30","13:30","17:30"]) assert.equal(tipo(data,inicio(h)),"sem-inicio",h);
+  assert.equal(obterRegraVisualDoIntervalo(data,inicio("09:00")).duracoesPermitidas.length,210);
+  assert.equal(obterRegraVisualDoIntervalo(data,inicio("10:30")).duracoesPermitidas.length,120);
 });
 
 test("quinta e sexta têm início até 20h30, limite de 21h e não possuem pausa fixa", () => {
@@ -63,19 +57,18 @@ test("quinta e sexta têm início até 20h30, limite de 21h e não possuem pausa
   }
 });
 
-test("sábado preserva regras especiais e exibe períodos sem início", () => {
-  const data = "2026-11-07";
-  assert.equal(tipo(data, inicio("09:00")), "livre");
-  for (const horario of ["15:00", "15:30", "16:00", "16:30", "17:00"]) {
-    assert.equal(tipo(data, inicio(horario)), "inicio-limitado", horario);
+test("sábado aceita duração real até 18h, mantendo exceção única às 16h",()=>{
+  const data="2026-11-07";
+  assert.equal(tipo(data,inicio("09:00")),"livre");
+  for(const h of ["15:00","15:30","16:00","16:30","17:00","17:30"]) {
+    assert.equal(tipo(data,inicio(h)),"inicio-limitado",h);
   }
-  assert.deepEqual(obterRegraVisualDoIntervalo(data, inicio("16:00")).duracoesPermitidas,
-    [60, 90, 120, 150]);
-  assert.deepEqual(obterRegraVisualDoIntervalo(data, inicio("16:30")).duracoesPermitidas, [90]);
-  for (const horario of ["17:30", "18:00"]) {
-    assert.equal(tipo(data, inicio(horario)), "sem-inicio", horario);
-    assert.ok(listarSlotsGerenciaveis(data, AGORA).includes(inicio(horario)));
-  }
+  const r16=obterRegraVisualDoIntervalo(data,inicio("16:00")).duracoesPermitidas;
+  assert.ok(r16.includes(150));
+  assert.equal(r16.includes(151),false);
+  assert.equal(obterRegraVisualDoIntervalo(data,inicio("16:30")).duracoesPermitidas.length,90);
+  assert.equal(tipo(data,inicio("18:00")),"sem-inicio");
+  assert.ok(listarSlotsGerenciaveis(data,AGORA).includes(inicio("18:00"))); // fechamento da exceção
 });
 
 test("a regra visual não altera fechamento nem abertura de intervalos", async () => {
