@@ -87,3 +87,10 @@ test("entradas inválidas e horários sem expediente são tratados como sem iní
   assert.equal(tipo("2026-11-31", inicio("11:00")), "sem-inicio");
   assert.equal(tipo("2026-11-05", 665), "sem-inicio");
 });
+
+test("service worker permite somente deep link estrito do calendário com data e atualiza cache", async () => {
+  const worker = await readFile(new URL("../service-worker.js", import.meta.url), "utf8");
+  assert.match(worker, /const CACHE_VERSION = "v25"/);
+  assert.ok(worker.includes(String.raw`/^\.\/admin-calendario\.html\?data=\d{4}-\d{2}-\d{2}$/`));
+  assert.match(worker, /destinoAgendaAdministrativa \|\| destinoPaginaExistente/);
+});

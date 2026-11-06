@@ -21,13 +21,13 @@ test("grade usa resolução nativa de 15 min, incluindo :15 e :45 sem segunda re
   assert.equal(validar("2026-11-10","14:05",60),false);
 });
 
-test("buffer 15 de cada lado e bloqueio manual nunca estica por 30 min",()=>{
+test("intervalos consecutivos são liberados e sobreposições/bloqueios continuam bloqueados",()=>{
   const anterior=[{inicioMinuto:540,fimMinuto:600,tipo:"agendamento"}];
-  assert.equal(indisponivelComBuffer(600,660,anterior),true);
+  assert.equal(indisponivelComBuffer(600,660,anterior),false);
   assert.equal(indisponivelComBuffer(615,675,anterior),false);
   const proximo=[{inicioMinuto:690,fimMinuto:810,tipo:"reserva"}];
   assert.equal(indisponivelComBuffer(615,675,proximo),false);
-  assert.equal(indisponivelComBuffer(630,690,proximo),true);
+  assert.equal(indisponivelComBuffer(630,690,proximo),false);
   assert.equal(indisponivelComBuffer(615,675,[{inicioMinuto:630,fimMinuto:645,tipo:"bloqueio"}]),true);
   assert.equal(indisponivelComBuffer(645,705,[{inicioMinuto:630,fimMinuto:645,tipo:"bloqueio"}]),false);
 });
@@ -52,7 +52,7 @@ test("PIX continua fail-closed quando :15 sobrepõe reserva existente",async()=>
   const db={collection:()=>({where:()=>({get:async()=>({docs:[]})})})};
   const p={conexao,db,data:"2026-11-10",inicio:615,fim:675};
   assert.equal(await verificarEncaixeNoBanco(p),true);
-  assert.equal(await verificarEncaixeNoBanco({...p,inicio:600,fim:660}),false);
+  assert.equal(await verificarEncaixeNoBanco({...p,inicio:600,fim:660}),true);
   items.push({inicio_minuto:660,fim_minuto:720,tipo:"reserva"});
   assert.equal(await verificarEncaixeNoBanco(p),false);
 });

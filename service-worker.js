@@ -4,7 +4,7 @@
 // ======================================================
 
 const CACHE_PREFIX = "im-nails";
-const CACHE_VERSION = "v24";
+const CACHE_VERSION = "v25";
 const STATIC_CACHE = `${CACHE_PREFIX}-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `${CACHE_PREFIX}-runtime-${CACHE_VERSION}`;
 
@@ -282,11 +282,13 @@ self.addEventListener("push", (event) => {
     payload.body || "Você recebeu uma nova notificação.",
   ).slice(0, 220);
 
-  const destination =
-    typeof payload.url === "string" &&
-    /^\.\/[a-zA-Z0-9/_-]+\.html$/.test(payload.url)
-      ? payload.url
-      : "./meu-perfil.html";
+  const destinoAgendaAdministrativa = typeof payload.url === "string" &&
+    /^\.\/admin-calendario\.html\?data=\d{4}-\d{2}-\d{2}$/.test(payload.url);
+  const destinoPaginaExistente = typeof payload.url === "string" &&
+    /^\.\/[a-zA-Z0-9/_-]+\.html$/.test(payload.url);
+  const destination = destinoAgendaAdministrativa || destinoPaginaExistente
+    ? payload.url
+    : "./meu-perfil.html";
 
   const options = {
     body,

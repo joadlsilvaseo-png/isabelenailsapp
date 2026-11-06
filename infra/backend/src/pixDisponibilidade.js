@@ -42,7 +42,7 @@ export function validarHorarioPix(dataIso, horario, duracao, agora = new Date(),
   const inicio = horas * 60 + minutos;
   const fim = inicio + duracao;
   // Grade nativa: :00, :15, :30 e :45 são horários normais.
-  // Conflitos/buffer continuam revalidados no banco sob lock de data.
+  // Sobreposições continuam revalidadas no banco sob lock de data.
   const gradeValida = inicio % 15 === 0;
   const diaSemana = data.getUTCDay();
 

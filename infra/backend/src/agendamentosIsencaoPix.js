@@ -225,7 +225,7 @@ export async function criarAgendamentoIsento({ pool, db, uid, dados, dependencie
       excluirAgendamentoId: agendamentoId,
       clienteUid: uid,
     }))) {
-      throw new ErroIsencaoPix(409, "Encaixe de 15 minutos indisponível", "ENCAIXE_INDISPONIVEL");
+      throw new ErroIsencaoPix(409, "O horário selecionado deixou de estar disponível", "ENCAIXE_INDISPONIVEL");
     }
 
     const reservaPropria = await conexao.query(`
@@ -429,7 +429,7 @@ export async function reagendarComBloqueio({ pool, db, uid, dados, dependencies 
       inicio: periodo.inicioMinuto, fim: periodo.fimMinuto,
       excluirAgendamentoId: agendamentoId,
     }))) {
-      throw new ErroIsencaoPix(409, "Encaixe de 15 minutos indisponível", "ENCAIXE_INDISPONIVEL");
+      throw new ErroIsencaoPix(409, "O horário selecionado deixou de estar disponível", "ENCAIXE_INDISPONIVEL");
     }
 
     const reservaExistente = await conexao.query(`

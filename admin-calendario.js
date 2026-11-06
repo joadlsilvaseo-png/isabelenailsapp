@@ -13,6 +13,7 @@ import {
   encerrarOperacaoCalendario,
   limparDatasAplicadas,
   obterDataAtiva,
+  obterDataSolicitada,
   removerIntervalos,
   resumirSelecoes,
 } from "./admin-calendario-state.mjs";
@@ -533,7 +534,9 @@ onAuthStateChanged(auth, async (user) => {
     el.acesso.hidden = true;
     el.conteudo.hidden = false;
     estado.meses = obterMesesGerenciaveis();
-    estado.mes = estado.meses[0]?.chave || null;
+    const dataSolicitada = obterDataSolicitada(window.location.search, estado.meses, listarSlotsGerenciaveis);
+    estado.mes = dataSolicitada?.slice(0, 7) || estado.meses[0]?.chave || null;
+    if (dataSolicitada) estado.dataPorMes.set(dataSolicitada.slice(0, 7), dataSolicitada);
     renderizarMeses();
     renderizarDatas();
   } catch {

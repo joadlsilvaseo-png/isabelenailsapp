@@ -1,7 +1,5 @@
-import { atendimentosConflitamComBuffer } from "./agendaBuffer.mjs";
 import { obterJanelasAtendimento, validarHorarioEspecial, validarServicoDezembro2026 } from "./agendamentoRegras.mjs";
 
-const BUFFER = 15;
 const GRADE = 15;
 
 export function paraMinutos(horario) {
@@ -21,10 +19,6 @@ function intervaloValido(valor) {
     valor.inicioMinuto >= 0 && valor.fimMinuto <= 1440 && valor.fimMinuto > valor.inicioMinuto;
 }
 
-function haSobreposicao(inicio, fim, intervalo) {
-  return inicio < intervalo.fimMinuto && fim > intervalo.inicioMinuto;
-}
-
 function obterHoraCivil(agora) {
   const partes = new Intl.DateTimeFormat("en-GB", {
     timeZone: "America/Sao_Paulo", hourCycle: "h23", hour: "2-digit", minute: "2-digit",
@@ -33,98 +27,121 @@ function obterHoraCivil(agora) {
   return Number(mapa.hour) * 60 + Number(mapa.minute);
 }
 
+function normalizarBaixaProcura(valor) {
+  return String(valor || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+}
+
+function servicoDeBaixaProcura(servico) {
+  return servico.baixaProcura === true || normalizarBaixaProcura(servico.nome) === "remocao de gel";
+}
+
+function obterPeriodosOcupados({ agendamentos, reservas, bloqueios }) {
+  const periodos = [...agendamentos, ...reservas, ...bloqueios]
+    .filter(intervaloValido)
+    .map(({ inicioMinuto, fimMinuto }) => ({ inicioMinuto, fimMinuto }))
+    .sort((a, b) => a.inicioMinuto - b.inicioMinuto || a.fimMinuto - b.fimMinuto);
+  const unidos = [];
+  for (const periodo of periodos) {
+    const anterior = unidos.at(-1);
+    if (!anterior || periodo.inicioMinuto > anterior.fimMinuto) unidos.push({ ...periodo });
+    else anterior.fimMinuto = Math.max(anterior.fimMinuto, periodo.fimMinuto);
+  }
+  return unidos;
+}
+
+function servicosQueCabem({ data, inicio, fim, servicos, horaAtual, hoje }) {
+  return servicos.filter((servico) => {
+    if (!validarServicoDezembro2026(data, servico).valido) return false;
+    for (let inicioServico = Math.ceil(inicio / GRADE) * GRADE;
+      inicioServico + servico.duracaoMinutos <= fim; inicioServico += GRADE) {
+      if (hoje === data && inicioServico <= horaAtual) continue;
+      if (validarHorarioEspecial(data, formatarMinutos(inicioServico), servico.duracaoMinutos)) return true;
+    }
+    return false;
+  });
+}
+
 /**
- * Detecta oportunidades de encaixe excepcional, jamais disponibilidade confirmada.
- * Somente lacunas ENTRE dois atendimentos ativos.
- * O serviço cabe fisicamente, mas o início exigiria dispensar um dos buffers.
- * Reservas PIX pendentes conservam o buffer; bloqueios nunca podem ser atravessados.
+ * Analisa apenas lacunas entre períodos ocupados. As sugestões nunca reservam nem
+ * alteram a agenda; a disponibilidade real continua sendo validada pelo fluxo normal.
  */
 export function analisarLacunasDoDia({
   data, agendamentos = [], reservas = [], bloqueios = [], servicos = [],
   hoje = null, agora = new Date(),
 }) {
-  if (typeof data !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(data)) {
-    throw new TypeError("Data inválida");
-  }
-  const janelas = obterJanelasAtendimento(data);
-  if (!janelas.length) return [];
-  if (![agendamentos, reservas, bloqueios, servicos].every(Array.isArray)) {
-    throw new TypeError("Coleções inválidas");
-  }
+  if (typeof data !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(data)) throw new TypeError("Data inválida");
+  if (![agendamentos, reservas, bloqueios, servicos].every(Array.isArray)) throw new TypeError("Coleções inválidas");
   for (const item of [...agendamentos, ...reservas, ...bloqueios]) {
     if (!intervaloValido(item)) throw new TypeError("Intervalo inválido na agenda");
   }
-
-  const ativos = [...agendamentos].sort((a, b) => a.inicioMinuto - b.inicioMinuto);
-  for (let i = 1; i < ativos.length; i++) {
-    if (ativos[i - 1].fimMinuto > ativos[i].inicioMinuto) {
-      throw new Error("Há atendimentos sobrepostos: a análise foi interrompida");
-    }
-  }
-
-  const servicosValidos = servicos.filter((s) =>
-    s && typeof s.id === "string" && typeof s.nome === "string" &&
-    Number.isInteger(s.duracaoMinutos) && s.duracaoMinutos >= 30 &&
-    s.duracaoMinutos <= 600
-  );
-  const horariosFuturos = hoje === data ? obterHoraCivil(agora) : -1;
   if (hoje && data < hoje) return [];
-  const oportunidades = [];
+  const janelas = obterJanelasAtendimento(data);
+  if (!janelas.length) return [];
+  const ativos = obterPeriodosOcupados({ agendamentos, reservas, bloqueios });
+  if (ativos.length < 2) return [];
+  const servicosValidos = servicos.filter((s) => s && typeof s.id === "string" &&
+    typeof s.nome === "string" && Number.isInteger(s.duracaoMinutos) &&
+    s.duracaoMinutos > 0 && s.duracaoMinutos <= 600);
+  const horaAtual = hoje === data ? obterHoraCivil(agora) : -1;
+  const sugestoes = [];
 
   for (let i = 1; i < ativos.length; i++) {
-    const anterior = ativos[i - 1];
-    const posterior = ativos[i];
-    const inicioLacuna = anterior.fimMinuto;
-    const fimLacuna = posterior.inicioMinuto;
-    if (fimLacuna <= inicioLacuna || fimLacuna - inicioLacuna < 30) continue;
+    const inicioLacuna = ativos[i - 1].fimMinuto;
+    const fimLacuna = ativos[i].inicioMinuto;
+    // Não sugerir bloqueio sobre pausas ou períodos fora do expediente.
+    // Cada lacuna precisa caber INTEIRA em uma mesma janela de atendimento.
+    const mesmaJanela = janelas.some((janela) =>
+      inicioLacuna >= janela.inicioMinuto && fimLacuna <= janela.encerramentoMinuto);
+    if (!mesmaJanela) continue;
+    const primeiroInicioFuturo = hoje === data ? (Math.floor(horaAtual / GRADE) + 1) * GRADE : inicioLacuna;
+    const inicioAnalisado = Math.max(inicioLacuna, primeiroInicioFuturo);
+    const duracaoLacunaMinutos = fimLacuna - inicioAnalisado;
+    if (duracaoLacunaMinutos <= 0) continue;
+    const elegiveis = servicosQueCabem({
+      data, inicio: inicioAnalisado, fim: fimLacuna, servicos: servicosValidos, horaAtual, hoje,
+    });
+    const baixaProcura = elegiveis.filter(servicoDeBaixaProcura);
+    const normais = elegiveis.filter((servico) => !servicoDeBaixaProcura(servico));
 
-    const opcoes = [];
-    for (const servico of servicosValidos) {
-      if (!validarServicoDezembro2026(data, servico).valido) continue;
-      const horarios = [];
-      const primeiro = Math.ceil(inicioLacuna / GRADE) * GRADE;
-      for (let inicio = primeiro; inicio + servico.duracaoMinutos <= fimLacuna; inicio += GRADE) {
-        if (inicio <= horariosFuturos) continue;
-        const fim = inicio + servico.duracaoMinutos;
-        if (!validarHorarioEspecial(data, formatarMinutos(inicio), servico.duracaoMinutos)) continue;
-
-        // Nunca sugerir sobreposições com atendimentos, reservas financeiras ou bloqueios.
-        if (ativos.some((item) => haSobreposicao(inicio, fim, item)) ||
-            reservas.some((item) => haSobreposicao(inicio, fim, item)) ||
-            bloqueios.some((item) => haSobreposicao(inicio, fim, item))) continue;
-
-        // Nunca reduzir o intervalo de segurança de uma reserva PIX pendente.
-        if (reservas.some((item) => atendimentosConflitamComBuffer(
-          inicio, fim, item.inicioMinuto, item.fimMinuto, BUFFER,
-        ))) continue;
-
-        // Se respeita todos os buffers, já é agendável normalmente: não é oportunidade.
-        if (!ativos.some((item) => atendimentosConflitamComBuffer(
-          inicio, fim, item.inicioMinuto, item.fimMinuto, BUFFER,
-        ))) continue;
-
-        horarios.push(formatarMinutos(inicio));
+    let classificacao = null;
+    let justificativa = "";
+    if (duracaoLacunaMinutos === 15) {
+      if (!elegiveis.length) {
+        classificacao = "sugestao_bloqueio";
+        justificativa = "A lacuna de 15 minutos não comporta nenhum serviço ativo permitido.";
       }
-      if (horarios.length) {
-        opcoes.push({
-          servicoId: servico.id,
-          servico: servico.nome,
-          duracaoMinutos: servico.duracaoMinutos,
-          horarios,
-        });
+    } else if (duracaoLacunaMinutos === 30) {
+      classificacao = "sugestao_bloqueio";
+      justificativa = baixaProcura.length
+        ? "Este horário é utilizável por serviço curto, mas há opção de baixa procura; avalie se vale mantê-lo aberto."
+        : "Lacuna de 30 minutos: avalie se vale manter este intervalo curto aberto.";
+    } else if (duracaoLacunaMinutos === 45) {
+      if (!elegiveis.length) {
+        classificacao = "sugestao_bloqueio";
+        justificativa = "A lacuna de 45 minutos não comporta nenhum serviço ativo permitido.";
+      } else if (!normais.length) {
+        classificacao = "sugestao_bloqueio";
+        justificativa = "O intervalo é utilizável por serviço curto de baixa procura; avalie a conveniência de mantê-lo aberto.";
       }
+    } else if (duracaoLacunaMinutos > 45 && !elegiveis.length) {
+      classificacao = "sugestao_bloqueio";
+      justificativa = "Nenhum serviço ativo permitido cabe neste intervalo.";
     }
-
-    if (opcoes.length) {
-      oportunidades.push({
-        chave: `${data}:${inicioLacuna}:${fimLacuna}`,
-        data,
-        inicio: formatarMinutos(inicioLacuna),
-        fim: formatarMinutos(fimLacuna),
-        duracaoLacunaMinutos: fimLacuna - inicioLacuna,
-        opcoes,
-      });
-    }
+    if (!classificacao) continue;
+    sugestoes.push({
+      // O relógio pode reduzir o período futuro, mas não cria outra lacuna.
+      // A identidade é o intervalo físico original entre dois períodos ocupados.
+      chave: `${data}:${inicioLacuna}:${fimLacuna}`,
+      data,
+      inicio: formatarMinutos(inicioAnalisado),
+      fim: formatarMinutos(fimLacuna),
+      duracaoLacunaMinutos,
+      classificacao,
+      justificativa,
+      servicosElegiveis: elegiveis.map((servico) => ({ id: servico.id, nome: servico.nome, duracaoMinutos: servico.duracaoMinutos })),
+      ...(baixaProcura.length ? { contemServicoBaixaProcura: true } : {}),
+      opcoes: [],
+    });
   }
-  return oportunidades;
+  return sugestoes;
 }

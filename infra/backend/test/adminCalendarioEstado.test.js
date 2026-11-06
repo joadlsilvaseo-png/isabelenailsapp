@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import {
   alternarIntervalo,
   criarPayloadLote,
@@ -8,6 +9,7 @@ import {
   formatarFalhaDeRede,
   iniciarOperacaoCalendario,
   obterDataAtiva,
+  obterDataSolicitada,
   removerIntervalos,
   resumirSelecoes,
 } from "../../../admin-calendario-state.mjs";
@@ -31,6 +33,27 @@ test("navegação entre meses restaura o dia escolhido e preserva seleções por
   assert.equal(obterDataAtiva(["2026-12-03", "2026-12-04"], "2026-12-03"), "2026-12-03");
   assert.equal(obterDataAtiva(["2027-01-05"], "2026-12-03"), "2027-01-05");
   assert.deepEqual([...selecoes.keys()], ["2026-11-05", "2026-12-03"]);
+});
+
+test("deep link seleciona somente data civil válida e gerenciável, sem criar seleção", () => {
+  const meses = obterMesesGerenciaveis(new Date("2026-11-06T12:00:00Z"));
+  const listar = (data) => data === "2026-11-07" ? [540, 555] : [];
+  assert.equal(obterDataSolicitada("?data=2026-11-07", meses, listar), "2026-11-07");
+  assert.equal(obterDataSolicitada("?data=2026-11-08", meses, listar), null);
+  assert.equal(obterDataSolicitada("?data=2026-11-31", meses, listar), null);
+  assert.equal(obterDataSolicitada("?data=2028-02-29", meses, listar), null);
+  assert.equal(obterDataSolicitada("?data=2026-12-03", meses, listar), null);
+  assert.deepEqual(resumirSelecoes(new Map()), { datas: [], quantidadeDatas: 0, quantidadeIntervalos: 0 });
+});
+
+test("admin-calendario só aplica a data da URL depois de confirmar admin ativo", async () => {
+  const source = await readFile(new URL("../../../admin-calendario.js", import.meta.url), "utf8");
+  const permissao = source.indexOf("usuario.data()?.role !== \"admin\" || usuario.data()?.ativo !== true");
+  const deepLink = source.indexOf("obterDataSolicitada(window.location.search");
+  assert.ok(permissao >= 0 && deepLink > permissao);
+  const trechoInicializacao = source.slice(deepLink, source.indexOf("renderizarMeses();", deepLink));
+  assert.match(trechoInicializacao, /dataPorMes\.set/);
+  assert.doesNotMatch(trechoInicializacao, /selecoes\.(set|add)/);
 });
 
 test("quatro datas de novembro e dezembro viram um único lote com intervalos agrupados", () => {

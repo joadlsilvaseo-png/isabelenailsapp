@@ -67,6 +67,19 @@ export function obterDataAtiva(datasDisponiveis, dataAnterior = null) {
   return datasDisponiveis.includes(dataAnterior) ? dataAnterior : datasDisponiveis[0];
 }
 
+/** Valida o deep link apenas contra as datas realmente administráveis. */
+export function obterDataSolicitada(search, meses, listarSlots) {
+  if (typeof search !== "string" || !Array.isArray(meses) || typeof listarSlots !== "function") return null;
+  let data;
+  try { data = new URLSearchParams(search).get("data"); } catch { return null; }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(data || "")) return null;
+  const [ano, mes, dia] = data.split("-").map(Number);
+  const civil = new Date(Date.UTC(ano, mes - 1, dia));
+  if (civil.getUTCFullYear() !== ano || civil.getUTCMonth() + 1 !== mes || civil.getUTCDate() !== dia) return null;
+  if (!meses.some((item) => item.chave === data.slice(0, 7) && data >= item.inicio && data <= item.fim)) return null;
+  try { return listarSlots(data).length > 0 ? data : null; } catch { return null; }
+}
+
 export function iniciarOperacaoCalendario(estado) {
   if (estado.salvando || estado.carregando || estado.erroConsulta) return false;
   estado.salvando = true;

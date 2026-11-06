@@ -367,7 +367,7 @@ async function processarOperacao(pool, operationId, dependencies = {}) {
       conexao, db, data: snapshot.data, inicio: snapshot.inicio,
       fim: snapshot.inicio + snapshot.duracaoNova, excluirAgendamentoId: operacao.agendamento_id,
     }))) {
-      throw new ErroAlteracaoServico(409, "O encaixe de 15 minutos deixou de ser válido.");
+      throw new ErroAlteracaoServico(409, "O horário selecionado deixou de estar disponível.");
     }
 
     const documentoAtual = await db.collection("agendamentos").doc(operacao.agendamento_id).get();
