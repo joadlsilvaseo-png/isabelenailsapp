@@ -6,9 +6,8 @@ import {
 
 import { getFirestore } from "firebase-admin/firestore";
 
-import { possuiSobreposicao } from "./pixDisponibilidade.js";
+import { indisponivelComBufferSequencial } from "./agendaBuffer.mjs";
 import { obterDuracaoAgendamentoPix } from "./pixDocumentoAgendamento.js";
-import { BUFFER_ENTRE_ATENDIMENTOS_MINUTOS } from "./agendaBuffer.mjs";
 
 const STATUS_OCUPADOS = new Set([
   "agendado",
@@ -31,6 +30,8 @@ export async function verificarConflitoFirestore(
   dataIso,
   inicioMinuto,
   fimMinuto,
+  clienteUid = null,
+  firestoreParaTeste = null,
 ) {
   if (
     typeof dataIso !== "string" ||
@@ -44,7 +45,7 @@ export async function verificarConflitoFirestore(
     throw new Error("Periodo invalido para consulta");
   }
 
-  const banco = obterBancoFirestore();
+  const banco = firestoreParaTeste || obterBancoFirestore();
 
   const resultado = await banco
     .collection("agendamentos")
@@ -80,16 +81,12 @@ export async function verificarConflitoFirestore(
     intervalosOcupados.push({
       inicioMinuto: inicio,
       fimMinuto: inicio + duracao,
+      sequencialMesmaCliente: Boolean(clienteUid && dados.clienteId === clienteUid && dados.status === "confirmado"),
     });
   });
 
   return {
-    ocupado: possuiSobreposicao(
-      inicioMinuto,
-      fimMinuto,
-      intervalosOcupados,
-      BUFFER_ENTRE_ATENDIMENTOS_MINUTOS,
-    ),
+    ocupado: indisponivelComBufferSequencial(inicioMinuto, fimMinuto, intervalosOcupados),
     quantidadeAgendamentosAtivos: intervalosOcupados.length,
   };
 }
