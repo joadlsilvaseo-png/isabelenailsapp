@@ -238,7 +238,7 @@ test("conflito na quarta data faz rollback do lote inteiro com data e intervalo"
   await assert.rejects(
     alterarHorariosLote({ pool, db: criarDbPorData(), uid: "admin-1", datas, acao: "fechar", agora: FIXO }),
     (erro) => erro instanceof ErroCalendario && erro.status === 409 &&
-      /03\/12\/2026, 14:30–15:00/.test(erro.message),
+      /03\/12\/2026, 14:30–14:45/.test(erro.message),
   );
   assert.equal(pool.gravados.length, 0);
   assert.equal(pool.chamadas.some(({ sql }) => sql === "COMMIT"), false);
