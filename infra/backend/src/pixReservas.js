@@ -331,7 +331,7 @@ export async function criarReservaPix(req, res, pool) {
       }
 
       // Reservas PIX ainda aguardando pagamento não aparecem no Firestore:
-      // a checagem SQL com o lock por data protege o buffer entre elas.
+      // a checagem SQL sob lock por data protege contra sobreposição.
       const reservaProxima = await conexao.query(`
         SELECT 1 FROM public.pix_reservas
         WHERE data_servico = $1 AND estado IN ('reservada', 'confirmada')
@@ -345,7 +345,7 @@ export async function criarReservaPix(req, res, pool) {
         LIMIT 1
       `, [data, periodo.inicioMinuto, periodo.fimMinuto, uid]);
       if (reservaProxima.rowCount) {
-        throw new ErroReserva(409, "É necessário um intervalo de 15 minutos entre atendimentos.");
+        throw new ErroReserva(409, "O horário selecionado se sobrepõe a outra reserva.");
       }
 
       const conflito = await verificarConflitoFirestore(
@@ -366,7 +366,7 @@ export async function criarReservaPix(req, res, pool) {
         inicio: periodo.inicioMinuto, fim: periodo.fimMinuto,
         clienteUid: uid,
       }))) {
-        throw new ErroReserva(409, "Encaixe de 15 minutos não está mais disponível");
+        throw new ErroReserva(409, "O horário selecionado deixou de estar disponível.");
       }
 
       const reservaId = randomUUID();

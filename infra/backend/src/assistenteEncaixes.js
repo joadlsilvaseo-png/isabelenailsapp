@@ -30,10 +30,10 @@ export function mesesValidos(agora = new Date()) {
   return obterMesesGerenciaveis(agora).map((item) => item.chave);
 }
 
-export async function consultarMesEncaixes({ pool, db, mes, agora = new Date() }) {
-  if (!MES.test(mes)) throw new TypeError("Mês inválido");
-  const primeiroDia = mes + "-01";
-  const ultimoExclusivo = mesSeguinte(mes) + "-01";
+async function consultarFaixaEncaixes({ pool, db, primeiroDia, ultimoExclusivo, agora = new Date() }) {
+  if (!DATA.test(primeiroDia) || !DATA.test(ultimoExclusivo) || ultimoExclusivo <= primeiroDia) {
+    throw new TypeError("Faixa inválida");
+  }
   const hoje = obterHojeSaoPaulo(agora);
   const [documentos, catalogo, banco] = await Promise.all([
     db.collection("agendamentos").where("data", ">=", primeiroDia)
@@ -61,6 +61,7 @@ export async function consultarMesEncaixes({ pool, db, mes, agora = new Date() }
       nome: String(item.nome || "").trim(),
       categoria: String(item.categoria || "").trim(),
       categoriaNome: String(item.categoriaNome || "").trim(),
+      baixaProcura: item.baixaProcura === true,
       duracaoMinutos: Number(item.duracao ?? item.duracaoMinutos ?? item.tempo),
     }));
 
@@ -118,6 +119,21 @@ export async function consultarMesEncaixes({ pool, db, mes, agora = new Date() }
     dia = seguinte.toISOString().slice(0, 10);
   }
   return oportunidades;
+}
+
+export async function consultarMesEncaixes({ pool, db, mes, agora = new Date() }) {
+  if (!MES.test(mes)) throw new TypeError("Mês inválido");
+  return consultarFaixaEncaixes({
+    pool, db, primeiroDia: `${mes}-01`, ultimoExclusivo: `${mesSeguinte(mes)}-01`, agora,
+  });
+}
+
+/** Varredura restrita a hoje e aos seis dias seguintes no fuso de São Paulo. */
+export async function consultarProximosSeteDias({ pool, db, agora = new Date() }) {
+  const primeiroDia = obterHojeSaoPaulo(agora);
+  const ultimoExclusivo = new Date(Date.parse(`${primeiroDia}T12:00:00Z`) + 7 * 86400000)
+    .toISOString().slice(0, 10);
+  return consultarFaixaEncaixes({ pool, db, primeiroDia, ultimoExclusivo, agora });
 }
 
 function responder(res, status, dados) {

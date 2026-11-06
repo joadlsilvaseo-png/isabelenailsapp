@@ -166,7 +166,7 @@ function criarFixture({ isenta = true, reservas = [], documentos = {}, falharCom
               ["reservada", "confirmada"].includes(reserva.estado) &&
               (!temExcecao && excluido !== undefined
                 ? (reserva.agendamentoId || reserva.agendamento_id) !== excluido : true) &&
-              inicio < reserva.fim + 15 && fim > reserva.inicio - 15 &&
+              inicio < reserva.fim && fim > reserva.inicio &&
               !(temExcecao && reserva.estado === "confirmada" &&
                 (reserva.clienteUid || reserva.cliente_uid) === uid &&
                 Boolean(reserva.agendamentoId || reserva.agendamento_id) &&
@@ -405,7 +405,7 @@ test("isenta agenda serviço exatamente após outro confirmado da mesma conta", 
   assert.equal(f.state.reservas.length, 2);
 });
 
-test("isenta não ignora buffer de outra cliente nem reserva pendente da própria conta", async () => {
+test("isenta pode iniciar exatamente no término de reserva de qualquer estado ou cliente", async () => {
   for (const reserva of [
     { clienteUid: "outra", estado: "confirmada" },
     { clienteUid: UID, estado: "reservada" },
@@ -413,10 +413,11 @@ test("isenta não ignora buffer de outra cliente nem reserva pendente da própri
     const f = criarFixture({ reservas: [{
       data: DATA, inicio: 840, fim: 900, agendamentoId: "anterior", ...reserva,
     }] });
-    await assert.rejects(criarAgendamentoIsento({
+    const resultado = await criarAgendamentoIsento({
       pool: f.pool, db: f.firestore, uid: UID, dados: payload(CHAVE, "15:00"),
       dependencies: f.dependencies,
-    }), (erro) => erro.codigo === "HORARIO_RESERVADO_PIX");
+    });
+    assert.equal(resultado.agendamentoConfirmado, true);
   }
 });
 
@@ -435,13 +436,14 @@ test("isenta não permite sobreposição mesmo entre serviços da mesma cliente"
   }), (erro) => ["HORARIO_RESERVADO_PIX", "HORARIO_OCUPADO", "ENCAIXE_INDISPONIVEL"].includes(erro.codigo));
 });
 
-test("reserva sem agendamento vinculado não concede exceção mesmo se estiver confirmada", async () => {
+test("reserva sem vínculo não bloqueia o horário iniciado no término exato", async () => {
   const f = criarFixture({ reservas: [{
     data: DATA, inicio: 840, fim: 900, estado: "confirmada",
     clienteUid: UID, agendamentoId: null,
   }] });
-  await assert.rejects(criarAgendamentoIsento({
+  const resultado = await criarAgendamentoIsento({
     pool: f.pool, db: f.firestore, uid: UID, dados: payload(CHAVE, "15:00"),
     dependencies: f.dependencies,
-  }), (erro) => erro.codigo === "HORARIO_RESERVADO_PIX");
+  });
+  assert.equal(resultado.agendamentoConfirmado, true);
 });

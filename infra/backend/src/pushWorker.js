@@ -1,6 +1,9 @@
 import webpush from "web-push";
+import { createHash } from "node:crypto";
 import { applicationDefault, getApps, initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
+import { consultarProximosSeteDias } from "./assistenteEncaixes.js";
+import { criarNotificacaoPreventiva } from "./assistenteEncaixesNotificacao.mjs";
 import {
   agendamentoAtivo,
   extrairAgendamento,
@@ -19,6 +22,8 @@ const HOSTS_PERMITIDOS = new Set([
 ]);
 const PROJECT_ID = "isabele-nails-app";
 const TIPOS_LEMBRETE = new Set(["lembrete_24h", "lembrete_1h"]);
+const TIPO_SUGESTAO_AGENDA = "sugestao_bloqueio_agenda";
+const TIPO_ANTIGO_ASSISTENTE = "oportunidade_encaixe";
 const ATRASO_MAXIMO_LEMBRETE_MS = 10 * 60 * 1000;
 
 let processamentoAtivo = false;
@@ -152,6 +157,25 @@ async function obterFirestore() {
     });
   }
   return getFirestore();
+}
+
+async function validarSugestaoAgenda(pool, entrega, firestore, agora = new Date()) {
+  if (!/^\.\/admin-calendario\.html\?data=\d{4}-\d{2}-\d{2}$/.test(entrega.destino || "")) return false;
+  const destino = new URL(entrega.destino, "https://isabele.invalid");
+  const data = destino.searchParams.get("data");
+  if (destino.origin !== "https://isabele.invalid" || !/^\d{4}-\d{2}-\d{2}$/.test(data || "") ||
+      destino.pathname.split("/").at(-1) !== "admin-calendario.html") return false;
+  const db = firestore || await obterFirestore();
+  const usuario = await db.collection("usuarios").doc(entrega.destinatario_uid).get();
+  if (!usuario.exists || usuario.data()?.role !== "admin" || usuario.data()?.ativo !== true) return false;
+  const sugestoes = await consultarProximosSeteDias({
+    pool, db, agora,
+  });
+  const atuais = sugestoes.filter((item) => item.data === data).sort((a, b) => a.chave.localeCompare(b.chave));
+  if (!atuais.length) return false;
+  const fingerprint = createHash("sha256").update(atuais.map((item) => item.chave).join("\n")).digest("hex").slice(0, 24);
+  if (!entrega.chave_evento.endsWith(`:${fingerprint}`)) return false;
+  return criarNotificacaoPreventiva(data, atuais);
 }
 
 /** Revalida o snapshot PostgreSQL e o documento Firestore imediatamente antes do Push. */
@@ -350,6 +374,23 @@ async function processarFila(pool) {
 
 export async function processarEntrega(pool, entrega, dependencias = {}) {
   let validacao = null;
+  if (entrega.tipo === TIPO_ANTIGO_ASSISTENTE) {
+    await finalizarEntrega(pool, entrega.id, "cancelado");
+    return "cancelado";
+  }
+  if (entrega.tipo === TIPO_SUGESTAO_AGENDA) {
+    const atual = await (dependencias.validarSugestao || validarSugestaoAgenda)(
+      pool, entrega, dependencias.firestore, dependencias.agora || new Date(),
+    );
+    if (!atual) {
+      await finalizarEntrega(pool, entrega.id, "cancelado");
+      return "cancelado";
+    }
+    if (typeof atual === "object") {
+      entrega.titulo = atual.titulo;
+      entrega.mensagem = atual.mensagem;
+    }
+  }
   if (TIPOS_LEMBRETE.has(entrega.tipo)) {
     const agora = dependencias.agora || new Date();
     const janela = verificarJanelaLembrete(entrega, agora);

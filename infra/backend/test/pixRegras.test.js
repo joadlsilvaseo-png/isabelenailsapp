@@ -645,7 +645,7 @@ test("ID de agendamento e estavel e conflito de horario respeita duracao", () =>
   ], 630, 690), true);
   assert.equal(encontrarConflitoAgendamentoPix([
     { status: "agendado", horario: "10:00", duracao: 60 },
-  ], 660, 720), true);
+  ], 660, 720), false);
   assert.equal(encontrarConflitoAgendamentoPix([
     { status: "agendado", horario: "10:00", duracao: 60 },
   ], 690, 750), false);

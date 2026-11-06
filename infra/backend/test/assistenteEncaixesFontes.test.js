@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
-import { consultarMesEncaixes } from "../src/assistenteEncaixes.js";
+import { consultarMesEncaixes, consultarProximosSeteDias } from "../src/assistenteEncaixes.js";
 
 const data = "2026-11-12"; // quinta-feira
 const agendamentos = [
   { id: "a", data: { data, horario: "11:00", duracao: 60, status: "confirmado" } },
-  { id: "b", data: { data, horario: "13:30", duracao: 60, status: "confirmado" } },
+  { id: "b", data: { data, horario: "12:30", duracao: 60, status: "confirmado" } },
 ];
 function firestore() {
   return { collection(nome) {
@@ -42,7 +42,8 @@ const ok = await consultarMesEncaixes({
 });
 assert.equal(ok.length, 1);
 assert.equal(ok[0].inicio, "12:00");
-assert.ok(ok[0].opcoes.some(x => x.duracaoMinutos === 90));
+assert.equal(ok[0].duracaoLacunaMinutos, 30);
+assert.equal(ok[0].classificacao, "sugestao_bloqueio");
 
 const pendente = await consultarMesEncaixes({
   db: firestore(), pool: postgres([{
@@ -59,3 +60,14 @@ const bloqueado = await consultarMesEncaixes({
 });
 assert.equal(bloqueado.length, 0);
 console.log("Assistente: Firestore/PG, reserva antiga e bloqueio validados");
+
+const seteDias = await consultarProximosSeteDias({
+  db: firestore(),
+  pool: { async query(sql, parametros) {
+    assert.match(sql, /FROM public\.pix_reservas/);
+    assert.deepEqual(parametros, ["2026-11-06", "2026-11-13"]);
+    return { rows: [] };
+  } },
+  agora,
+});
+assert.deepEqual(seteDias.map((item) => item.data), [data], "a varredura inclui hoje e os seis dias seguintes, sem examinar o mês inteiro");

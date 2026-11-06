@@ -209,7 +209,7 @@ export async function iniciarReagendamentoPixPago({
       conexao, db, data, inicio, fim: inicio + origemDuracao,
       excluirAgendamentoId: agendamentoId,
     }))) {
-      throw new ErroReagendamentoPago(409, "Encaixe de 15 minutos indisponível");
+      throw new ErroReagendamentoPago(409, "O horário selecionado deixou de estar disponível.");
     }
 
     let holdId = null;

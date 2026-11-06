@@ -569,7 +569,7 @@ async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null, s
     let quantidadeDisponivel = 0;
 
     // A grade inteira usa 15 minutos; cada início é checado pela duração real,
-    // janela de expediente, bloqueios e buffer. Nenhum início é aberto à força.
+    // janela de expediente e bloqueios. Nenhum início é aberto à força.
     const iniciosPossiveis = [...new Set(janelas.flatMap(({ inicioMinuto, encerramentoMinuto }) => {
       const inicios = [];
       for (let minuto = inicioMinuto; minuto <= encerramentoMinuto - 15; minuto += 15) {
