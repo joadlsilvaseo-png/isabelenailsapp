@@ -110,6 +110,25 @@ function validarSelecao(data, horas, agora) {
   }
 }
 
+/**
+ * Compatibilidade com páginas administrativas antigas que selecionam blocos
+ * de 30 min. Sem marcador de versão, jamais transformar 30 em 15 silenciosamente.
+ * O frontend novo envia resolucaoMinutos=15 e usa cada quarto diretamente.
+ */
+export function normalizarHorariosDaRequisicao(horas, resolucaoMinutos, data, agora) {
+  if (resolucaoMinutos === 15) return horas;
+  if (resolucaoMinutos !== undefined && resolucaoMinutos !== 30) {
+    throw new ErroCalendario(400, "Resolução de horários inválida");
+  }
+  const permitidos = new Set(listarSlotsGerenciaveis(data, agora));
+  if (!Array.isArray(horas) || !horas.length || horas.length > 48 ||
+      horas.some((minuto) => !Number.isInteger(minuto) || minuto % 30 !== 0 ||
+        !permitidos.has(minuto) || !permitidos.has(minuto + 15))) {
+    throw new ErroCalendario(409, "Atualize o calendário para utilizar a nova grade de 15 minutos.");
+  }
+  return horas.flatMap((inicio) => [inicio, inicio + 15]);
+}
+
 async function consultarDia(pool, db, data) {
   const [bloqueados, reservas, firestore] = await Promise.all([
     pool.query(`
@@ -334,10 +353,22 @@ export async function atenderGerenciarCalendario(req, res, pool, dependencies = 
       const corpo = await lerCorpo(req);
       const resultado = rotaLote
         ? await alterarHorariosLote({
-            pool, db, uid, datas: corpo.datas, acao: corpo.acao, agora,
+            pool, db, uid,
+            datas: Array.isArray(corpo.datas)
+              ? corpo.datas.map((item) => ({
+                  data: item?.data,
+                  horas: normalizarHorariosDaRequisicao(
+                    item?.horas, corpo.resolucaoMinutos, item?.data, agora,
+                  ),
+                }))
+              : corpo.datas,
+            acao: corpo.acao, agora,
           })
         : await alterarHorarios({
-            pool, db, uid, data: corpo.data, horas: corpo.horas,
+            pool, db, uid, data: corpo.data,
+            horas: normalizarHorariosDaRequisicao(
+              corpo.horas, corpo.resolucaoMinutos, corpo.data, agora,
+            ),
             acao: corpo.acao, agora,
           });
       resposta(res, 200, resultado);
