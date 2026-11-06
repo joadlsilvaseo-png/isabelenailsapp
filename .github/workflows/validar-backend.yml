@@ -105,9 +105,11 @@ jobs:
         run: node --test ../../scripts/admin-agenda-filtros-foto.test.mjs
       - name: Testar card de manutenção e CTA do Meu Perfil
         run: node --test ../../scripts/perfil-manutencao.test.mjs
-      - name: Validar script de deploy
+      - name: Validar sintaxe dos scripts operacionais (sem executar)
         working-directory: .
-        run: bash -n infra/scripts/atualizar-vps-pix.sh
+        run: |
+          bash -n infra/scripts/atualizar-vps-pix.sh
+          bash -n infra/scripts/backup-pre-grade-15.sh
 
   validar-migracao-020-postgresql:
     name: Migração 020 — PostgreSQL 17 temporário
