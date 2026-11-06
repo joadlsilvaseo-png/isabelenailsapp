@@ -39,7 +39,20 @@ function criarFixture({ isenta = true, reservas = [], documentos = {}, falharCom
             async get() { return snapshot(state.documentos, path); },
           };
         },
-        where(campo, operador, valor) { return { nome, campo, operador, valor }; },
+        where(campo, operador, valor) {
+          return {
+            nome, campo, operador, valor,
+            async get() {
+              const docs = [...state.documentos.entries()]
+                .filter(([path]) => path.startsWith(`${nome}/`))
+                .map(([path, dados]) => ({
+                  id: path.slice(nome.length + 1), data: () => structuredClone(dados),
+                }))
+                .filter((doc) => doc.data()?.[campo] === valor);
+              return { docs };
+            },
+          };
+        },
       };
     },
     async runTransaction(callback) {
