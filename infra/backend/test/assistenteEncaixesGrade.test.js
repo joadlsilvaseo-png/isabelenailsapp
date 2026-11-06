@@ -55,6 +55,27 @@ assert.deepEqual(analisarLacunasDoDia({
   data: "2026-11-08", agendamentos: doisPeriodos, servicos: manicurias, hoje: "2026-11-05",
 }), [], "respeita calendário de expediente");
 
+// Quarta possui pausa entre 12:30 e 14:00; não sugerir bloqueio que
+// invada o horário fechado nem misturar manhã e tarde.
+assert.deepEqual(analisarLacunasDoDia({
+  data: "2026-11-11",
+  agendamentos: [
+    { inicioMinuto: 690, fimMinuto: 735 }, // 11:30–12:15
+    { inicioMinuto: 855, fimMinuto: 915 }, // 14:15–15:15
+  ],
+  servicos: servicoLongo,
+  hoje: "2026-11-06",
+}), [], "não alerta sobre a pausa do expediente");
+assert.equal(analisarLacunasDoDia({
+  data: "2026-11-11",
+  agendamentos: [
+    { inicioMinuto: 600, fimMinuto: 630 }, // 10:00–10:30
+    { inicioMinuto: 660, fimMinuto: 720 }, // 11:00–12:00
+  ],
+  servicos: servicoLongo,
+  hoje: "2026-11-06",
+}).length, 1, "lacuna dentro da mesma janela continua gerando sugestão");
+
 const servicosDezembro = [
   { id: "ped", nome: "Pedicure Simples", categoria: "Pedicure", duracaoMinutos: 60 },
   { id: "man", nome: "Manicure Simples", categoria: "Manicure", duracaoMinutos: 60 },

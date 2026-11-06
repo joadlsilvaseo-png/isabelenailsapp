@@ -88,6 +88,11 @@ export function analisarLacunasDoDia({
   for (let i = 1; i < ativos.length; i++) {
     const inicioLacuna = ativos[i - 1].fimMinuto;
     const fimLacuna = ativos[i].inicioMinuto;
+    // Não sugerir bloqueio sobre pausas ou períodos fora do expediente.
+    // Cada lacuna precisa caber INTEIRA em uma mesma janela de atendimento.
+    const mesmaJanela = janelas.some((janela) =>
+      inicioLacuna >= janela.inicioMinuto && fimLacuna <= janela.encerramentoMinuto);
+    if (!mesmaJanela) continue;
     const primeiroInicioFuturo = hoje === data ? (Math.floor(horaAtual / GRADE) + 1) * GRADE : inicioLacuna;
     const inicioAnalisado = Math.max(inicioLacuna, primeiroInicioFuturo);
     const duracaoLacunaMinutos = fimLacuna - inicioAnalisado;
