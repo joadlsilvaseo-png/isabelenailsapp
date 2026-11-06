@@ -15,7 +15,7 @@ export function removerIntervalos(selecoes, data, inicios) {
   return selecoes;
 }
 
-export function agruparIntervalos(inicios, duracao = 30) {
+export function agruparIntervalos(inicios, duracao = 15) {
   const ordenados = [...new Set(inicios)].sort((a, b) => a - b);
   const grupos = [];
   for (const inicio of ordenados) {
