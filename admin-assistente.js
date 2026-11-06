@@ -37,13 +37,13 @@ function determinarPeriodo(pergunta) {
   const mesAtual=hoje.slice(0,7);
   const janela=[mesAtual,adicionarMes(mesAtual,1),adicionarMes(mesAtual,2)];
   const correspondente=janela.find((mes)=>texto.includes(normalizar(NOMES[Number(mes.slice(5))-1])));
-  const numerica=texto.match(/(?:\\bdia\\s*)?(\\d{1,2})[\\/.-](\\d{1,2})(?:[\\/.-](\\d{4}))?/);
+  const numerica=texto.match(/(?:\bdia\s*)?(\d{1,2})[\/.-](\d{1,2})(?:[\/.-](\d{4}))?/);
   if(numerica){
     const ano=numerica[3]||hoje.slice(0,4);
     const data=`${ano}-${numerica[2].padStart(2,"0")}-${numerica[1].padStart(2,"0")}`;
     if(janela.includes(data.slice(0,7)))return {mes:data.slice(0,7),data};
   }
-  const diaPorExtenso=texto.match(/\\bdia\\s+(\\d{1,2})\\s+de\\s+([a-z]+)/);
+  const diaPorExtenso=texto.match(/\bdia\s+(\d{1,2})\s+de\s+([a-z]+)/);
   if(diaPorExtenso && correspondente){
     const data=`${correspondente}-${diaPorExtenso[1].padStart(2,"0")}`;
     return {mes:correspondente,data};
