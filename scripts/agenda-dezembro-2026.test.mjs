@@ -83,7 +83,7 @@ test("14 e 16 a 24 e 28 a 30 seguem abertura/encerramento excepcionais exatos", 
     }, data);
     const slots = listarSlotsGerenciaveis(data, AGORA);
     assert.equal(slots[0], abertura, data);
-    assert.equal(slots.at(-1), fechamento - 30, data);
+    assert.equal(slots.at(-1), fechamento - 15, data);
     assert.equal(validarHorarioEspecial(data, hora(abertura), 60), true, data);
     assert.equal(validarHorarioEspecial(data, hora(abertura - 30), 60), false, data);
     assert.equal(validarHorarioEspecial(data, hora(fechamento - 60), 60), true, data);
