@@ -521,7 +521,11 @@ async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null, s
               !dados.horario || !statusValidos.includes(dados.status)) return;
           const inicio = timeToMins(dados.horario);
           const duracaoAgendada = Number(dados.duracao) || 90;
-          intervalos.push({ inicioMinuto: inicio, fimMinuto: inicio + duracaoAgendada, tipo: "agendamento" });
+          intervalos.push({
+            inicioMinuto: inicio, fimMinuto: inicio + duracaoAgendada, tipo: "agendamento",
+            ...(!reagendarId && dados.status === "confirmado" &&
+                dados.clienteId === usuario.uid ? { sequencialMesmaCliente: true } : {}),
+          });
         });
         return intervalos;
       },
