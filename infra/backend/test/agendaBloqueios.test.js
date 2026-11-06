@@ -42,7 +42,14 @@ function criarPool({ reservas = [], bloqueios = [] } = {}) {
         const [data, inicio, fim] = params;
         const filtradas = bloqueios.filter(({ inicio: a, fim: b }) =>
           params.length === 1 || sobrepoe(inicio, fim, a, b));
-        return { rows: filtradas.map(({ inicio, fim }) => ({ inicio_minuto: inicio, fim_minuto: fim })), rowCount: filtradas.length };
+        return { rows: filtradas.map(({ inicio, fim }) => ({
+          inicio_minuto: inicio, fim_minuto: fim, alterado_por_uid: "admin-1",
+          criado_em: new Date("2026-11-01T12:00:00Z"),
+        })), rowCount: filtradas.length };
+      }
+      if (/DELETE FROM public.agenda_bloqueios/.test(sql) ||
+          /INSERT INTO public.agenda_bloqueios/.test(sql)) {
+        return { rows: [], rowCount: 1 };
       }
       return { rows: [], rowCount: 0 };
     },
@@ -50,7 +57,7 @@ function criarPool({ reservas = [], bloqueios = [] } = {}) {
   };
   return { chamadas, conexao, connect: async () => conexao, query: conexao.query };
 }
-function criarPoolLote({ reservasPorData = {} } = {}) {
+function criarPoolLote({ reservasPorData = {}, bloqueiosPorData = {} } = {}) {
   const chamadas = [];
   const gravacoesPendentes = [];
   const exclusoesPendentes = [];
@@ -69,6 +76,13 @@ function criarPoolLote({ reservasPorData = {} } = {}) {
           inicio_minuto: inicio, fim_minuto: fim,
         }));
         return { rows, rowCount: rows.length };
+      }
+      if (sql.includes("FROM public.agenda_bloqueios") && /^\s*SELECT/.test(sql)) {
+        const registros = bloqueiosPorData[params[0]] || [];
+        return { rows: registros.map(({ inicio, fim }) => ({
+          inicio_minuto: inicio, fim_minuto: fim, alterado_por_uid: "admin-1",
+          criado_em: new Date("2026-11-01T12:00:00Z"),
+        })), rowCount: registros.length };
       }
       if (sql.includes("INSERT INTO public.agenda_bloqueios")) {
         gravacoesPendentes.push(params);
@@ -186,7 +200,10 @@ test("fecha quatro datas, incluindo dezembro, com locks ordenados e uma única c
 });
 
 test("reabre intervalos em datas diferentes sem alterar reservas reais", async () => {
-  const pool = criarPoolLote();
+  const pool = criarPoolLote({ bloqueiosPorData: {
+    "2026-12-03": [{ inicio: 840, fim: 870 }],
+    "2026-11-05": [{ inicio: 900, fim: 930 }, { inicio: 930, fim: 960 }],
+  } });
   const resultado = await alterarHorariosLote({
     pool,
     db: criarDbPorData(),
@@ -200,8 +217,15 @@ test("reabre intervalos em datas diferentes sem alterar reservas reais", async (
   });
   assert.equal(resultado.quantidadeDatas, 2);
   assert.deepEqual(pool.exclusoesPendentes, [
-    ["2026-11-05", [900, 930]],
-    ["2026-12-03", [840]],
+    ["2026-11-05", 900, 930],
+    ["2026-11-05", 930, 960],
+    ["2026-12-03", 840, 870],
+  ]);
+  // A metade não selecionada de cada bloqueio de 30 min continua fechada.
+  assert.deepEqual(pool.gravados.map((params) => [params[0], params[1], params[2]]), [
+    ["2026-11-05", 915, 930],
+    ["2026-11-05", 945, 960],
+    ["2026-12-03", 855, 870],
   ]);
   assert.equal(pool.chamadas.some(({ sql }) => sql.includes("UPDATE public.pix_reservas")), false);
   assert.ok(pool.chamadas.some(({ sql }) => sql === "COMMIT"));
@@ -262,12 +286,20 @@ test("reserva Firestore antiga também impede fechar horários em conflito", asy
 });
 
 test("reabrir remove só intervalos selecionados sem afetar reservas", async () => {
-  const pool = criarPool();
+  const pool = criarPool({ bloqueios: [
+    { inicio: 900, fim: 930 }, { inicio: 960, fim: 990 },
+  ] });
   const resultado = await alterarHorarios({ pool, db: criarDb(), uid: "admin-1",
     data: DATA, horas: [900, 960], acao: "reabrir", agora: FIXO });
   assert.equal(resultado.acao, "reabrir");
-  const deleteQuery = pool.chamadas.find(({ sql }) => sql.includes("DELETE FROM public.agenda_bloqueios"));
-  assert.deepEqual(deleteQuery.params, [DATA, [900, 960]]);
+  const deletes = pool.chamadas.filter(({ sql }) => sql.includes("DELETE FROM public.agenda_bloqueios"));
+  assert.deepEqual(deletes.map(({ params }) => params), [
+    [DATA, 900, 930], [DATA, 960, 990],
+  ]);
+  const inserts = pool.chamadas.filter(({ sql }) => sql.includes("INSERT INTO public.agenda_bloqueios"));
+  assert.deepEqual(inserts.map(({ params }) => params.slice(0, 3)), [
+    [DATA, 915, 930], [DATA, 975, 990],
+  ]);
 });
 
 test("clientes não conseguem consultar ou modificar o calendário administrativo", async () => {
@@ -405,6 +437,12 @@ function simularConcorrenciaCalendario() {
               inicio_minuto: inicio, fim_minuto: fim,
             }));
             return { rows: encontrados, rowCount: encontrados.length };
+          }
+          if (sql.includes("FROM public.agenda_bloqueios") && sql.includes("FOR UPDATE")) {
+            return { rows: bloqueios.map(({ inicio, fim }) => ({
+              inicio_minuto: inicio, fim_minuto: fim, alterado_por_uid: "admin-1",
+              criado_em: new Date("2026-11-01T12:00:00Z"),
+            })), rowCount: bloqueios.length };
           }
           if (sql.includes("INSERT INTO public.agenda_bloqueios")) {
             pendentes.bloqueios.push({ inicio: params[1], fim: params[2] });
