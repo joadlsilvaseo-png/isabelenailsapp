@@ -63,12 +63,12 @@ export function obterRegraVisualDoIntervalo(dataIso, inicioMinuto) {
     ? `Duração máxima de ${maximo} min`
     : `Durações permitidas: ${duracoes.join(", ")} min`;
 
-  // Na terça/quarta há inícios e durações definidos especificamente.
-  // No sábado, as exceções começam às 15h. No fim do expediente,
-  // o início pode aceitar somente atendimentos mais curtos.
+  // A grade administrativa continua em intervalos de 30min, mas a
+  // disponibilidade da cliente é nativa de 15min. Não sinalizar toda
+  // terça/quarta como restrição de início: agora há janelas contínuas.
+  // Só destacar limites reais de duração, exceções de sábado e serviço.
   const restricaoDeServico = /^2026-12-(17|18|19|20|21|22|23|24)$/.test(dataIso);
-  const inicioCondicionado = restricaoDeServico || (!especial && (diaSemana === 2 || diaSemana === 3
-    || (diaSemana === 6 && inicioMinuto >= 900))) || maximo < 120;
+  const inicioCondicionado = restricaoDeServico || !faixaContinua || maximo < 120;
 
   if (inicioCondicionado) {
     const orientacaoServico = restricaoDeServico
