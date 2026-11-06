@@ -35,14 +35,20 @@ export async function varrerOportunidades({ pool, db, agora = new Date(), consul
       // O primeiro ciclo apenas estabelece referência; não notificar todo o histórico.
       await con.query(
         "INSERT INTO public.push_controle (chave, valor) VALUES ($1, $2)",
-        [CHAVE_ESTADO, JSON.stringify(chavesAtuais)],
+        [CHAVE_ESTADO, JSON.stringify({ meses, chaves: chavesAtuais })],
       );
       await con.query("COMMIT");
       return { inicializado: true, novas: 0, total: atuais.length };
     }
 
-    const antigas = JSON.parse(anterior.rows[0].valor);
-    const novas = descreverNovasOportunidades(antigas, atuais);
+    const estadoSalvo = JSON.parse(anterior.rows[0].valor);
+    const antigas = Array.isArray(estadoSalvo) ? estadoSalvo : estadoSalvo.chaves;
+    const mesesAnteriores = new Set(Array.isArray(estadoSalvo)
+      ? antigas.map((chave) => chave.slice(0, 7))
+      : estadoSalvo.meses);
+    // Não anunciar lacunas antigas de um mês recém-incluído na janela.
+    const novas = descreverNovasOportunidades(antigas, atuais)
+      .filter((item) => mesesAnteriores.has(item.data.slice(0, 7)));
     if (novas.length) {
       const administradores = await db.collection("usuarios").where("role", "==", "admin").get();
       const destinatarios = administradores.docs
@@ -78,7 +84,7 @@ export async function varrerOportunidades({ pool, db, agora = new Date(), consul
 
     await con.query(
       "UPDATE public.push_controle SET valor = $2, atualizado_em = NOW() WHERE chave = $1",
-      [CHAVE_ESTADO, JSON.stringify(chavesAtuais)],
+      [CHAVE_ESTADO, JSON.stringify({ meses, chaves: chavesAtuais })],
     );
     await con.query("COMMIT");
     return { inicializado: false, novas: novas.length, total: atuais.length };
