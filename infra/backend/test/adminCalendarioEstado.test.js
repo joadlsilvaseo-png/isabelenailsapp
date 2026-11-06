@@ -61,6 +61,7 @@ test("reabertura mantém cada data separada no payload", () => {
   ]);
   assert.deepEqual(criarPayloadLote(selecoes, "reabrir"), {
     acao: "reabrir",
+    resolucaoMinutos: 15,
     datas: [
       { data: "2026-11-05", horas: [900, 930] },
       { data: "2026-12-03", horas: [840] },
