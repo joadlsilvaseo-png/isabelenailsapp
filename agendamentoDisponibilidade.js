@@ -8,13 +8,16 @@ import { indisponivelComBuffer, encaixeInteligenteDisponivel } from "./infra/bac
  * Sem pausa fixa de almoço: intervalos são gerenciados manualmente no calendário.
  */
 export function obterLimitesAtendimentoSemanal(diaSemana) {
-  const horarioEstendido = diaSemana === 4 || diaSemana === 5;
-  const sabado = diaSemana === 6;
-  return {
-    minAbertura: diaSemana === 4 ? 660 : 540,
-    minUltimoInicio: sabado ? 1020 : horarioEstendido ? 1230 : 1080,
-    minFechamento: sabado ? 1110 : horarioEstendido ? 1260 : 1200,
+  // O encerramento corresponde ao término real do último atendimento.
+  const periodos = {
+    2: { minAbertura: 840, minFechamento: 1050 }, // Terça
+    3: { minAbertura: 540, minFechamento: 1050 }, // Quarta: pausa entre janelas
+    4: { minAbertura: 660, minFechamento: 1260 }, // Quinta
+    5: { minAbertura: 540, minFechamento: 1260 }, // Sexta
+    6: { minAbertura: 540, minFechamento: 1110 }, // Sábado: exceção 16h/150min
   };
+  const limites = periodos[diaSemana] || { minAbertura: 0, minFechamento: 0 };
+  return { ...limites, minUltimoInicio: limites.minFechamento - 30 };
 }
 
 function validarIntervalos(intervalos) {
@@ -70,4 +73,21 @@ export function listarIniciosEncaixe({ abertura, ultimoInicio, duracao, interval
     }
   }
   return inicios;
+}
+
+/**
+ * Grade nativa: todas as opções em intervalos de 15min.
+ * A validação de janela comercial (incluindo dezembro) vem do mesmo
+ * módulo do backend. Ocupação, buffer e bloqueios são aplicados em conjunto.
+ */
+export function listarIniciosGrade15({ abertura, ultimoInicio, duracao, validarInicio }) {
+  if (![abertura, ultimoInicio, duracao].every(Number.isInteger) ||
+      duracao <= 0 || typeof validarInicio !== "function") {
+    throw new TypeError("Parâmetros inválidos da grade de 15 minutos");
+  }
+  const horarios = [];
+  for (let minuto = Math.ceil(abertura / 15) * 15; minuto <= ultimoInicio; minuto += 15) {
+    if (validarInicio(minuto)) horarios.push(minuto);
+  }
+  return horarios;
 }

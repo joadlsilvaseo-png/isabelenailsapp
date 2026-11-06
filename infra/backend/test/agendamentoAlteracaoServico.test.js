@@ -537,7 +537,7 @@ test("bloqueio administrativo impede a alteração", async () => {
 
 test("regras de sábado e as restrições especiais de dezembro continuam valendo", () => {
   assert.equal(validarNovoPeriodoServico({ data: "2026-11-07", horario: "16:00", duracao: 150, servico: { nome: "Manutenção" }, now: new Date("2026-11-04T12:00:00-03:00") }).valido, true);
-  assert.equal(validarNovoPeriodoServico({ data: "2026-11-07", horario: "16:30", duracao: 60, servico: { nome: "Manutenção" }, now: new Date("2026-11-04T12:00:00-03:00") }).valido, false);
+  assert.equal(validarNovoPeriodoServico({ data: "2026-11-07", horario: "16:30", duracao: 60, servico: { nome: "Manutenção" }, now: new Date("2026-11-04T12:00:00-03:00") }).valido, true);
   assert.equal(validarNovoPeriodoServico({ data: "2026-12-18", horario: "14:00", duracao: 60, servico: { nome: "Pedicure Simples", categoria: "Pedicure" }, now: new Date("2026-11-04T12:00:00-03:00") }).valido, false);
 });
 
