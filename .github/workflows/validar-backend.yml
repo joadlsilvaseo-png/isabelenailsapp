@@ -67,12 +67,13 @@ jobs:
         run: |
           psql -v ON_ERROR_STOP=1 -Atc "SELECT COUNT(*) FROM information_schema.columns WHERE table_name='pix_reagendamentos_pagos';" | grep -qx 27
           psql -v ON_ERROR_STOP=1 -Atc "SELECT COUNT(*) FROM pg_indexes WHERE tablename='pix_reagendamentos_pagos' AND indexname IN ('ux_pix_reagendamento_pago_pendente','ix_pix_reagendamento_pago_worker');" | grep -qx 2
-      - name: Simular migração 022 com 185 bloqueios legados no PostgreSQL 17 isolado
+      - name: Simular migração 022 com 185 bloqueios legados em banco dedicado
         run: |
-          psql -v ON_ERROR_STOP=1 -f infra/migrations/018_agenda_bloqueios.sql
-          psql -v ON_ERROR_STOP=1 -f infra/backend/test/sql/fixture_agenda_grade15_pg17.sql
-          psql -v ON_ERROR_STOP=1 -f infra/migrations/022_agenda_bloqueios_grade_15.sql
-          psql -v ON_ERROR_STOP=1 -f infra/backend/test/sql/assert_agenda_grade15_pg17.sql
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE DATABASE isabele_agenda15_ci"
+          psql -v ON_ERROR_STOP=1 -d isabele_agenda15_ci -f infra/migrations/018_agenda_bloqueios.sql
+          psql -v ON_ERROR_STOP=1 -d isabele_agenda15_ci -f infra/backend/test/sql/fixture_agenda_grade15_pg17.sql
+          psql -v ON_ERROR_STOP=1 -d isabele_agenda15_ci -f infra/migrations/022_agenda_bloqueios_grade_15.sql
+          psql -v ON_ERROR_STOP=1 -d isabele_agenda15_ci -f infra/backend/test/sql/assert_agenda_grade15_pg17.sql
       - name: Testes integrados de pagamento, agendamento, Calendar simulado e recuperação
         run: node --test infra/backend/test/pixReagendamentoPagoPostgres.test.js
 
