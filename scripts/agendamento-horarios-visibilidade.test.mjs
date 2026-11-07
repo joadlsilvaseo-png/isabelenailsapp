@@ -22,7 +22,7 @@ test("exibir livres por padrão e disponibilizar visualização opcional dos dem
   assert.match(pagina, /alternarIndisponiveis\.setAttribute\("aria-pressed", String\(mostrar\)\)/);
   assert.match(pagina, /slot\.hidden = !mostrar/);
   assert.match(pagina, /Sem horários disponíveis neste período/);
-  assert.match(pagina, /Sem horários disponíveis nesta data para este serviço/);
+  assert.match(pagina, /Não há horários disponíveis nesta data para este serviço/);
 });
 
 test("validações da API, Firestore e bloqueios continuam sem exceções artificiais", async () => {
