@@ -239,7 +239,19 @@ function criarFixture(options = {}) {
           if (normalized.startsWith("select 1 from public.pix_reagendamentos_pagos")) {
              return { rowCount: options.pixRebookingPending ? 1 : 0, rows: options.pixRebookingPending ? [{}] : [] };
            }
-           if (normalized.startsWith("select 1 from public.pix_reservas")) {
+           // O verificador agora protege todos os inícios, inclusive :00/:30.
+          if (normalized.startsWith("select inicio_minuto, fim_minuto, 'reserva'::text as tipo")) {
+            const [data, excluirId] = params;
+            const rows = state.conflicts
+              .filter((item) => item.data === data && item.agendamento_id !== excluirId)
+              .map((item) => ({
+                inicio_minuto: item.inicio, fim_minuto: item.fim, tipo: "reserva",
+                estado: item.estado, cliente_uid: "outra-cliente",
+                agendamento_id: item.agendamento_id,
+              }));
+            return { rowCount: rows.length, rows };
+          }
+          if (normalized.startsWith("select 1 from public.pix_reservas")) {
             const [date, ownId, start, end] = params;
             const occupied = state.conflicts.some((item) => item.data === date && item.agendamento_id !== ownId && item.estado === "reservada" && start < item.fim && end > item.inicio);
             return { rowCount: occupied ? 1 : 0, rows: occupied ? [{}] : [] };
