@@ -60,7 +60,7 @@ test("análise semanal compara intervalos de sete dias equivalentes, sem chamar 
   const d = montarVisaoGestao({ ...base, clientes: [], agendamentos: [
     ag("a", "1", "2026-11-05", "10:00", 45, "realizado", "Manicure", { precoSnapshot: 70 }),
     ag("b", "2", "2026-10-31", "10:00", 45, "realizado", "Manicure", { precoSnapshot: 70 }),
-    ag("c", "3", "2026-11-01", "10:00", 45, "realizado", "Manicure", { precoSnapshot: 60 }),
+    ag("c", "3", "2026-10-30", "10:00", 45, "realizado", "Manicure", { precoSnapshot: 60 }),
     ag("d", "4", "2026-11-01", "11:00", 45, "cancelado_cliente", "Manicure"),
   ]});
   assert.equal(d.semana.atual.concluidos, 1);
