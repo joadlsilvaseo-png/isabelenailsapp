@@ -27,3 +27,13 @@ test("links e acesso administrativo preservados",async()=>{
   assert.match(c,/body\[data-page="admin-assistente"\]\[data-access-state="allowed"\]/);
   for (const id of ["assistente-acesso","assistente-conteudo","assistente-dialogo","assistente-form","assistente-pergunta","assistente-enviar"]) assert.ok(h.includes('id="'+id+'"'),id);
 });
+
+test("área externa dos cards do Assistente não possui fundo gelo", async()=>{
+ const css=await read("admin-assistente.css"),h=await read("admin-assistente.html");
+ assert.match(css,/\.assistente-main\{[^}]*background:transparent\}/);
+ assert.match(css,/\.assistente-main\{[^}]*border-radius:0/);
+ assert.match(css,/\.assistente-atalhos \.assistente-secao-cabecalho h2 \{ color: #ffffff; \}/);
+ assert.match(css,/\.assistente-rodape \{ color: rgba\(255,255,255,\.87\); \}/);
+ assert.match(h,/admin-assistente\.css\?v=4/);
+ assert.match(css,/\.assistente-intro\{[^}]*background:#fff/);
+});
