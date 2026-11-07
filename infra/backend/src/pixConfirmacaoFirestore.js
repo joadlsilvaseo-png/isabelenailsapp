@@ -119,7 +119,9 @@ export async function confirmarAgendamentoPixNoFirestore({
       existentes.docs.map((documento) => documento.data()),
       reserva.inicio_minuto,
       reserva.fim_minuto,
-      0, // A cobrança paga respeita o hold PIX já aceito antes da nova regra.
+      0, // Cobrança paga respeita o hold PIX já aceito, sem dispensar a checagem de sobreposição.
+      null,
+      { ignorarProtecaoInicio: true },
     );
 
     if (conflito) {

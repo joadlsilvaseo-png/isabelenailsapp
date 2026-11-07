@@ -360,12 +360,14 @@ async function processarOperacao(pool, operationId, dependencies = {}) {
     const outrosAgendamentos = diaDisponibilidade.docs
       .filter((doc) => doc.id !== operacao.agendamento_id)
       .map((doc) => doc.data());
-    if (encontrarConflitoAgendamentoPix(outrosAgendamentos, snapshot.inicio, snapshot.inicio + snapshot.duracaoNova)) {
+    if (encontrarConflitoAgendamentoPix(outrosAgendamentos, snapshot.inicio, snapshot.inicio + snapshot.duracaoNova,
+      undefined, snapshot.clienteUid)) {
       throw new ErroAlteracaoServico(409, "O novo período conflita com outro agendamento confirmado.");
     }
-    if (snapshot.inicio % 30 === 15 && snapshot.duracaoNova > snapshot.duracaoAnterior && !(await verificarEncaixeNoBanco({
+    if (snapshot.duracaoNova > snapshot.duracaoAnterior && !(await verificarEncaixeNoBanco({
       conexao, db, data: snapshot.data, inicio: snapshot.inicio,
       fim: snapshot.inicio + snapshot.duracaoNova, excluirAgendamentoId: operacao.agendamento_id,
+      clienteUid: snapshot.clienteUid,
     }))) {
       throw new ErroAlteracaoServico(409, "O horário selecionado deixou de estar disponível.");
     }
@@ -408,7 +410,8 @@ async function processarOperacao(pool, operationId, dependencies = {}) {
         }
         const dia = await transacao.get(db.collection("agendamentos").where("data", "==", snapshot.data));
         const registros = dia.docs.filter((doc) => doc.id !== operacao.agendamento_id).map((doc) => doc.data());
-        if (encontrarConflitoAgendamentoPix(registros, snapshot.inicio, snapshot.inicio + snapshot.duracaoNova)) {
+        if (encontrarConflitoAgendamentoPix(registros, snapshot.inicio, snapshot.inicio + snapshot.duracaoNova,
+          undefined, snapshot.clienteUid)) {
           throw new ErroAlteracaoServico(409, "O novo período conflita com outro agendamento confirmado.");
         }
         transacao.update(referencia, { alteracaoServicoOperacaoPendente: operationId });
@@ -481,7 +484,8 @@ async function processarOperacao(pool, operationId, dependencies = {}) {
         }
         const dia = await transacao.get(db.collection("agendamentos").where("data", "==", snapshot.data));
         const registros = dia.docs.filter((doc) => doc.id !== operacao.agendamento_id).map((doc) => doc.data());
-        if (encontrarConflitoAgendamentoPix(registros, snapshot.inicio, snapshot.inicio + snapshot.duracaoNova)) {
+        if (encontrarConflitoAgendamentoPix(registros, snapshot.inicio, snapshot.inicio + snapshot.duracaoNova,
+          undefined, snapshot.clienteUid)) {
           throw new ErroAlteracaoServico(409, "O novo período conflita com outro agendamento confirmado.");
         }
         transacao.update(referencia, {

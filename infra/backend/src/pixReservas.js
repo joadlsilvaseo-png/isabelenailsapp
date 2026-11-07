@@ -330,8 +330,8 @@ export async function criarReservaPix(req, res, pool) {
         throw new ErroReserva(409, "Agenda fechada pela profissional neste horário");
       }
 
-      // Reservas PIX ainda aguardando pagamento não aparecem no Firestore:
-      // a checagem SQL sob lock por data protege contra sobreposição.
+      // Reservas PIX pendentes não aparecem no Firestore; SQL protege
+      // sobreposição e a verificação compartilhada protege o novo início.
       const reservaProxima = await conexao.query(`
         SELECT 1 FROM public.pix_reservas
         WHERE data_servico = $1 AND estado IN ('reservada', 'confirmada')
@@ -361,7 +361,7 @@ export async function criarReservaPix(req, res, pool) {
           "Horario ocupado por outro agendamento"
         );
       }
-      if (periodo.inicioMinuto % 30 === 15 && !(await verificarEncaixeNoBanco({
+      if (!(await verificarEncaixeNoBanco({
         conexao, db: firestore(), data,
         inicio: periodo.inicioMinuto, fim: periodo.fimMinuto,
         clienteUid: uid,

@@ -14,8 +14,8 @@ export async function verificarEncaixeNoBanco({
   clienteUid = null,
 }) {
   if (!Number.isInteger(inicio) || !Number.isInteger(fim) || inicio % 15 !== 0 || inicio >= fim) return false;
-  // :15 e :45 deixam de exigir dois agendamentos vizinhos.
-  // Continuamos fazendo a validação redundante no lock para proteger o PIX.
+  // Revalidar TODOS os inícios (:00/:15/:30/:45) sob lock: proteção dinâmica
+  // e checagem de Firestore + PIX + bloqueios, sem abrir sobreposição.
   if (!db || !conexao || typeof data !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(data)) return false;
   const [resultado, documentos] = await Promise.all([
     conexao.query(`
