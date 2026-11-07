@@ -310,6 +310,7 @@ function criarFixture(options = {}) {
   if (options.inactiveAdmin) state.docs.set(`usuarios/${ADMIN}`, { role: "admin", ativo: false });
   if (options.status) state.docs.set(`agendamentos/${APPT}`, { ...state.docs.get(`agendamentos/${APPT}`), status: options.status });
   if (options.fsConflict) state.docs.set("agendamentos/other", { data: DATE, horario: "12:00", duracao: 60, status: "confirmado" });
+  if (options.priorAdjacent) state.docs.set("agendamentos/prior", { data: DATE, horario: "10:00", duracao: 60, status: "confirmado", clienteId: "other" });
   if (options.pixConflict) state.conflicts.push({ data: DATE, inicio: 700, fim: 730, estado: "reservada", agendamento_id: "pix-other" });
   if (options.block) dependencies.possuiBloqueio = async () => true;
   if (options.missingCalendarId) {
@@ -515,6 +516,14 @@ test("troca por serviço mais longo é aceita quando há disponibilidade", async
   assert.equal(res.status, 200);
   assert.equal(fixture.state.reservation.reserva_fim, 840);
   assert.equal(fixture.state.docs.get(`agendamentos/${APPT}`).duracao, 180);
+});
+
+test("troca de serviço preserva compromisso já confirmado que começa em sequência", async () => {
+  const fixture = criarFixture({ priorAdjacent: true });
+  const res = await execute(fixture, request(OP, "long"));
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+  assert.equal(fixture.state.reservation.reserva_inicio, 660);
+  assert.equal(fixture.state.reservation.reserva_fim, 840);
 });
 
 test("backend ignora preço e duração enviados pelo navegador", async () => {

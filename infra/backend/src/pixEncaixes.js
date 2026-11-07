@@ -11,7 +11,7 @@ const HORARIO = /^([01]\d|2[0-3]):[0-5]\d$/;
  */
 export async function verificarEncaixeNoBanco({
   conexao, db, data, inicio, fim, excluirAgendamentoId = null, agora = new Date(),
-  clienteUid = null,
+  clienteUid = null, ignorarProtecaoInicio = false,
 }) {
   if (!Number.isInteger(inicio) || !Number.isInteger(fim) || inicio % 15 !== 0 || inicio >= fim) return false;
   // Revalidar TODOS os inícios (:00/:15/:30/:45) sob lock: proteção dinâmica
@@ -56,5 +56,5 @@ export async function verificarEncaixeNoBanco({
         STATUS_OCUPADOS.has(item.status)),
     });
   }
-  return !indisponivelComBufferSequencial(inicio, fim, intervalos);
+  return !indisponivelComBufferSequencial(inicio, fim, intervalos, 0, { ignorarProtecaoInicio });
 }

@@ -16,8 +16,9 @@ export function atendimentosConflitamComBuffer(inicio, fim, inicioExistente, fim
  * Bloqueios administrativos não criam pausa e serviços confirmados da mesma
  * cliente podem ficar consecutivos, sem permitir sobreposição real.
  *
- * ignorarProtecaoInicio: somente para efetivar um PIX já reservado e pago
- * antes da mudança, sem prejudicar a confirmação financeira.
+ * ignorarProtecaoInicio: usado exclusivamente para efetivar um PIX já pago
+ * ou editar a duração de um agendamento que já existia, sem prejudicar
+ * compromissos antigos. Sobreposição real continua proibida.
  */
 export function indisponivelComBufferSequencial(inicio, fim, intervalos, buffer = 0, opcoes = {}) {
   if (!Array.isArray(intervalos)) throw new TypeError("Lista de intervalos inválida");
