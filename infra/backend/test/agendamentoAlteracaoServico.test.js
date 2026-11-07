@@ -239,6 +239,29 @@ function criarFixture(options = {}) {
           if (normalized.startsWith("select 1 from public.pix_reagendamentos_pagos")) {
              return { rowCount: options.pixRebookingPending ? 1 : 0, rows: options.pixRebookingPending ? [{}] : [] };
            }
+           if (normalized.includes("union all") && normalized.includes("from public.pix_reservas")) {
+             // O validador compartilhado consulta intervalos PIX e bloqueios no lock.
+             const [date, exclude] = params;
+             const rows = state.conflicts.filter((item) =>
+               item.data === date && item.agendamento_id !== exclude &&
+               ["reservada", "confirmada"].includes(item.estado))
+               .map((item) => ({
+                 inicio_minuto: item.inicio, fim_minuto: item.fim,
+                 tipo: "reserva", cliente_uid: item.cliente_uid || null,
+                 estado: item.estado, agendamento_id: item.agendamento_id,
+               }));
+             if (state.reservation?.reserva_data === date &&
+                 state.reservation.agendamento_id !== exclude) {
+               rows.push({
+                 inicio_minuto: state.reservation.reserva_inicio,
+                 fim_minuto: state.reservation.reserva_fim,
+                 tipo: "reserva", cliente_uid: state.reservation.cliente_uid,
+                 estado: state.reservation.reserva_estado,
+                 agendamento_id: state.reservation.agendamento_id,
+               });
+             }
+             return { rowCount: rows.length, rows };
+           }
            if (normalized.startsWith("select 1 from public.pix_reservas")) {
             const [date, ownId, start, end] = params;
             const occupied = state.conflicts.some((item) => item.data === date && item.agendamento_id !== ownId && item.estado === "reservada" && start < item.fim && end > item.inicio);
