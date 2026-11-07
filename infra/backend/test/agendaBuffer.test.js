@@ -63,7 +63,7 @@ test("o backend mantém a validação sob lock e todas as fontes de ocupação",
   for (const path of ["pixReservas.js", "agendamentosIsencaoPix.js", "pixReagendamentoPagoOperacao.js", "agendamentoAlteracaoServico.js"]) {
     assert.match(ler(path), /BUFFER_ENTRE_ATENDIMENTOS_MINUTOS/);
   }
-  assert.match(ler("pixConfirmacaoFirestore.js"), /reserva\\.fim_minuto,\\s*0,/);
+  assert.match(ler("pixConfirmacaoFirestore.js"), /reserva\.fim_minuto,\s*0,/);
   for (const path of ["pixReservas.js", "agendamentosIsencaoPix.js", "pixReagendamentoPagoOperacao.js", "agendamentoAlteracaoServico.js"]) {
     assert.doesNotMatch(ler(path), /% 30 === 15 && .*verificarEncaixeNoBanco/);
   }
