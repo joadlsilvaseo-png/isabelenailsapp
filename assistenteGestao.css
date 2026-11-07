@@ -1,0 +1,44 @@
+/* Assistente Isabele: paleta administrativa e fontes legíveis */
+.ig-superficie{width:100%;min-width:0;color:#591c31;font-family:"Poppins",sans-serif}
+.ig-superficie [hidden]{display:none!important}
+.ig-cartao{padding:18px 15px;border:1px solid #e9d6de;border-radius:20px;background:#fffafb;box-shadow:0 10px 24px rgba(55,13,29,.14)}
+.ig-topo{display:flex;gap:11px;align-items:center}
+.ig-marca{width:42px;height:42px;flex:0 0 42px;display:grid;place-items:center;border-radius:13px;background:#591c31;color:#fff;font-size:25px}
+.ig-titulos{flex:1;min-width:0}
+.ig-titulos span{display:block;color:#9b5771;font-size:11px;font-weight:600}
+.ig-titulos h2{margin:2px 0 0;color:#591c31;font-size:17px;line-height:1.4}
+.ig-ver-tudo{min-height:37px;padding:8px;border:1px solid #e5c2d0;border-radius:10px;color:#591c31;font-size:12px;font-weight:700;text-decoration:none;white-space:nowrap}
+.ig-descricao{margin:11px 0;color:#775362;font-size:13px;line-height:1.6}
+.ig-estado,.ig-vazio{margin:12px 0 0;padding:13px;border-radius:12px;background:#f7eaf0;color:#724a5a;font-size:13px;line-height:1.6}
+.ig-metricas{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:13px}
+.ig-metrica{min-width:0;padding:12px;border:1px solid #efdee5;border-radius:13px;background:#fff}
+.ig-metrica span{display:block;color:#775463;font-size:12px;line-height:1.4}
+.ig-metrica strong{display:block;margin-top:6px;color:#591c31;font-size:23px;line-height:1.2}
+.ig-livre-nota,.ig-proximo{margin:9px 0 0;color:#735466;font-size:12px;line-height:1.5}
+.ig-destaque{margin-top:14px;padding:14px;border:1px solid #ead3de;border-radius:15px;background:#f9ecf2}
+.ig-legenda{color:#a45173;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+.ig-destaque h3{margin:7px 0;color:#591c31;font-size:16px;line-height:1.4}
+.ig-destaque p{margin:0;color:#714b5b;font-size:13px;line-height:1.6}
+.ig-acoes{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:12px}
+.ig-botao{min-height:42px;padding:9px 12px;border:1px solid #d5aab9;border-radius:11px;font:600 12px/1.4 "Poppins",sans-serif;text-align:center;text-decoration:none;cursor:pointer}
+.ig-botao--primario{background:#591c31;color:#fff;border-color:#591c31}
+.ig-botao--secundario{background:#fff;color:#591c31}
+.ig-botao:disabled{opacity:.55;cursor:wait}
+.ig-rodape,.ig-nota{margin:12px 0 0;color:#806271;font-size:11px;line-height:1.6}
+.ig-secao{margin-top:16px;padding:16px 13px;border:1px solid #ecd8e1;border-radius:18px;background:#fff}
+.ig-secao h3{margin:0;color:#591c31;font-size:17px}
+.ig-secao-subtitulo{margin:6px 0 12px;color:#785a68;font-size:12.5px;line-height:1.55}
+.ig-cliente{margin-top:10px;padding:13px;border:1px solid #ebdbe1;border-radius:14px;background:#fffafb}
+.ig-cliente-nome{margin:0;color:#591c31;font-size:15px}
+.ig-cliente-meta{margin:5px 0;color:#785463;font-size:12px;line-height:1.5}
+.ig-mensagem{margin:10px 0;padding:11px;border-radius:10px;background:#f8edf2;color:#593d49;font-size:13px;line-height:1.6;overflow-wrap:anywhere;user-select:text}
+.ig-status-acao{color:#3d7250;font-size:12px}
+.ig-sem-telefone{color:#765563;font-size:11px}
+.ig-semana-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.ig-semana-item{padding:10px 7px;border-radius:12px;background:#f7eaf0;text-align:center}
+.ig-semana-item span{display:block;color:#785463;font-size:11px;line-height:1.5}
+.ig-semana-item strong{display:block;margin-top:6px;color:#591c31;font-size:22px}
+.ig-leitura{color:#644352;font-size:13px;line-height:1.6}
+.ig-atualizar{margin-top:12px}
+.ig-superficie a:focus-visible,.ig-superficie button:focus-visible{outline:3px solid #b36b87;outline-offset:3px}
+@media(max-width:365px){.ig-cartao{padding:15px 12px}.ig-marca{width:36px;height:36px;flex-basis:36px}.ig-titulos h2{font-size:15px}.ig-ver-tudo{font-size:11px}.ig-metrica strong{font-size:21px}}

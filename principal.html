@@ -38,6 +38,7 @@
 
   <link rel="stylesheet" href="principal.css?v=1.1.3">
   <link rel="stylesheet" href="admin-bottom-nav.css?v=1">
+  <link rel="stylesheet" href="./assistenteGestao.css?v=1">
 </head>
 
 <body data-page="principal" data-user-role="loading">
@@ -161,6 +162,42 @@
             <p>
               Aguarde enquanto identificamos seu perfil.
             </p>
+          </div>
+        </section>
+
+
+        <!-- Assistente: visível somente para administradoras, abaixo do perfil. -->
+        <section id="ig-home" class="ig-superficie ig-superficie--home" data-ig-contexto="home"
+                 data-role-section="admin" aria-labelledby="ig-home-titulo" hidden>
+          <div class="ig-cartao">
+            <div class="ig-topo">
+              <span class="ig-marca" aria-hidden="true">✧</span>
+              <div class="ig-titulos">
+                <span>Sua gestão, em foco</span>
+                <h2 id="ig-home-titulo">Assistente Isabele</h2>
+              </div>
+              <a class="ig-ver-tudo" href="./admin-assistente.html">Ver tudo</a>
+            </div>
+            <p class="ig-descricao">Uma visão rápida do seu dia e das oportunidades do negócio.</p>
+            <p class="ig-estado" data-ig-estado role="status" aria-live="polite">Preparando recomendações...</p>
+            <div data-ig-dados hidden>
+              <div class="ig-metricas" aria-label="Resumo do dia">
+                <div class="ig-metrica"><span>Atendimentos hoje</span><strong data-ig-atendimentos>—</strong></div>
+                <div class="ig-metrica"><span>Tempo livre restante</span><strong data-ig-livre>—</strong></div>
+              </div>
+              <p class="ig-livre-nota" data-ig-livre-nota></p>
+              <p class="ig-proximo" data-ig-proximo></p>
+              <div class="ig-destaque">
+                <span class="ig-legenda">Recomendação do momento</span>
+                <h3 data-ig-recomendacao-titulo></h3>
+                <p data-ig-recomendacao-texto></p>
+                <div class="ig-acoes">
+                  <a class="ig-botao ig-botao--primario" data-ig-recomendacao-link href="./admin-assistente.html">Ver recomendação</a>
+                  <button type="button" class="ig-botao ig-botao--secundario" data-ig-proxima hidden>Outra dica</button>
+                </div>
+              </div>
+              <p class="ig-rodape" data-ig-atualizado></p>
+            </div>
           </div>
         </section>
 
@@ -354,8 +391,8 @@
               </span>
               <span class="admin-action-content">
                 <span class="admin-action-eyebrow">Oportunidades</span>
-                <strong>Assistente de Agenda</strong>
-                <small>Encontre encaixes excepcionais e acompanhe alertas de novas lacunas.</small>
+                <strong>Assistente Isabele</strong>
+                <small>Acompanhe retornos, mensagens, resultados e alertas preventivos.</small>
               </span>
               <span class="admin-action-arrow" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none">
@@ -704,7 +741,7 @@
 
   <script type="module" src="vitrine.js?v=1.0.1" defer></script>
 
-  <script type="module" src="principal.js?v=1.2.0"></script>
+  <script type="module" src="principal.js?v=1.3.0"></script>
 
   <script src="app.js?v=2.0.0" defer></script>
   <script type="module" src="foto-perfil-preview.js?v=2"></script>

@@ -20,6 +20,7 @@ import {
   runTransaction,
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
 
+import { iniciarAssistenteGestao } from "./assistenteGestaoUI.js?v=1";
 import { montarCatalogoCliente, normalizarSlugCategoria } from "./categoriasCatalogo.mjs";
 import { montarResultadosBusca } from "./catalogoBusca.mjs";
 
@@ -731,6 +732,7 @@ async function handleAuthenticatedUser(user, elements) {
 
     if (accessProfile.role === "admin") {
       configureAdminInterface(user, accessProfile, elements);
+      void iniciarAssistenteGestao({ user, contexto: "home" });
     } else {
       configureClientInterface(user, accessProfile, elements);
     }

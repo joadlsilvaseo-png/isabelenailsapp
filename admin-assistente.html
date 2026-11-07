@@ -4,12 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex, nofollow">
-  <meta name="description" content="Assistente Preventivo de Agenda da Isabele Mariana Nails">
+  <meta name="description" content="Assistente Isabele: gestão diária, clientes para retorno e planejamento preventivo">
   <meta name="theme-color" content="#591c31">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="IM Nails">
-  <title>Assistente de Agenda | Isabele Mariana Nails</title>
+  <title>Assistente Isabele | Gestão Inteligente</title>
   <link rel="manifest" href="./manifest.json">
   <link rel="icon" type="image/png" href="./assets/favicon.png">
   <link rel="apple-touch-icon" href="./assets/apple-touch-icon.png">
@@ -19,6 +19,7 @@
   <link rel="stylesheet" href="./base.css?v=1.0.4">
   <link rel="stylesheet" href="./admin-assistente.css?v=3">
   <link rel="stylesheet" href="./admin-bottom-nav.css?v=1">
+  <link rel="stylesheet" href="./assistenteGestao.css?v=1">
 </head>
 <body data-page="admin-assistente" data-access-state="loading">
   <div class="app-container assistente-layout">
@@ -29,7 +30,7 @@
             <path d="M15 18L9 12L15 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
         </a>
-        <div class="assistente-nav-titulo"><span>Gestão profissional</span><h1>Assistente de Agenda</h1></div>
+        <div class="assistente-nav-titulo"><span>Gestão profissional</span><h1>Assistente Isabele</h1></div>
         <a href="./admin-calendario.html" class="assistente-nav-link" aria-label="Abrir Gerenciador de Calendário" title="Gerenciar Calendário">
           <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <rect x="3.5" y="5.5" width="17" height="15" rx="2.5" stroke="currentColor" stroke-width="1.8"/>
@@ -39,9 +40,9 @@
       </nav>
       <section class="assistente-hero" aria-labelledby="assistente-hero-titulo">
         <div class="assistente-hero-conteudo">
-          <p class="assistente-kicker">Planejamento inteligente</p>
-          <h2 id="assistente-hero-titulo">Mais controle sobre cada intervalo.</h2>
-          <p>Encontre lacunas pouco aproveitáveis e avalie quando vale a pena manter um horário aberto.</p>
+          <p class="assistente-kicker">Gestão inteligente</p>
+          <h2 id="assistente-hero-titulo">Mais clareza para cuidar do seu negócio.</h2>
+          <p>Confira retornos, resultados e oportunidades sem alterar seus agendamentos.</p>
         </div>
         <span class="assistente-hero-icone" aria-hidden="true">
           <svg viewBox="0 0 32 32" fill="none">
@@ -56,6 +57,60 @@
     <section id="assistente-acesso" class="assistente-estado" role="status" aria-live="polite">Verificando acesso administrativo...</section>
 
     <main id="assistente-conteudo" class="assistente-main" hidden>
+
+      <!-- Resumo de gestão; assistente preventivo de agenda preservado abaixo. -->
+      <section id="ig-detalhe" class="ig-superficie ig-superficie--detalhe" data-ig-contexto="detalhe" aria-labelledby="ig-detalhe-titulo">
+        <div class="ig-cartao">
+          <div class="ig-topo">
+            <span class="ig-marca" aria-hidden="true">✧</span>
+            <div class="ig-titulos">
+              <span>Informações do seu negócio</span>
+              <h2 id="ig-detalhe-titulo">Assistente Isabele</h2>
+            </div>
+          </div>
+          <p class="ig-descricao">Resumo diário, retornos sugeridos, mensagens e análise semanal.</p>
+          <p class="ig-estado" data-ig-estado role="status" aria-live="polite">Preparando recomendações...</p>
+          <div data-ig-dados hidden>
+            <div class="ig-metricas" aria-label="Resumo do dia">
+              <div class="ig-metrica"><span>Atendimentos hoje</span><strong data-ig-atendimentos>—</strong></div>
+              <div class="ig-metrica"><span>Tempo livre restante</span><strong data-ig-livre>—</strong></div>
+            </div>
+            <p class="ig-livre-nota" data-ig-livre-nota></p>
+            <p class="ig-proximo" data-ig-proximo></p>
+            <div class="ig-destaque">
+              <span class="ig-legenda">Recomendação do momento</span>
+              <h3 data-ig-recomendacao-titulo></h3>
+              <p data-ig-recomendacao-texto></p>
+              <div class="ig-acoes">
+                <a class="ig-botao ig-botao--primario" data-ig-recomendacao-link href="#ig-radar">Conferir</a>
+                <button type="button" class="ig-botao ig-botao--secundario" data-ig-proxima hidden>Outra dica</button>
+              </div>
+            </div>
+            <p class="ig-rodape" data-ig-atualizado></p>
+          </div>
+          <button type="button" class="ig-botao ig-botao--secundario ig-atualizar" data-ig-atualizar>Atualizar análise</button>
+        </div>
+        <section id="ig-radar" class="ig-secao" aria-labelledby="ig-radar-titulo">
+          <h3 id="ig-radar-titulo">Clientes para retorno</h3>
+          <p class="ig-secao-subtitulo">Sugestões baseadas no histórico concluído. As mensagens não são enviadas automaticamente.</p>
+          <p class="ig-nota" data-ig-radar-contagem></p>
+          <div data-ig-radar-lista></div>
+        </section>
+        <section id="ig-semana" class="ig-secao" aria-labelledby="ig-semana-titulo">
+          <h3 id="ig-semana-titulo">Análise semanal</h3>
+          <p class="ig-secao-subtitulo">Últimos 7 dias comparados com os 7 dias anteriores.</p>
+          <div class="ig-semana-grid">
+            <div class="ig-semana-item"><span>Concluídos</span><strong data-ig-semana-atual>—</strong></div>
+            <div class="ig-semana-item"><span>Período anterior</span><strong data-ig-semana-anterior>—</strong></div>
+            <div class="ig-semana-item"><span>Cancelados</span><strong data-ig-semana-cancelamentos>—</strong></div>
+          </div>
+          <p class="ig-leitura" data-ig-semana-leitura></p>
+          <p class="ig-leitura">Serviço mais realizado: <strong data-ig-semana-servico>—</strong></p>
+          <p class="ig-nota" data-ig-semana-valor></p>
+        </section>
+      </section>
+
+
       <section class="assistente-intro" aria-labelledby="assistente-intro-titulo">
         <span class="assistente-intro-icone" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none">
@@ -108,7 +163,7 @@
       <p class="assistente-rodape">As sugestões são consultivas e podem mudar com os agendamentos. Confira o dia no calendário antes de fechar qualquer intervalo.</p>
     </main>
   </div>
-  <script type="module" src="./admin-assistente.js?v=3"></script>
+  <script type="module" src="./admin-assistente.js?v=4"></script>
   <script src="./admin-bottom-nav.js?v=1" defer></script>
 </body>
 </html>
