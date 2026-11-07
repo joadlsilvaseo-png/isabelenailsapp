@@ -202,12 +202,14 @@ export async function iniciarReagendamentoPixPago({
     const outros = docs.docs
       .filter((doc) => doc.id !== agendamentoId)
       .map((doc) => doc.data());
-    if (encontrarConflitoAgendamentoPix(outros, inicio, inicio + origemDuracao)) {
+    if (encontrarConflitoAgendamentoPix(outros, inicio, inicio + origemDuracao, undefined,
+      agendamento.clienteId)) {
       throw new ErroReagendamentoPago(409, "Novo horário ocupado por outro agendamento");
     }
-    if (inicio % 30 === 15 && !(await verificarEncaixeNoBanco({
+    if (!(await verificarEncaixeNoBanco({
       conexao, db, data, inicio, fim: inicio + origemDuracao,
       excluirAgendamentoId: agendamentoId,
+      clienteUid: agendamento.clienteId,
     }))) {
       throw new ErroReagendamentoPago(409, "O horário selecionado deixou de estar disponível.");
     }
@@ -298,7 +300,8 @@ async function aplicarFirestore(op, db, dependencies) {
 
     const destino = await tx.get(db.collection("agendamentos").where("data", "==", destinoData));
     const outros = destino.docs.filter((item) => item.id !== op.agendamento_id).map((item) => item.data());
-    if (encontrarConflitoAgendamentoPix(outros, Number(op.destino_inicio), Number(op.destino_fim))) {
+    if (encontrarConflitoAgendamentoPix(outros, Number(op.destino_inicio), Number(op.destino_fim),
+      undefined, op.cliente_uid)) {
       throw new ErroReagendamentoPago(409, "Outro agendamento ocupa o novo horário");
     }
     tx.update(ref, {

@@ -219,7 +219,7 @@ export async function criarAgendamentoIsento({ pool, db, uid, dados, dependencie
     if (await possuiBloqueio(conexao, data, periodo.inicioMinuto, periodo.fimMinuto)) {
       throw new ErroIsencaoPix(409, "Agenda fechada pela profissional neste horário", "AGENDA_FECHADA");
     }
-    if (periodo.inicioMinuto % 30 === 15 && !(await verificarEncaixeNoBanco({
+    if (!(await verificarEncaixeNoBanco({
       conexao, db: firestore, data,
       inicio: periodo.inicioMinuto, fim: periodo.fimMinuto,
       excluirAgendamentoId: agendamentoId,
@@ -424,10 +424,11 @@ export async function reagendarComBloqueio({ pool, db, uid, dados, dependencies 
     if (await possuiBloqueio(conexao, data, periodo.inicioMinuto, periodo.fimMinuto)) {
       throw new ErroIsencaoPix(409, "Agenda fechada pela profissional neste horário", "AGENDA_FECHADA");
     }
-    if (periodo.inicioMinuto % 30 === 15 && !(await verificarEncaixeNoBanco({
+    if (!(await verificarEncaixeNoBanco({
       conexao, db: firestore, data,
       inicio: periodo.inicioMinuto, fim: periodo.fimMinuto,
       excluirAgendamentoId: agendamentoId,
+      clienteUid: dadosAtuais.clienteId,
     }))) {
       throw new ErroIsencaoPix(409, "O horário selecionado deixou de estar disponível", "ENCAIXE_INDISPONIVEL");
     }
@@ -500,7 +501,8 @@ export async function reagendarComBloqueio({ pool, db, uid, dados, dependencies 
       const registros = doDia.docs
         .filter((documento) => documento.id !== agendamentoId)
         .map((documento) => documento.data());
-      if (encontrarConflitoAgendamentoPix(registros, periodo.inicioMinuto, periodo.fimMinuto)) {
+      if (encontrarConflitoAgendamentoPix(registros, periodo.inicioMinuto, periodo.fimMinuto,
+        undefined, dadosAtuais.clienteId)) {
         throw new ErroIsencaoPix(409, "Horário ocupado por outro agendamento", "HORARIO_OCUPADO");
       }
 

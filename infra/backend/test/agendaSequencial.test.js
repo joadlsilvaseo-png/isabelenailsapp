@@ -16,16 +16,16 @@ function firestore(documentos) {
 }
 const data = "2026-12-18";
 const primeiro = { data, clienteId: "cliente-1", status: "confirmado", horario: "16:00", duracao: 60 };
-test("Firestore: qualquer cliente pode iniciar no término exato, sem permitir sobreposição", async () => {
+test("Firestore: só a mesma cliente pode iniciar no término exato sem permitir sobreposição", async () => {
   const db = firestore([primeiro]);
   assert.equal((await verificarConflitoFirestore(data, 1020, 1140, "cliente-1", db)).ocupado, false);
-  assert.equal((await verificarConflitoFirestore(data, 1020, 1140, "cliente-2", db)).ocupado, false);
+  assert.equal((await verificarConflitoFirestore(data, 1020, 1140, "cliente-2", db)).ocupado, true);
   assert.equal((await verificarConflitoFirestore(data, 1005, 1125, "cliente-1", db)).ocupado, true);
-  assert.equal((await verificarConflitoFirestore(data, 1020, 1140, null, db)).ocupado, false);
+  assert.equal((await verificarConflitoFirestore(data, 1020, 1140, null, db)).ocupado, true);
   assert.equal((await verificarConflitoFirestore(data, 1020, 1140, "cliente-1",
     firestore([{ ...primeiro, status: "agendado" }]))).ocupado, false);
 });
-test("lock por data: reservas e documentos permitem sequência sem sobreposição", async () => {
+test("lock por data protege início alheio e mantém exceção da mesma cliente", async () => {
   const db = firestore([primeiro]);
   let linhas = [{ inicio_minuto: 960, fim_minuto: 1020,
     tipo: "reserva", estado: "confirmada", cliente_uid: "cliente-1",
@@ -36,12 +36,12 @@ test("lock por data: reservas e documentos permitem sequência sem sobreposiçã
   } };
   const args = { conexao, db, data, inicio: 1020, fim: 1140, clienteUid: "cliente-1" };
   assert.equal(await verificarEncaixeNoBanco(args), true);
-  assert.equal(await verificarEncaixeNoBanco({ ...args, clienteUid: "cliente-2" }), true);
+  assert.equal(await verificarEncaixeNoBanco({ ...args, clienteUid: "cliente-2" }), false);
   assert.equal(await verificarEncaixeNoBanco({ ...args, inicio: 1005, fim: 1125 }), false);
   linhas = [{ ...linhas[0], agendamento_id: null }];
-  assert.equal(await verificarEncaixeNoBanco(args), true, "reserva adjacente não cria intervalo de buffer");
+  assert.equal(await verificarEncaixeNoBanco(args), false, "reserva não confirmada não libera o início");
   linhas = [{ ...linhas[0], estado: "reservada" }];
-  assert.equal(await verificarEncaixeNoBanco(args), true);
+  assert.equal(await verificarEncaixeNoBanco(args), false);
   linhas = [{ inicio_minuto: 1020, fim_minuto: 1035, tipo: "bloqueio" }];
   assert.equal(await verificarEncaixeNoBanco(args), false);
 });

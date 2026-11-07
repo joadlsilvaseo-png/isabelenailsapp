@@ -120,7 +120,7 @@ test("pedicure simples/em gel suspensas de 17 a 23 e retornam 28 a 30", () => {
   }
 });
 
-test("24/12 aceita somente alongamento aplicação, banho de gel e manicures autorizadas", () => {
+test("24/12 permite manutenções de unhas, aplicações e manicures; pedicure segue proibida", () => {
   const permitidos = [
     ["Alongamento em Fibra de Vidro", "Unhas em Gel"],
     ["Aplicação de Alongamento", "Unhas em Gel"],
@@ -128,12 +128,17 @@ test("24/12 aceita somente alongamento aplicação, banho de gel e manicures aut
     ["Manicure Simples", "Manicure"],
     ["Manicure em Gel", "Manicure"],
     ["Esmaltação em Gel", "Manicure"],
+    ["Manutenção Banho de Gel", "Unhas em Gel"],
+    ["Manutenção de Banho de Gel", "Unhas em Gel"],
+    ["Manutenção Alongamento em Fibra", "Unhas em Gel"],
+    ["Manutenção em Gel", "Unhas em Gel"],
+    ["MANUTENÇÃO DE ALONGAMENTO", "Unhas em Gel"],
   ];
   const proibidos = [
-    ["Manutenção Banho de Gel", "Unhas em Gel"],
-    ["Manutenção Alongamento em Fibra", "Unhas em Gel"],
     ["Pedicure Simples", "Pedicure"],
     ["Esmaltação em Gel", "Pedicure"],
+    ["Manutenção Pedicure em Gel", "Pedicure"],
+    ["Manutenção e Remoção de Alongamento", "Unhas em Gel"],
     ["Blindagem", "Unhas em Gel"],
     ["Remoção de Alongamento", "Unhas em Gel"],
   ];
@@ -145,6 +150,13 @@ test("24/12 aceita somente alongamento aplicação, banho de gel e manicures aut
     assert.equal(validarServicoDezembro2026("2026-12-24", {nome, categoria}).valido,
       false, nome);
   }
+  // A nova permissão comercial não estende o expediente de 07h às 16h.
+  assert.equal(validarHorarioEspecial("2026-12-24", "15:00", 60), true);
+  assert.equal(validarHorarioEspecial("2026-12-24", "15:00", 90), false);
+  // O restante do período 17–23 e os dias fechados não são reabertos.
+  assert.equal(validarServicoDezembro2026("2026-12-23",
+    { nome: "Pedicure Simples", categoria: "Pedicure" }).valido, false);
+  assert.equal(validarDataNaJanela("2026-12-25", AGORA).valido, false);
 });
 
 test("backend de criação e reagendamento usa as mesmas restrições comerciais", async () => {

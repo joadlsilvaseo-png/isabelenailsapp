@@ -1023,3 +1023,41 @@ button {
 @media (prefers-reduced-motion: reduce) {
   .agendamento-time-carousel { scroll-behavior: auto; }
 }
+
+/* Apresentação otimizada: preserva os carrosséis Manhã/Tarde/Noite e seus botões. */
+.agendamento-availability-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  padding: 9px 13px;
+  margin: -5px 0 15px;
+  border: 1px solid rgba(124, 51, 76, .25);
+  border-radius: 12px;
+  background: #fffafb;
+  color: #591c31;
+  font: 600 12px/1.4 "Poppins", sans-serif;
+  cursor: pointer;
+}
+.agendamento-availability-toggle:hover,
+.agendamento-availability-toggle:focus-visible {
+  background: #fceaf1;
+  outline-offset: 3px;
+}
+.agendamento-period-empty {
+  padding: 13px 10px;
+  margin: 0;
+  border-radius: 11px;
+  background: #fcf1f5;
+  color: #815565;
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
+}
+.agendamento-availability-toggle[hidden],
+.agendamento-times .agendamento-time[hidden],
+.agendamento-times .agendamento-carousel[hidden],
+.agendamento-times .agendamento-carousel-hint[hidden],
+.agendamento-times .agendamento-period-empty[hidden] {
+  display: none !important;
+}

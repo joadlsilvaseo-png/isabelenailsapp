@@ -11,11 +11,11 @@ const HORARIO = /^([01]\d|2[0-3]):[0-5]\d$/;
  */
 export async function verificarEncaixeNoBanco({
   conexao, db, data, inicio, fim, excluirAgendamentoId = null, agora = new Date(),
-  clienteUid = null,
+  clienteUid = null, ignorarProtecaoInicio = false,
 }) {
   if (!Number.isInteger(inicio) || !Number.isInteger(fim) || inicio % 15 !== 0 || inicio >= fim) return false;
-  // :15 e :45 deixam de exigir dois agendamentos vizinhos.
-  // Continuamos fazendo a validação redundante no lock para proteger o PIX.
+  // Revalidar TODOS os inícios (:00/:15/:30/:45) sob lock: proteção dinâmica
+  // e checagem de Firestore + PIX + bloqueios, sem abrir sobreposição.
   if (!db || !conexao || typeof data !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(data)) return false;
   const [resultado, documentos] = await Promise.all([
     conexao.query(`
@@ -53,8 +53,8 @@ export async function verificarEncaixeNoBanco({
       fimMinuto: comeco + obterDuracaoAgendamentoPix(item.duracao),
       tipo: "agendamento",
       sequencialMesmaCliente: Boolean(clienteUid && item.clienteId === clienteUid &&
-        item.status === "confirmado"),
+        STATUS_OCUPADOS.has(item.status)),
     });
   }
-  return !indisponivelComBufferSequencial(inicio, fim, intervalos);
+  return !indisponivelComBufferSequencial(inicio, fim, intervalos, 0, { ignorarProtecaoInicio });
 }

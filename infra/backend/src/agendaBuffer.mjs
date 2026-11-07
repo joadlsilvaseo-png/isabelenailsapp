@@ -9,13 +9,26 @@ export function atendimentosConflitamComBuffer(inicio, fim, inicioExistente, fim
   return inicio < fimExistente + buffer && fim > inicioExistente - buffer;
 }
 
-/** Mantém o nome legado dos chamadores, com semântica de sobreposição real [início, fim). */
-export function indisponivelComBufferSequencial(inicio, fim, intervalos, buffer = 0) {
+/**
+ * Proteção direcional: uma NOVA reserva não começa exatamente no término
+ * de uma reserva/agendamento existente. O próximo início da grade de 15 min
+ * continua livre; novo serviço pode terminar no início do próximo existente.
+ * Bloqueios administrativos não criam pausa e serviços confirmados da mesma
+ * cliente podem ficar consecutivos, sem permitir sobreposição real.
+ *
+ * ignorarProtecaoInicio: usado exclusivamente para efetivar um PIX já pago
+ * ou editar a duração de um agendamento que já existia, sem prejudicar
+ * compromissos antigos. Sobreposição real continua proibida.
+ */
+export function indisponivelComBufferSequencial(inicio, fim, intervalos, buffer = 0, opcoes = {}) {
   if (!Array.isArray(intervalos)) throw new TypeError("Lista de intervalos inválida");
-  return intervalos.some((item) => atendimentosConflitamComBuffer(
-    inicio, fim, item.inicioMinuto, item.fimMinuto,
-    item.tipo === "bloqueio" ? 0 : buffer,
-  ));
+  return intervalos.some((item) =>
+    atendimentosConflitamComBuffer(inicio, fim, item.inicioMinuto, item.fimMinuto,
+      item.tipo === "bloqueio" ? 0 : buffer) ||
+    (!opcoes.ignorarProtecaoInicio && buffer === 0 &&
+      item.tipo !== "bloqueio" && item.sequencialMesmaCliente !== true &&
+      inicio === item.fimMinuto)
+  );
 }
 
 export function indisponivelComBuffer(inicio, fim, intervalos) {
