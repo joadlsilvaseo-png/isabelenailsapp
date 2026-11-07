@@ -21,6 +21,13 @@ on:
       - "meu-perfil.css"
       - "perfilManutencao.mjs"
       - "admin-calendario-regras.mjs"
+      - "principal.html"
+      - "principal.js"
+      - "admin-assistente.html"
+      - "admin-assistente.js"
+      - "assistenteGestaoCore.mjs"
+      - "assistenteGestaoUI.js"
+      - "assistenteGestao.css"
       - "service-worker.js"
       - "infra/migrations/**"
       - "infra/scripts/**"
@@ -117,6 +124,12 @@ jobs:
           node --check ../../admin-assistente.js
           node --check ../../admin-bottom-nav.js
           node --test ../../scripts/admin-assistente-ui.test.mjs
+      - name: Validar Assistente Isabele: gestão em frontend
+        run: |
+          node --check ../../assistenteGestaoCore.mjs
+          node --check ../../assistenteGestaoUI.js
+          node --check ../../principal.js
+          node --test ../../scripts/assistente-gestao-core.test.mjs ../../scripts/assistente-gestao-ui.test.mjs
       - name: Testar card de manutenção e CTA do Meu Perfil
         run: node --test ../../scripts/perfil-manutencao.test.mjs
       - name: Validar sintaxe dos scripts operacionais (sem executar)

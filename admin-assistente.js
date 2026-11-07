@@ -1,4 +1,5 @@
 import { auth, db } from "./firebase-config.js";
+import { iniciarAssistenteGestao } from "./assistenteGestaoUI.js?v=1";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
 import { doc, getDoc } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
 
@@ -195,6 +196,7 @@ onAuthStateChanged(auth,async(user)=>{
     acesso.hidden=true;
     conteudo.hidden=false;
     input.focus();
+    void iniciarAssistenteGestao({ user, contexto: "detalhe" });
   }catch{
     acesso.textContent="Não foi possível confirmar seu acesso. Atualize a página.";
   }
