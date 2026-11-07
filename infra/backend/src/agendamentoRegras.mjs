@@ -144,9 +144,12 @@ export function validarServicoDezembro2026(dataIso, servico) {
     const manicureGel = /\bmanicure em gel\b/.test(nome)
       || ((categoria === "manicure" || /\bmanicure\b/.test(nome))
         && /\besmaltacao em gel\b/.test(nome));
-    return !pedicure && !manutencao && (alongamento || banhoGel || manicureSimples || manicureGel)
+    // A pedido da profissional, 24/12 também aceita manutenções de unhas.
+    // Pedicure e remoção continuam fora dos serviços autorizados nesta data.
+    const manutencaoUnhas = manutencao && !/\bremocao\b/.test(nome);
+    return !pedicure && (manutencaoUnhas || alongamento || banhoGel || manicureSimples || manicureGel)
       ? { valido: true }
-      : { valido: false, motivo: "Serviço indisponível no dia 24/12; somente alongamento, banho de gel e manicure simples/em gel" };
+      : { valido: false, motivo: "Serviço indisponível no dia 24/12; somente alongamento, banho de gel, manutenções de unhas e manicure simples/em gel" };
   }
   // 17–23: pedicure simples e em gel ficam suspensas; remoções são serviços distintos.
   const pedicureSuspensa = pedicure && !/\bremocao\b/.test(nome)
