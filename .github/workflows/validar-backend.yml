@@ -124,7 +124,7 @@ jobs:
           node --check ../../admin-assistente.js
           node --check ../../admin-bottom-nav.js
           node --test ../../scripts/admin-assistente-ui.test.mjs
-      - name: Validar Assistente Isabele: gestão em frontend
+      - name: Validar Assistente Isabele no frontend
         run: |
           node --check ../../assistenteGestaoCore.mjs
           node --check ../../assistenteGestaoUI.js
