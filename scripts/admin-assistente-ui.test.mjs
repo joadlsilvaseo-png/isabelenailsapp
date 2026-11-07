@@ -17,7 +17,7 @@ test("links e acesso administrativo preservados",async()=>{
   const n=await read("admin-bottom-nav.js"),c=await read("admin-bottom-nav.css");
   assert.match(h,/aria-label="Voltar para Gestão"/);
   assert.match(h,/admin-assistente\.css\?v=3/);
-  assert.match(h,/admin-assistente\.js\?v=4/);
+  assert.match(h,/admin-assistente\.js\?v=5/);
   assert.match(h,/admin-bottom-nav\.js/);
   assert.match(j,/admin-calendario\.html\?data=/);
   assert.match(j,/encodeURIComponent\(item\.data\)/);
