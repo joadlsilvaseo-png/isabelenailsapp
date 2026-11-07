@@ -20,7 +20,7 @@ body[data-page="admin-assistente"] .app-container.assistente-layout{width:min(10
 .assistente-hero-icone{width:62px;height:62px;flex:0 0 62px;display:grid;place-items:center;border:1px solid rgba(255,255,255,.2);border-radius:19px;color:#591c31;background:#f0c1d1}
 .assistente-hero-icone svg{width:37px;height:37px}
 .assistente-estado{margin:0 16px 20px;padding:20px;border:1px solid rgba(255,255,255,.2);border-radius:19px;background:#fffafb;font-size:15px;font-weight:600;line-height:1.5}
-.assistente-main{flex:1;min-width:0;padding:22px 16px max(38px,env(safe-area-inset-bottom));border-radius:28px 28px 0 0;background:#fffafb}
+.assistente-main{flex:1;min-width:0;padding:22px 16px max(38px,env(safe-area-inset-bottom));border-radius:0;background:transparent}
 .assistente-intro{display:flex;align-items:flex-start;gap:13px;padding:16px;border:1px solid #eedee4;border-radius:19px;background:#fff;box-shadow:var(--assistente-sombra)}
 .assistente-intro-icone,.assistente-chat-icone{width:44px;height:44px;flex:0 0 44px;display:grid;place-items:center;border-radius:14px;color:#591c31;background:#fae7ee}
 .assistente-intro-icone svg,.assistente-chat-icone svg{width:24px;height:24px}
@@ -67,3 +67,8 @@ body[data-page="admin-assistente"] .app-container.assistente-layout{width:min(10
 .assistente-layout a:focus-visible,.assistente-layout button:focus-visible,.assistente-layout input:focus-visible{outline:3px solid #c87f9b;outline-offset:3px}
 @media(max-width:365px){.assistente-header{padding-right:12px;padding-left:12px}.assistente-hero{padding:17px 14px;gap:9px}.assistente-hero-icone{width:49px;height:49px;flex-basis:49px}.assistente-hero-icone svg{width:30px;height:30px}.assistente-main{padding-right:12px;padding-left:12px}.assistente-controles{flex-direction:column}.assistente-controles button{width:100%}}
 @media(prefers-reduced-motion:reduce){.assistente-layout *{transition-duration:.01ms!important}}
+
+/* A área entre os cards acompanha o fundo vinho da página, sem placa gelo. */
+body[data-page="admin-assistente"] .assistente-atalhos .assistente-secao-cabecalho h2 { color: #ffffff; }
+body[data-page="admin-assistente"] .assistente-atalhos .assistente-secao-kicker { color: #f0c1d1; }
+body[data-page="admin-assistente"] .assistente-rodape { color: rgba(255,255,255,.87); }
