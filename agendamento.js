@@ -480,6 +480,12 @@ async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null, s
   const container = document.querySelector(".agendamento-times");
 
   const availabilityElement = document.getElementById("availability-status");
+  const alternarIndisponiveis = document.getElementById("agendamento-ver-indisponiveis");
+  if (alternarIndisponiveis) {
+    alternarIndisponiveis.hidden = true;
+    alternarIndisponiveis.setAttribute("aria-pressed", "false");
+    alternarIndisponiveis.onclick = null;
+  }
 
   if (!container || !dataIso) {
     console.error("Contêiner de horários ou data não encontrados.");
@@ -523,7 +529,7 @@ async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null, s
           const duracaoAgendada = Number(dados.duracao) || 90;
           intervalos.push({
             inicioMinuto: inicio, fimMinuto: inicio + duracaoAgendada, tipo: "agendamento",
-            ...(!reagendarId && dados.status === "confirmado" &&
+            ...(!reagendarId && statusValidos.includes(dados.status) &&
                 dados.clienteId === usuario.uid ? { sequencialMesmaCliente: true } : {}),
           });
         });
@@ -567,6 +573,8 @@ async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null, s
     const horariosNoite = [];
 
     let quantidadeDisponivel = 0;
+    let quantidadeIndisponivel = 0;
+    const controlesPeriodos = [];
 
     // A grade inteira usa 15 minutos; cada início é checado pela duração real,
     // janela de expediente e bloqueios. Nenhum início é aberto à força.
@@ -599,6 +607,9 @@ async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null, s
       botao.setAttribute("aria-pressed", "false");
 
       if (indisponivel) {
+        quantidadeIndisponivel += 1;
+        // Mantém o slot na grade para a visualização opcional; padrão = livres.
+        botao.hidden = true;
         botao.classList.add("horario-ocupado");
 
         botao.disabled = true;
@@ -635,7 +646,9 @@ async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null, s
       const title = document.createElement("strong");
       title.textContent = titulo;
       const description = document.createElement("span");
-      description.textContent = subtitulo;
+      const livresNoPeriodo = horarios.filter((botao) => !botao.disabled).length;
+      description.textContent = subtitulo + " · " + livresNoPeriodo +
+        (livresNoPeriodo === 1 ? " livre" : " livres");
       heading.append(title, description);
 
       const carousel = document.createElement("div");
@@ -669,9 +682,16 @@ async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null, s
       const dica = document.createElement("p");
       dica.className = "agendamento-carousel-hint";
       dica.textContent = "Deslize para ver mais horários";
-      periodo.append(heading, carousel, dica);
+      const vazio = document.createElement("p");
+      vazio.className = "agendamento-period-empty";
+      vazio.textContent = "Sem horários disponíveis neste período.";
+      vazio.hidden = livresNoPeriodo > 0;
+      carousel.hidden = livresNoPeriodo === 0;
+      dica.hidden = livresNoPeriodo === 0;
+      periodo.append(heading, carousel, dica, vazio);
       container.appendChild(periodo);
-      requestAnimationFrame(atualizarSetas);
+      controlesPeriodos.push({ rolagem, carousel, dica, vazio, atualizarSetas });
+      if (livresNoPeriodo) requestAnimationFrame(atualizarSetas);
     }
 
     criarGrupoHorario("Manhã", "Antes das 12h", horariosManha);
@@ -679,19 +699,39 @@ async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null, s
     criarGrupoHorario("Noite", "A partir das 18h · término até " + minsToTime(minFechamento), horariosNoite);
 
     if (availabilityElement) {
-      availabilityElement.textContent =
-        quantidadeDisponivel === 1
-          ? "1 horário"
-          : `${quantidadeDisponivel} horários`;
+      availabilityElement.textContent = quantidadeDisponivel === 1
+        ? "1 horário livre" : `${quantidadeDisponivel} horários livres`;
     }
 
     if (quantidadeDisponivel === 0) {
-      container.innerHTML = `
-        <div class="agendamento-time-state">
-          Não há horários disponíveis nesta data.
-          Escolha outro dia para continuar.
-        </div>
-      `;
+      const aviso = document.createElement("div");
+      aviso.className = "agendamento-time-state";
+      aviso.textContent = "Não há horários disponíveis nesta data para este serviço. " +
+        "Escolha outro dia ou veja os horários indisponíveis.";
+      container.appendChild(aviso);
+    }
+
+    if (alternarIndisponiveis && quantidadeIndisponivel > 0) {
+      alternarIndisponiveis.hidden = false;
+      const rotuloPadrao = "Ver horários indisponíveis (" + quantidadeIndisponivel + ")";
+      alternarIndisponiveis.textContent = rotuloPadrao;
+      alternarIndisponiveis.onclick = () => {
+        const mostrar = alternarIndisponiveis.getAttribute("aria-pressed") !== "true";
+        alternarIndisponiveis.setAttribute("aria-pressed", String(mostrar));
+        alternarIndisponiveis.textContent = mostrar
+          ? "Ocultar horários indisponíveis" : rotuloPadrao;
+        for (const controle of controlesPeriodos) {
+          for (const slot of controle.rolagem.querySelectorAll(".agendamento-time:disabled")) {
+            slot.hidden = !mostrar;
+          }
+          const possuiVisiveis = [...controle.rolagem.children].some((botao) => !botao.hidden);
+          controle.carousel.hidden = !possuiVisiveis;
+          controle.dica.hidden = !possuiVisiveis;
+          controle.vazio.hidden = possuiVisiveis;
+          controle.rolagem.scrollLeft = 0;
+          if (possuiVisiveis) requestAnimationFrame(controle.atualizarSetas);
+        }
+      };
     }
 
     const horarioSalvo = localStorage.getItem("horarioAgendamento");

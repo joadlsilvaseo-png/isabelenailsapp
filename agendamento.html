@@ -19,7 +19,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
   <link rel="stylesheet" href="base.css?v=1.0.4">
-  <link rel="stylesheet" href="agendamento.css?v=2.1.0">
+  <link rel="stylesheet" href="agendamento.css?v=2.2.0">
   <link rel="stylesheet" href="pixCheckout.css?v=1.0.3">
 </head>
 
@@ -177,9 +177,13 @@
             </span>
           </div>
 
-          <p class="agendamento-time-info">Horários disponíveis de 15 em 15 minutos, conforme a duração do serviço e a disponibilidade da agenda.</p>
+          <p class="agendamento-time-info">Mostramos primeiro apenas os horários livres para este serviço, em intervalos de 15 minutos. Quer conferir os demais? Use “Ver horários indisponíveis”.</p>
+          <button id="agendamento-ver-indisponiveis" class="agendamento-availability-toggle"
+                  type="button" aria-pressed="false" aria-controls="horarios-agendamento" hidden>
+            Ver horários indisponíveis
+          </button>
 
-          <div class="agendamento-times" role="group" aria-label="Selecionar horário" aria-live="polite">
+          <div id="horarios-agendamento" class="agendamento-times" role="group" aria-label="Selecionar horário" aria-live="polite">
             <!-- Horários criados pelo JavaScript -->
           </div>
         </section>
@@ -273,7 +277,7 @@
     </main>
   </div>
 
-  <script type="module" src="agendamento.js?v=2.2.0"></script>
+  <script type="module" src="agendamento.js?v=2.3.0"></script>
   <script type="module" src="pixCheckout.js?v=1.0.2"></script>
 
   <script src="app.js?v=2.0.0" defer></script>

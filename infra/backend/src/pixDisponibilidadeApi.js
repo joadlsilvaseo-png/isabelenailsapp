@@ -101,8 +101,9 @@ export async function consultarDisponibilidadePix(req, res, pool, dependencies =
     // Bloqueios administrativos continuam valendo inclusive no reagendamento.
     const resultado = await pool.query(`
       SELECT inicio_minuto, fim_minuto, 'reserva'::text AS tipo,
-             ($2::text IS NULL AND estado = 'confirmada'
-               AND cliente_uid = $4::text AND agendamento_id IS NOT NULL) AS sequencial_mesma_cliente
+             (estado = 'confirmada'
+               AND cliente_uid = COALESCE($3::text, $4::text)
+               AND agendamento_id IS NOT NULL) AS sequencial_mesma_cliente
       FROM public.pix_reservas
       WHERE data_servico = $1
         AND estado IN ('reservada', 'confirmada')

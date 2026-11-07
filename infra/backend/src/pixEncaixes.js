@@ -53,7 +53,7 @@ export async function verificarEncaixeNoBanco({
       fimMinuto: comeco + obterDuracaoAgendamentoPix(item.duracao),
       tipo: "agendamento",
       sequencialMesmaCliente: Boolean(clienteUid && item.clienteId === clienteUid &&
-        item.status === "confirmado"),
+        STATUS_OCUPADOS.has(item.status)),
     });
   }
   return !indisponivelComBufferSequencial(inicio, fim, intervalos);

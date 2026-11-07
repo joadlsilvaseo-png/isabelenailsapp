@@ -33,7 +33,7 @@ export function encontrarConflitoAgendamentoPix(
 
     const mesmaCliente = buffer === BUFFER_ENTRE_ATENDIMENTOS_MINUTOS &&
       typeof clienteUid === "string" && clienteUid.length > 0 &&
-      registro.clienteId === clienteUid && registro.status === "confirmado";
+      registro.clienteId === clienteUid && STATUS_OCUPADOS.has(registro.status);
     if (indisponivelComBufferSequencial(inicio, fim, [{
       inicioMinuto: comeco, fimMinuto: comeco + duracao,
       sequencialMesmaCliente: mesmaCliente,

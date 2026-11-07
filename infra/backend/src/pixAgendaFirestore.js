@@ -81,7 +81,7 @@ export async function verificarConflitoFirestore(
     intervalosOcupados.push({
       inicioMinuto: inicio,
       fimMinuto: inicio + duracao,
-      sequencialMesmaCliente: Boolean(clienteUid && dados.clienteId === clienteUid && dados.status === "confirmado"),
+      sequencialMesmaCliente: Boolean(clienteUid && dados.clienteId === clienteUid && STATUS_OCUPADOS.has(dados.status)),
     });
   });
 
