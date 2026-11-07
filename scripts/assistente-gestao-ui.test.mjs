@@ -62,3 +62,18 @@ test("Expandir/Recolher preserva acessibilidade e não altera os dados", async (
   assert.match(js, /label\.textContent = aberto \? "Recolher" : "Expandir"/);
   assert.match(js, /if \(contexto === "home"\) prepararExpansaoHome\(root\)/);
 });
+
+test("Card da Gestão usa identidade visual clara, mantendo os indicadores e a expansão", async () => {
+  const h = await read("principal.html");
+  const css = await read("assistenteGestao.css");
+  assert.match(h, /assistenteGestao\.css\?v=3/);
+  assert.match(css, /\.ig-superficie--home \.ig-cartao\s*\{[^}]*background: #fffafb;/s);
+  assert.match(css, /\.ig-superficie--home \.ig-metrica\s*\{[^}]*background: #fff;/s);
+  assert.match(css, /\.ig-superficie--home \.ig-metrica strong\s*\{[^}]*color: #591c31;/s);
+  assert.match(css, /\.ig-previa\s*\{[^}]*background: #fbeaf1;/s);
+  assert.match(css, /\.ig-previa-titulo\s*\{[^}]*color: #591c31;/s);
+  assert.match(css, /\.ig-expandir\s*\{[^}]*color: #591c31;/s);
+  assert.match(h, /data-ig-toggle/);
+  assert.match(h, /data-ig-atendimentos/);
+  assert.match(h, /data-ig-recomendacao-titulo/);
+});

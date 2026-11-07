@@ -4,7 +4,7 @@
 // ======================================================
 
 const CACHE_PREFIX = "im-nails";
-const CACHE_VERSION = "v27";
+const CACHE_VERSION = "v28";
 const STATIC_CACHE = `${CACHE_PREFIX}-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `${CACHE_PREFIX}-runtime-${CACHE_VERSION}`;
 
