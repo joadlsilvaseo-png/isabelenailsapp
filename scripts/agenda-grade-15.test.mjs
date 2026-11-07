@@ -65,3 +65,19 @@ test("frontend não importa módulos de pagamento e usa carrossel isolado",async
   assert.match(page,/minuto \+= 15/);
   assert.match(css,/scroll-snap-type/);
 });
+
+test("carrosséis Manhã/Tarde/Noite preservados com filtro de disponíveis e consulta dos indisponíveis",async()=>{
+  const page=await readFile(new URL("../agendamento.js",import.meta.url),"utf8");
+  const html=await readFile(new URL("../agendamento.html",import.meta.url),"utf8");
+  const css=await readFile(new URL("../agendamento.css",import.meta.url),"utf8");
+  assert.match(page,/criarGrupoHorario\("Manhã"/);
+  assert.match(page,/criarGrupoHorario\("Tarde"/);
+  assert.match(page,/criarGrupoHorario\("Noite"/);
+  assert.match(page,/horarios\.filter\(\(horario\) => !horario\.disabled\)/);
+  assert.match(page,/Ver horários indisponíveis/);
+  assert.match(page,/Sem horários disponíveis neste período/);
+  assert.match(page,/agendamento-time-carousel/);
+  assert.match(page,/aria-pressed/);
+  assert.match(html,/agendamento\.js\?v=2\.3\.0/);
+  assert.match(css,/scroll-snap-type: x proximity/);
+});
