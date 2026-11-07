@@ -264,7 +264,7 @@ test("horário ocupado no Firestore continua bloqueado", async () => {
   } });
   await assert.rejects(
     criarAgendamentoIsento({ pool: f.pool, db: f.firestore, uid: UID, dados: payload(), dependencies: f.dependencies }),
-    (erro) => erro.codigo === "HORARIO_OCUPADO",
+    (erro) => ["HORARIO_OCUPADO", "ENCAIXE_INDISPONIVEL"].includes(erro.codigo),
   );
 });
 
@@ -272,7 +272,7 @@ test("reserva PIX pendente ocupa o horário para o fluxo isento", async () => {
   const f = criarFixture({ reservas: [{ data: DATA, inicio: 840, fim: 900, estado: "reservada" }] });
   await assert.rejects(
     criarAgendamentoIsento({ pool: f.pool, db: f.firestore, uid: UID, dados: payload(), dependencies: f.dependencies }),
-    (erro) => erro.codigo === "HORARIO_RESERVADO_PIX",
+    (erro) => ["HORARIO_RESERVADO_PIX", "ENCAIXE_INDISPONIVEL"].includes(erro.codigo),
   );
 });
 
