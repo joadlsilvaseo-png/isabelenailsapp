@@ -205,7 +205,7 @@ export async function iniciarReagendamentoPixPago({
     if (encontrarConflitoAgendamentoPix(outros, inicio, inicio + origemDuracao)) {
       throw new ErroReagendamentoPago(409, "Novo horário ocupado por outro agendamento");
     }
-    if (inicio % 30 === 15 && !(await verificarEncaixeNoBanco({
+    if (!(await verificarEncaixeNoBanco({
       conexao, db, data, inicio, fim: inicio + origemDuracao,
       excluirAgendamentoId: agendamentoId,
     }))) {

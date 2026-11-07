@@ -1023,3 +1023,26 @@ button {
 @media (prefers-reduced-motion: reduce) {
   .agendamento-time-carousel { scroll-behavior: auto; }
 }
+
+/* Controle discreto de exibição: preserva os carrosséis e seus botões originais. */
+.agendamento-time-explanation {
+  margin: 0;
+  color: var(--booking-text-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.agendamento-time-toggle {
+  justify-self: start;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid rgba(124,51,76,.21);
+  border-radius: 12px;
+  background: #fff9fb;
+  color: var(--booking-primary);
+  font: 600 12px/1.4 "Poppins",sans-serif;
+  cursor: pointer;
+}
+.agendamento-time-toggle:hover { background: #fceaf1; }
+.agendamento-time-toggle:focus-visible { outline: 3px solid #b36b87; outline-offset: 2px; }
+.agendamento-periodos-lista { display: grid; gap: 13px; min-width: 0; }
+.agendamento-time-empty { margin: 0; font-size: 11px; line-height: 1.5; color: var(--booking-text-muted); }

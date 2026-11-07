@@ -363,7 +363,7 @@ async function processarOperacao(pool, operationId, dependencies = {}) {
     if (encontrarConflitoAgendamentoPix(outrosAgendamentos, snapshot.inicio, snapshot.inicio + snapshot.duracaoNova)) {
       throw new ErroAlteracaoServico(409, "O novo período conflita com outro agendamento confirmado.");
     }
-    if (snapshot.inicio % 30 === 15 && snapshot.duracaoNova > snapshot.duracaoAnterior && !(await verificarEncaixeNoBanco({
+    if (!(await verificarEncaixeNoBanco({
       conexao, db, data: snapshot.data, inicio: snapshot.inicio,
       fim: snapshot.inicio + snapshot.duracaoNova, excluirAgendamentoId: operacao.agendamento_id,
     }))) {

@@ -1,7 +1,7 @@
 import { auth, db } from "./firebase-config.js";
 import { obterMesPredominante } from "./agendamentoMes.mjs?v=1.0.0";
 import { consultarDisponibilidadePix, reagendarAgendamentoApi, consultarReagendamentoPixConfigApi, consultarReagendamentoPixPagoApi } from "./agendamentosApi.js";
-import { consultarIntervalosDisponibilidade, intervaloSobrepoeDisponibilidade, } from "./agendamentoDisponibilidade.js?v=2.2.0";
+import { consultarIntervalosDisponibilidade, intervaloSobrepoeDisponibilidade, } from "./agendamentoDisponibilidade.js?v=2.3.0";
 import { obterJanelaAgendamento, validarDataNaJanela, validarHorarioEspecial, obterExpedienteEspecialDezembro2026, validarServicoDezembro2026, obterJanelasAtendimento, AGENDA_DEZEMBRO_2026_ABERTA } from "./infra/backend/src/agendamentoRegras.mjs?v=2.1.0";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
 import {
@@ -623,9 +623,27 @@ async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null, s
 
     container.innerHTML = "";
 
-    function criarGrupoHorario(titulo, subtitulo, horarios) {
-      if (!horarios.length) return;
+    // Exibição compacta por padrão, preservando os carrosséis Manhã/Tarde/Noite.
+    // A visualização completa não altera a disponibilidade nem habilita horários.
+    const aviso = document.createElement("p");
+    aviso.className = "agendamento-time-explanation";
+    aviso.textContent = "Mostramos apenas os horários disponíveis para este serviço.";
+    container.appendChild(aviso);
 
+    const alternarVisao = document.createElement("button");
+    alternarVisao.type = "button";
+    alternarVisao.className = "agendamento-time-toggle";
+    alternarVisao.setAttribute("aria-pressed", "false");
+    alternarVisao.textContent = "Ver horários indisponíveis";
+    container.appendChild(alternarVisao);
+
+    const listaPeriodos = document.createElement("div");
+    listaPeriodos.className = "agendamento-periodos-lista";
+    container.appendChild(listaPeriodos);
+
+    function criarGrupoHorario(titulo, subtitulo, horarios, mostrarIndisponiveis) {
+      if (!horarios.length) return;
+      const visiveis = mostrarIndisponiveis ? horarios : horarios.filter((horario) => !horario.disabled);
       const periodo = document.createElement("section");
       periodo.className = "agendamento-period";
       periodo.setAttribute("aria-label", "Horários de " + titulo.toLowerCase());
@@ -635,8 +653,18 @@ async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null, s
       const title = document.createElement("strong");
       title.textContent = titulo;
       const description = document.createElement("span");
-      description.textContent = subtitulo;
+      const livres = horarios.filter((horario) => !horario.disabled).length;
+      description.textContent = livres === 1 ? "1 disponível" : livres + " disponíveis";
       heading.append(title, description);
+
+      if (!visiveis.length) {
+        const vazio = document.createElement("p");
+        vazio.className = "agendamento-time-empty";
+        vazio.textContent = "Sem horários disponíveis neste período.";
+        periodo.append(heading, vazio);
+        listaPeriodos.appendChild(periodo);
+        return;
+      }
 
       const carousel = document.createElement("div");
       carousel.className = "agendamento-carousel";
@@ -645,7 +673,7 @@ async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null, s
       rolagem.setAttribute("role", "group");
       rolagem.setAttribute("aria-label", "Deslize para escolher um horário de " + titulo.toLowerCase());
       rolagem.tabIndex = 0;
-      horarios.forEach((horario) => rolagem.appendChild(horario));
+      visiveis.forEach((horario) => rolagem.appendChild(horario));
 
       const criarSeta = (simbolo, direcao, nome) => {
         const seta = document.createElement("button");
@@ -670,28 +698,38 @@ async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null, s
       dica.className = "agendamento-carousel-hint";
       dica.textContent = "Deslize para ver mais horários";
       periodo.append(heading, carousel, dica);
-      container.appendChild(periodo);
+      listaPeriodos.appendChild(periodo);
       requestAnimationFrame(atualizarSetas);
     }
 
-    criarGrupoHorario("Manhã", "Antes das 12h", horariosManha);
-    criarGrupoHorario("Tarde", "Das 12h às 18h", horariosTarde);
-    criarGrupoHorario("Noite", "A partir das 18h · término até " + minsToTime(minFechamento), horariosNoite);
+    let mostrarIndisponiveis = false;
+    function exibirPeriodos() {
+      listaPeriodos.replaceChildren();
+      criarGrupoHorario("Manhã", "Antes das 12h", horariosManha, mostrarIndisponiveis);
+      criarGrupoHorario("Tarde", "Das 12h às 18h", horariosTarde, mostrarIndisponiveis);
+      criarGrupoHorario("Noite", "A partir das 18h · término até " + minsToTime(minFechamento), horariosNoite, mostrarIndisponiveis);
+    }
+    alternarVisao.addEventListener("click", () => {
+      mostrarIndisponiveis = !mostrarIndisponiveis;
+      alternarVisao.setAttribute("aria-pressed", String(mostrarIndisponiveis));
+      alternarVisao.textContent = mostrarIndisponiveis
+        ? "Mostrar apenas disponíveis" : "Ver horários indisponíveis";
+      aviso.textContent = mostrarIndisponiveis
+        ? "Horários em cinza estão ocupados, bloqueados ou não comportam a duração do serviço."
+        : "Mostramos apenas os horários disponíveis para este serviço.";
+      exibirPeriodos();
+    });
+    exibirPeriodos();
 
     if (availabilityElement) {
       availabilityElement.textContent =
-        quantidadeDisponivel === 1
-          ? "1 horário"
-          : `${quantidadeDisponivel} horários`;
+        quantidadeDisponivel === 1 ? "1 horário" : `${quantidadeDisponivel} horários`;
     }
-
     if (quantidadeDisponivel === 0) {
-      container.innerHTML = `
-        <div class="agendamento-time-state">
-          Não há horários disponíveis nesta data.
-          Escolha outro dia para continuar.
-        </div>
-      `;
+      const estado = document.createElement("p");
+      estado.className = "agendamento-time-state";
+      estado.textContent = "Não há horários disponíveis nesta data. Escolha outro dia para continuar.";
+      container.insertBefore(estado, listaPeriodos);
     }
 
     const horarioSalvo = localStorage.getItem("horarioAgendamento");

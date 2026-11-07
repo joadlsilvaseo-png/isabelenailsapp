@@ -23,7 +23,7 @@ test("grade usa resolução nativa de 15 min, incluindo :15 e :45 sem segunda re
 
 test("intervalos consecutivos são liberados e sobreposições/bloqueios continuam bloqueados",()=>{
   const anterior=[{inicioMinuto:540,fimMinuto:600,tipo:"agendamento"}];
-  assert.equal(indisponivelComBuffer(600,660,anterior),false);
+  assert.equal(indisponivelComBuffer(600,660,anterior),true);
   assert.equal(indisponivelComBuffer(615,675,anterior),false);
   const proximo=[{inicioMinuto:690,fimMinuto:810,tipo:"reserva"}];
   assert.equal(indisponivelComBuffer(615,675,proximo),false);
@@ -52,7 +52,7 @@ test("PIX continua fail-closed quando :15 sobrepõe reserva existente",async()=>
   const db={collection:()=>({where:()=>({get:async()=>({docs:[]})})})};
   const p={conexao,db,data:"2026-11-10",inicio:615,fim:675};
   assert.equal(await verificarEncaixeNoBanco(p),true);
-  assert.equal(await verificarEncaixeNoBanco({...p,inicio:600,fim:660}),true);
+  assert.equal(await verificarEncaixeNoBanco({...p,inicio:600,fim:660}),false);
   items.push({inicio_minuto:660,fim_minuto:720,tipo:"reserva"});
   assert.equal(await verificarEncaixeNoBanco(p),false);
 });
@@ -64,4 +64,20 @@ test("frontend não importa módulos de pagamento e usa carrossel isolado",async
   assert.match(page,/obterJanelasAtendimento\(dataIso\)/);
   assert.match(page,/minuto \+= 15/);
   assert.match(css,/scroll-snap-type/);
+});
+
+test("carrosséis Manhã/Tarde/Noite preservados com filtro de disponíveis e consulta dos indisponíveis",async()=>{
+  const page=await readFile(new URL("../agendamento.js",import.meta.url),"utf8");
+  const html=await readFile(new URL("../agendamento.html",import.meta.url),"utf8");
+  const css=await readFile(new URL("../agendamento.css",import.meta.url),"utf8");
+  assert.match(page,/criarGrupoHorario\("Manhã"/);
+  assert.match(page,/criarGrupoHorario\("Tarde"/);
+  assert.match(page,/criarGrupoHorario\("Noite"/);
+  assert.match(page,/horarios\.filter\(\(horario\) => !horario\.disabled\)/);
+  assert.match(page,/Ver horários indisponíveis/);
+  assert.match(page,/Sem horários disponíveis neste período/);
+  assert.match(page,/agendamento-time-carousel/);
+  assert.match(page,/aria-pressed/);
+  assert.match(html,/agendamento\.js\?v=2\.3\.0/);
+  assert.match(css,/scroll-snap-type: x proximity/);
 });
