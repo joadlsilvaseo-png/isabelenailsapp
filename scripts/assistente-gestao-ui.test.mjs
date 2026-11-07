@@ -34,3 +34,31 @@ test("WhatsApp é manual, mensagens são renderizadas como texto", async () => {
   assert.match(j, /navigator\.clipboard\.writeText/);
   assert.match(j, /textContent/);
 });
+
+test("Card compacto mostra indicadores e recomendação sem precisar expandir", async () => {
+  const h = await read("principal.html"), css = await read("assistenteGestao.css");
+  const inicio = h.indexOf('id="ig-home"');
+  const fim = h.indexOf('<!-- ==================================================', inicio);
+  const trecho = h.slice(inicio, fim);
+  const expansivel = trecho.indexOf('id="ig-home-expansivel"');
+  assert.ok(expansivel > 0);
+  for (const dado of ["data-ig-atendimentos", "data-ig-livre", "data-ig-recomendacao-titulo"]) {
+    assert.ok(trecho.indexOf(dado) < expansivel, dado + " visível sem expandir");
+  }
+  for (const dado of ["data-ig-recomendacao-texto", "data-ig-recomendacao-link", "data-ig-proxima"]) {
+    assert.ok(trecho.indexOf(dado) > expansivel, dado + " somente expandido");
+  }
+  assert.match(trecho, /aria-controls="ig-home-expansivel" aria-expanded="false"/);
+  assert.match(trecho, /data-ig-expansivel hidden/);
+  assert.match(css, /\.ig-superficie--home \.ig-cartao\s*\{/);
+  assert.match(css, /\.ig-superficie--detalhe \+ \.assistente-intro\s*\{ margin-top: 14px; \}/);
+});
+
+test("Expandir/Recolher preserva acessibilidade e não altera os dados", async () => {
+  const js = await read("assistenteGestaoUI.js");
+  assert.match(js, /function prepararExpansaoHome\(root\)/);
+  assert.match(js, /painel\.hidden = !aberto/);
+  assert.match(js, /botao\.setAttribute\("aria-expanded", String\(aberto\)\)/);
+  assert.match(js, /label\.textContent = aberto \? "Recolher" : "Expandir"/);
+  assert.match(js, /if \(contexto === "home"\) prepararExpansaoHome\(root\)/);
+});

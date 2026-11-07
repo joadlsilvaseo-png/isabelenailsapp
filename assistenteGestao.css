@@ -42,3 +42,97 @@
 .ig-atualizar{margin-top:12px}
 .ig-superficie a:focus-visible,.ig-superficie button:focus-visible{outline:3px solid #b36b87;outline-offset:3px}
 @media(max-width:365px){.ig-cartao{padding:15px 12px}.ig-marca{width:36px;height:36px;flex-basis:36px}.ig-titulos h2{font-size:15px}.ig-ver-tudo{font-size:11px}.ig-metrica strong{font-size:21px}}
+
+
+/* Compacto expansível na Gestão: acompanha o vinho/rosa, sem bloco branco. */
+.ig-superficie--home .ig-cartao {
+  padding: 14px;
+  color: #fff;
+  background: linear-gradient(135deg, rgba(70,20,40,.94), rgba(111,44,69,.90));
+  border: 1px solid rgba(240,193,209,.28);
+  border-radius: 19px;
+  box-shadow: 0 8px 19px rgba(45,8,21,.10);
+}
+.ig-superficie--home .ig-marca {
+  width: 39px;
+  height: 39px;
+  flex-basis: 39px;
+  background: #f0c1d1;
+  color: #591c31;
+}
+.ig-superficie--home .ig-titulos span { color: #f0c1d1; font-size: 11px; }
+.ig-superficie--home .ig-titulos h2 { color: #fff; font-size: 16px; }
+.ig-expandir {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  min-height: 40px;
+  padding: 7px 9px;
+  border: 1px solid rgba(240,193,209,.45);
+  border-radius: 11px;
+  background: rgba(255,255,255,.07);
+  color: #fff;
+  font: 600 12px/1.3 "Poppins",sans-serif;
+  cursor: pointer;
+}
+.ig-expandir svg { width: 17px; height: 17px; transition: transform 180ms ease; }
+.ig-expandir[aria-expanded="true"] svg { transform: rotate(180deg); }
+.ig-superficie--home .ig-metricas { margin-top: 12px; gap: 8px; }
+.ig-superficie--home .ig-metrica {
+  padding: 9px 11px;
+  background: rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 12px;
+}
+.ig-superficie--home .ig-metrica span { color: #f4dfe7; font-size: 11px; }
+.ig-superficie--home .ig-metrica strong { color: #fff; font-size: 21px; margin-top: 3px; }
+.ig-previa {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 11px;
+  padding: 10px 11px;
+  border-radius: 11px;
+  background: rgba(240,193,209,.12);
+  border: 1px solid rgba(240,193,209,.19);
+}
+.ig-superficie--home .ig-legenda { color: #f0c1d1; font-size: 10.5px; }
+.ig-previa-titulo { color: #fff; font-size: 13.5px; font-weight: 700; line-height: 1.45; }
+.ig-expansivel {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(240,193,209,.27);
+}
+.ig-superficie--home .ig-descricao,
+.ig-superficie--home .ig-livre-nota,
+.ig-superficie--home .ig-proximo,
+.ig-superficie--home .ig-recomendacao-detalhe,
+.ig-superficie--home .ig-rodape {
+  color: #f3e1e8;
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+.ig-superficie--home .ig-descricao { margin: 0; }
+.ig-superficie--home .ig-livre-nota,
+.ig-superficie--home .ig-proximo,
+.ig-superficie--home .ig-recomendacao-detalhe { margin: 9px 0 0; }
+.ig-superficie--home .ig-botao--primario { background: #f0c1d1; border-color: #f0c1d1; color: #591c31; }
+.ig-superficie--home .ig-botao--secundario { background: rgba(255,255,255,.09); color: #fff; border-color: rgba(240,193,209,.38); }
+.ig-superficie--home .ig-estado { color: #fff; background: rgba(255,255,255,.09); }
+.ig-superficie--home .ig-expandir:focus-visible { outline: 3px solid #f0c1d1; outline-offset: 3px; }
+
+/* Respiro entre o resumo da semana e o assistente preventivo. */
+.ig-superficie--detalhe + .assistente-intro { margin-top: 14px; }
+
+@media (max-width: 365px) {
+  .ig-superficie--home .ig-cartao { padding: 12px; }
+  .ig-superficie--home .ig-topo { gap: 8px; }
+  .ig-superficie--home .ig-marca { width: 35px; height: 35px; flex-basis: 35px; }
+  .ig-superficie--home .ig-titulos h2 { font-size: 15px; }
+  .ig-expandir { padding: 7px; }
+  .ig-superficie--home .ig-metrica strong { font-size: 20px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ig-expandir svg { transition: none; }
+}

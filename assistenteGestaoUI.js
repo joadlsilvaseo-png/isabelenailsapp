@@ -144,6 +144,25 @@ function exibir(root, visao, contexto) {
   $(root, "[data-ig-estado]").hidden = true;
   $(root, "[data-ig-dados]").hidden = false;
 }
+/**
+ * O card da principal inicia recolhido. Indicadores e recomendação ficam fora
+ * do painel recolhível; apenas o conteúdo complementar é expandido.
+ */
+function prepararExpansaoHome(root) {
+  const botao = $(root, "[data-ig-toggle]");
+  const painel = $(root, "[data-ig-expansivel]");
+  if (!botao || !painel) return;
+  const label = $(botao, "[data-ig-toggle-texto]");
+  function aplicar(aberto) {
+    painel.hidden = !aberto;
+    botao.setAttribute("aria-expanded", String(aberto));
+    if (label) label.textContent = aberto ? "Recolher" : "Expandir";
+    root.classList.toggle("ig-aberto", aberto);
+  }
+  aplicar(false);
+  botao.onclick = () => aplicar(botao.getAttribute("aria-expanded") !== "true");
+}
+
 export async function iniciarAssistenteGestao({ user, contexto = "home" }) {
   const root = document.querySelector('[data-ig-contexto="' + contexto + '"]');
   if (!root || !user?.uid) return;
@@ -151,6 +170,7 @@ export async function iniciarAssistenteGestao({ user, contexto = "home" }) {
     (contexto === "home" ? document.body.dataset.userRole === "admin"
       : document.body.dataset.accessState === "allowed");
   if (!autorizado()) return;
+  if (contexto === "home") prepararExpansaoHome(root);
   const estado = $(root, "[data-ig-estado]"), dados = $(root, "[data-ig-dados]");
   estado.hidden = false;
   estado.textContent = "Preparando recomendações com seus dados...";
