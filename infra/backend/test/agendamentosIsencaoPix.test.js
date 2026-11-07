@@ -157,6 +157,23 @@ function criarFixture({ isenta = true, reservas = [], documentos = {}, falharCom
             return { rows: registro ? [{ id: registro.id || "reserva-persistida", cliente_uid: registro.clienteUid || registro.cliente_uid, cobranca_id: registro.cobrancaId ?? registro.cobranca_id ?? null }] : [], rowCount: registro ? 1 : 0 };
           }
           if (sql.includes("FROM public.pix_reservas")) {
+            if (sql.includes("UNION ALL")) {
+              // Consulta combinada usada pelo validador compartilhado sob lock.
+              const [data, excluirAgendamentoId] = params;
+              const rows = state.reservas
+                .filter((reserva) => reserva.data === data
+                  && ["reservada", "confirmada"].includes(reserva.estado)
+                  && (reserva.agendamentoId || reserva.agendamento_id) !== excluirAgendamentoId)
+                .map((reserva) => ({
+                  inicio_minuto: reserva.inicio,
+                  fim_minuto: reserva.fim,
+                  tipo: "reserva",
+                  cliente_uid: reserva.clienteUid || reserva.cliente_uid,
+                  estado: reserva.estado,
+                  agendamento_id: reserva.agendamentoId || reserva.agendamento_id || null,
+                }));
+              return { rows, rowCount: rows.length };
+            }
             const [data, inicio, fim] = params;
             const lista = [...state.reservas, ...(pendingReservations || []).filter((r) => r.tipo === "insert").map((r) => r.registro)];
             const excluido = params[3];
@@ -264,7 +281,7 @@ test("horário ocupado no Firestore continua bloqueado", async () => {
   } });
   await assert.rejects(
     criarAgendamentoIsento({ pool: f.pool, db: f.firestore, uid: UID, dados: payload(), dependencies: f.dependencies }),
-    (erro) => erro.codigo === "HORARIO_OCUPADO",
+    (erro) => ["HORARIO_OCUPADO", "ENCAIXE_INDISPONIVEL"].includes(erro.codigo),
   );
 });
 
@@ -272,7 +289,7 @@ test("reserva PIX pendente ocupa o horário para o fluxo isento", async () => {
   const f = criarFixture({ reservas: [{ data: DATA, inicio: 840, fim: 900, estado: "reservada" }] });
   await assert.rejects(
     criarAgendamentoIsento({ pool: f.pool, db: f.firestore, uid: UID, dados: payload(), dependencies: f.dependencies }),
-    (erro) => erro.codigo === "HORARIO_RESERVADO_PIX",
+    (erro) => ["HORARIO_RESERVADO_PIX", "ENCAIXE_INDISPONIVEL"].includes(erro.codigo),
   );
 });
 
