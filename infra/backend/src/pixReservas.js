@@ -361,7 +361,7 @@ export async function criarReservaPix(req, res, pool) {
           "Horario ocupado por outro agendamento"
         );
       }
-      if (periodo.inicioMinuto % 30 === 15 && !(await verificarEncaixeNoBanco({
+      if (!(await verificarEncaixeNoBanco({
         conexao, db: firestore(), data,
         inicio: periodo.inicioMinuto, fim: periodo.fimMinuto,
         clienteUid: uid,

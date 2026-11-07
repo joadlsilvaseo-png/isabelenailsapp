@@ -16,7 +16,7 @@ export function obterDuracaoAgendamentoPix(valor) {
 }
 
 export function encontrarConflitoAgendamentoPix(
-  registros, inicio, fim, buffer = BUFFER_ENTRE_ATENDIMENTOS_MINUTOS, clienteUid = null,
+  registros, inicio, fim, buffer = undefined, clienteUid = null,
 ) {
   for (const registro of registros) {
     if (!STATUS_OCUPADOS.has(registro.status)) continue;
@@ -31,7 +31,7 @@ export function encontrarConflitoAgendamentoPix(
     const comeco = h * 60 + m;
     const duracao = obterDuracaoAgendamentoPix(registro.duracao);
 
-    const mesmaCliente = buffer === BUFFER_ENTRE_ATENDIMENTOS_MINUTOS &&
+    const mesmaCliente = buffer !== 0 &&
       typeof clienteUid === "string" && clienteUid.length > 0 &&
       registro.clienteId === clienteUid && registro.status === "confirmado";
     if (indisponivelComBufferSequencial(inicio, fim, [{

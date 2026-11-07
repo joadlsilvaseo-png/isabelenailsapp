@@ -1,5 +1,7 @@
-/** Grade de início segue de 15 em 15 minutos; não existe intervalo obrigatório. */
+/** A grade segue de 15 em 15 minutos. O buffer SQL legado continua zero. */
 export const BUFFER_ENTRE_ATENDIMENTOS_MINUTOS = 0;
+/** Proteção apenas APÓS o término de um compromisso existente, não antes dele. */
+export const PROTECAO_INICIO_MINUTOS = 15;
 
 export function atendimentosConflitamComBuffer(inicio, fim, inicioExistente, fimExistente, buffer = 0) {
   if (![inicio, fim, inicioExistente, fimExistente, buffer].every(Number.isInteger) ||
@@ -9,17 +11,29 @@ export function atendimentosConflitamComBuffer(inicio, fim, inicioExistente, fim
   return inicio < fimExistente + buffer && fim > inicioExistente - buffer;
 }
 
-/** Mantém o nome legado dos chamadores, com semântica de sobreposição real [início, fim). */
-export function indisponivelComBufferSequencial(inicio, fim, intervalos, buffer = 0) {
+/**
+ * Proteção assimétrica de 15 min: um novo início não pode encostar no FIM
+ * de um compromisso anterior de outra cliente. Terminar no INÍCIO de um
+ * compromisso futuro é permitido. Bloqueios manuais só impedem sobreposição.
+ *
+ * O parâmetro buffer=0 é uma exceção explícita de compatibilidade usada na
+ * confirmação de um hold PIX já aceito anteriormente à implantação da regra.
+ */
+export function indisponivelComBufferSequencial(inicio, fim, intervalos, buffer = PROTECAO_INICIO_MINUTOS) {
   if (!Array.isArray(intervalos)) throw new TypeError("Lista de intervalos inválida");
-  return intervalos.some((item) => atendimentosConflitamComBuffer(
-    inicio, fim, item.inicioMinuto, item.fimMinuto,
-    item.tipo === "bloqueio" ? 0 : buffer,
-  ));
+  return intervalos.some((item) => {
+    const ocupado = atendimentosConflitamComBuffer(
+      inicio, fim, item.inicioMinuto, item.fimMinuto, 0,
+    );
+    if (ocupado) return true;
+    if (item.tipo === "bloqueio" || item.sequencialMesmaCliente === true) return false;
+    if (!Number.isInteger(buffer) || buffer < 0) throw new TypeError("Proteção inválida");
+    return inicio >= item.fimMinuto && inicio < item.fimMinuto + buffer;
+  });
 }
 
 export function indisponivelComBuffer(inicio, fim, intervalos) {
-  return indisponivelComBufferSequencial(inicio, fim, intervalos, 0);
+  return indisponivelComBufferSequencial(inicio, fim, intervalos);
 }
 
 /** Compatibilidade com chamadores antigos: :15/:45 são inícios normais da grade. */
