@@ -39,9 +39,9 @@ test("lock por data: reserva confirmada mesma cliente libera sequência; demais 
   assert.equal(await verificarEncaixeNoBanco({ ...args, clienteUid: "cliente-2" }), false);
   assert.equal(await verificarEncaixeNoBanco({ ...args, inicio: 1005, fim: 1125 }), false);
   linhas = [{ ...linhas[0], agendamento_id: null }];
-  assert.equal(await verificarEncaixeNoBanco(args), true, "documento confirmado da mesma cliente ainda autoriza sequência");
+  assert.equal(await verificarEncaixeNoBanco(args), false, "sem ID de agendamento confirmado, não há isenção de proteção");
   linhas = [{ ...linhas[0], estado: "reservada" }];
-  assert.equal(await verificarEncaixeNoBanco(args), true);
+  assert.equal(await verificarEncaixeNoBanco(args), false, "reserva ainda pendente não autoriza sequência");
   linhas = [{ inicio_minuto: 1020, fim_minuto: 1035, tipo: "bloqueio" }];
   assert.equal(await verificarEncaixeNoBanco(args), false);
 });
