@@ -101,9 +101,9 @@ test("PostgreSQL 17: idempotencia, timeout, vinculo atomico e legado bloqueado",
     }, OPCOES), { codigo: "OUTRA_OPERACAO_PENDENTE" });
 
     await assert.rejects(confirmarIntencaoCalendar(pool, {
-      operationId: first.operationId,
+      operationId: first.operationId, leaseToken: lease1,
       googleEvent: { ...GOOGLE_OK, id: gerarIdEventoGoogle("diferente") },
-    }, OPCOES), { codigo: "EVENTO_NAO_CONFIRMADO" });
+    }, WORKER_OPCOES), { codigo: "EVENTO_NAO_CONFIRMADO" });
 
     // O erro anterior reverte a transacao: nenhuma vinculacao criada.
     const before = await pool.query(
@@ -152,7 +152,7 @@ test("PostgreSQL 17: idempotencia, timeout, vinculo atomico e legado bloqueado",
     await assert.rejects(confirmarIntencaoCalendar(pool, {
       operationId: alterar.operationId, leaseToken: leaseAlterar,
       googleEvent: { id: EVENTO, status: "confirmed" }, // Sem marcador
-    }, OPCOES), { codigo: "MARCADOR_GOOGLE_DIVERGENTE" });
+    }, WORKER_OPCOES), { codigo: "MARCADOR_GOOGLE_DIVERGENTE" });
     assert.equal((await confirmarIntencaoCalendar(pool, {
       operationId: alterar.operationId, leaseToken: leaseAlterar, googleEvent: GOOGLE_OK,
     }, WORKER_OPCOES)).jaConcluida, false);
