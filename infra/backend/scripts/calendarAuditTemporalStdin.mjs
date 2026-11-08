@@ -361,6 +361,66 @@ try {
     else if (!fsValido) motivo.firestoreDivergente++;
     else marcadorLegado.candidatoForteParaRevisao++;
   }
+  // Inventario final das divergencias, sem gravar na API nem no banco.
+  // Os detalhes nunca incluem nomes, IDs reais nem descricoes.
+  const ausentes = {
+    cancelamentoConcluido: 0,
+    cancelamentoNaoConcluido: 0,
+    dispensado: 0,
+    enviadoSemCancelamento: 0,
+    outro: 0,
+  };
+  const porCancelamento = new Map(cancelamentos.map(c => [c.agendamento_id, c]));
+  const divergencias = [];
+  let eventosGoogleCancelados = 0;
+  let firestoreEstadoNaoAtivo = 0;
+  for (const a of associacoesPorRegistro) {
+    const row = a.row;
+    const cancellation = porCancelamento.get(row.agendamento_id);
+    if (a.matches.length === 0) {
+      if (cancellation?.estado === "concluida") ausentes.cancelamentoConcluido++;
+      else if (cancellation) ausentes.cancelamentoNaoConcluido++;
+      else if (row.status === "dispensado") ausentes.dispensado++;
+      else if (row.status === "enviado") ausentes.enviadoSemCancelamento++;
+      else ausentes.outro++;
+      continue;
+    }
+    if (a.matches.length !== 1 ||
+        reivindicantes.get(a.matches[0].id).size !== 1) continue;
+    const ev = a.matches[0];
+    const fs = porDoc.get(row.agendamento_id);
+    const horaGoogle = chaveHorario(ev.start?.dateTime);
+    const durGoogle = typeof ev.start?.dateTime === "string" &&
+      typeof ev.end?.dateTime === "string"
+      ? (Date.parse(ev.end.dateTime) - Date.parse(ev.start.dateTime)) / 60000 : null;
+    const durFS = fs?.duracaoSnapshot ?? fs?.duracao ?? fs?.duracaoMinutos;
+    const fsHora = fs ? String(fs.data || "") + "T" +
+      String(fs.horario || "").slice(0, 5) : null;
+    const statusFS = String(fs?.status || "").toLowerCase();
+    const statusGoogle = String(ev.status || "").toLowerCase();
+    if (statusGoogle === "cancelled") eventosGoogleCancelados++;
+    if (fs && !["confirmado", "reagendado", "agendado"].includes(statusFS)) {
+      firestoreEstadoNaoAtivo++;
+    }
+    const dadosDivergentes =
+      Number(row.duracao_minutos) !== durGoogle ||
+      row.data_iso + "T" + row.hora_iso !== horaGoogle ||
+      !fs || fsHora !== horaGoogle || Number(durFS) !== durGoogle ||
+      statusGoogle === "cancelled" || !["confirmado", "reagendado", "agendado"].includes(statusFS);
+    if (!dadosDivergentes || cancellation || row.status !== "enviado") continue;
+    divergencias.push({
+      dia: row.data_iso, hora: row.hora_iso,
+      duracaoOutboxMin: Number(row.duracao_minutos),
+      duracaoGoogleMin: durGoogle,
+      duracaoFirestoreMin: durFS == null ? null : Number(durFS),
+      horarioGoogleIgualOutbox: horaGoogle === row.data_iso + "T" + row.hora_iso,
+      horarioFirestoreIgualGoogle: fsHora === horaGoogle,
+      estadoFirestore: statusFS ? (["confirmado","reagendado","agendado"].includes(statusFS)
+        ? "ativo" : "revisar") : "ausente",
+    });
+  }
+  divergencias.sort((a,b) =>
+    (a.dia + "T" + a.hora).localeCompare(b.dia + "T" + b.hora));
   const vinculacoesCriadas = 0;
   console.log(JSON.stringify({
     resultado: "DIAGNOSTICO_TEMPORAL_SOMENTE_LEITURA",
@@ -391,6 +451,10 @@ try {
       ...marcadorLegado,
       registrosInseridos: vinculacoesCriadas,
     },
+    marcadoresAusentesClassificados: ausentes,
+    estadosAdicionais: { eventosGoogleCancelados, firestoreEstadoNaoAtivo },
+    divergenciasSemDadosPessoais: divergencias.length <= 15
+      ? divergencias : { total: divergencias.length, detalhesOmitidos: true },
     aviso: "Candidatos fortes ainda exigem verificacao por ID, status atual e revisao humana; nenhum vinculo foi inserido.",
   }, null, 2));
 } catch (e) {
