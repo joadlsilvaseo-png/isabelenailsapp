@@ -1,0 +1,47 @@
+/* Cartão temporário: autorização OAuth do Google Calendar, somente no painel admin. */
+.google-calendar-connect-card {
+  width: 100%;
+  min-width: 0;
+  margin-top: 16px;
+  padding: 19px;
+  border: 1px solid rgba(255,255,255,.26);
+  border-radius: 18px;
+  background: rgba(255,255,255,.095);
+  color: #fff;
+  box-shadow: 0 8px 20px rgba(45,8,21,.11);
+}
+.google-calendar-connect-card[hidden] { display: none !important; }
+.google-calendar-connect-heading { display: flex; align-items: flex-start; gap: 13px; }
+.google-calendar-connect-icon {
+  display: grid; place-items: center; flex: 0 0 47px; height: 47px;
+  border-radius: 14px; background: #f0c1d1; color: #591c31;
+}
+.google-calendar-connect-icon svg { width: 27px; height: 27px; }
+.google-calendar-connect-card h3 {
+  margin: 0 0 4px;
+  font-size: 17px; line-height: 1.35; font-weight: 700;
+}
+.google-calendar-connect-card p {
+  font-size: 14px; line-height: 1.55;
+  margin: 0; color: rgba(255,255,255,.84);
+}
+.google-calendar-connect-status {
+  margin: 17px 0 15px !important;
+  padding: 11px 13px; border-radius: 10px;
+  background: rgba(255,255,255,.10);
+  color: #fff !important; font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.google-calendar-connect-button {
+  display: block; width: 100%; min-height: 49px; border: none;
+  border-radius: 13px; padding: 12px 16px;
+  background: #ffd9e7; color: #591c31;
+  font: inherit; font-size: 15px; font-weight: 700;
+  cursor: pointer;
+}
+.google-calendar-connect-button[hidden] { display: none !important; }
+.google-calendar-connect-button:disabled { opacity: .56; cursor: default; }
+.google-calendar-connect-button:focus-visible {
+  outline: 3px solid #fff; outline-offset: 3px;
+}
+.google-calendar-connect-note { margin-top: 12px !important; font-size: 13px !important; }
