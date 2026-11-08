@@ -107,6 +107,7 @@ jobs:
         run: |
           node --check src/pixCalendarWorker.js
           node --check scripts/calendarAuditOAuthStageStdin.mjs
+          node --check scripts/calendarAuditTemporalStdin.mjs
           node --check src/pixReagendamentoPago.js
           node --check src/pixReagendamentoPagoOperacao.js
           node --check src/agendamentosIsencaoPix.js
