@@ -106,6 +106,8 @@ jobs:
       - name: Verificar sintaxe
         run: |
           node --check src/pixCalendarWorker.js
+          node --check scripts/calendarAuditOAuthStageStdin.mjs
+          node --check scripts/calendarAuditTemporalStdin.mjs
           node --check src/pixReagendamentoPago.js
           node --check src/pixReagendamentoPagoOperacao.js
           node --check src/agendamentosIsencaoPix.js
@@ -200,16 +202,33 @@ jobs:
       PGDATABASE: isabele_ci
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Dependencias Node para testes transacionais do Calendar
+        working-directory: infra/backend
+        run: npm install --no-package-lock --ignore-scripts
       - name: Validar esquema aditivo e reexecucao sem duplicar estruturas
         run: |
           psql -v ON_ERROR_STOP=1 -f infra/migrations/023_google_calendar_oauth.sql
           psql -v ON_ERROR_STOP=1 -f infra/migrations/024_google_calendar_event_links.sql
           psql -v ON_ERROR_STOP=1 -f infra/migrations/024_google_calendar_event_links.sql
+          psql -v ON_ERROR_STOP=1 -f infra/migrations/025_google_calendar_lease_fencing.sql
+          psql -v ON_ERROR_STOP=1 -f infra/migrations/025_google_calendar_lease_fencing.sql
+          psql -v ON_ERROR_STOP=1 -f infra/migrations/026_google_calendar_creation_authorizations.sql
+          psql -v ON_ERROR_STOP=1 -f infra/migrations/026_google_calendar_creation_authorizations.sql
       - name: Testar constraints, idempotencia e conciliacao (transacao revertida)
         run: |
           psql -v ON_ERROR_STOP=1 -f infra/backend/test/sql/assert_google_calendar_links_pg17.sql
           test "$(psql -v ON_ERROR_STOP=1 -Atc "SELECT (SELECT COUNT(*) FROM public.google_calendar_event_links), (SELECT COUNT(*) FROM public.google_calendar_sync_operations), (SELECT COUNT(*) FROM public.google_calendar_reconciliation_candidates);" -F '|')" = "0|0|0"
+      - name: Validar transacoes Node e recuperacao de timeout no PG17
+        working-directory: infra/backend
+        run: node --test test/googleCalendarSafeStore.postgres.test.js
       - name: Confirmar indices de seguranca e ausencia de dependencias legadas
         run: |
           test "$(psql -v ON_ERROR_STOP=1 -Atc "SELECT COUNT(*) FROM pg_indexes WHERE schemaname='public' AND indexname IN ('ux_google_calendar_operacao_ativa','idx_google_calendar_operacoes_pendentes','idx_google_calendar_operacoes_lease','idx_google_calendar_candidatos_pendentes','idx_google_calendar_candidatos_evento');")" = "5"
           test "$(psql -v ON_ERROR_STOP=1 -Atc "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('pix_calendar_outbox','pix_cobrancas','pix_reservas');")" = "0"
+          test "$(psql -v ON_ERROR_STOP=1 -Atc "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='google_calendar_sync_operations' AND column_name='lease_token';")" = "1"
+          test "$(psql -v ON_ERROR_STOP=1 -Atc "SELECT COUNT(*) FROM pg_indexes WHERE schemaname='public' AND indexname='idx_google_calendar_lease_token';")" = "1"
+          test "$(psql -v ON_ERROR_STOP=1 -Atc "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name='google_calendar_creation_authorizations';")" = "1"
+          test "$(psql -v ON_ERROR_STOP=1 -Atc "SELECT COUNT(*) FROM pg_indexes WHERE schemaname='public' AND indexname='idx_google_calendar_autorizacoes_nao_consumidas';")" = "1"

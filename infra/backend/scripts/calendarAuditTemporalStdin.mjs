@@ -1,0 +1,530 @@
+/**
+ * Auditoria de correspondencia temporal em modo READ-ONLY.
+ *
+ * Executa via stdin em isabele-infra-api-1 (imagem oauth-stage).
+ * Compara apenas em memoria horarios/duracoes/nomes ja presentes no Google
+ * e outbox. NUNCA imprime nome, identificador de reserva, titulo, credencial
+ * ou token. Nao preenche tabelas ou sincroniza eventos.
+ *
+ * PROIBIDO usar resultado para vincular automaticamente eventos legados.
+ */
+import pg from "pg";
+import { initializeApp, applicationDefault, getApps } from "firebase-admin/app";
+import { getFirestore } from "firebase-admin/firestore";
+import {
+  configuracaoCalendarOAuth, descriptografarCalendarToken,
+} from "/app/src/googleCalendarOAuth.js";
+
+function falhar(codigo) {
+  throw Object.assign(new Error(codigo), { codigo });
+}
+function validarDia(valor) {
+  if (typeof valor !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(valor)) falhar("DATA_INVALIDA");
+  const d = new Date(valor + "T12:00:00Z");
+  if (!Number.isFinite(d.valueOf()) || d.toISOString().slice(0, 10) !== valor) {
+    falhar("DATA_INVALIDA");
+  }
+  return valor;
+}
+async function google(url, options) {
+  let resp;
+  try {
+    resp = await fetch(url, { ...options, signal: AbortSignal.timeout(15000) });
+  } catch {
+    falhar("GOOGLE_INDISPONIVEL");
+  }
+  if (!resp.ok) falhar("GOOGLE_HTTP_" + resp.status);
+  try { return await resp.json(); }
+  catch { falhar("GOOGLE_JSON_INVALIDO"); }
+}
+const fmt = new Intl.DateTimeFormat("en-US", {
+  timeZone: "America/Sao_Paulo",
+  hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit",
+  hour: "2-digit", minute: "2-digit",
+});
+function chaveHorario(data) {
+  if (typeof data !== "string") return null;
+  const ms = Date.parse(data);
+  if (!Number.isFinite(ms)) return null;
+  const c = Object.fromEntries(fmt.formatToParts(new Date(ms))
+    .filter(x => ["year", "month", "day", "hour", "minute"].includes(x.type))
+    .map(x => [x.type, x.value]));
+  return c.year + "-" + c.month + "-" + c.day + "T" + c.hour + ":" + c.minute;
+}
+function normalizar(s) {
+  if (typeof s !== "string") return "";
+  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ");
+}
+function ocorrencias(obj, campo) {
+  const mapa = Object.create(null);
+  for (const x of obj) {
+    const key = String(x?.[campo] ?? "indefinido").replace(/[^a-z0-9_-]/gi, "_");
+    mapa[key] = (mapa[key] || 0) + 1;
+  }
+  return mapa;
+}
+function contarComparacoes(registros, eventos) {
+  const porHora = new Map();
+  for (const e of eventos) {
+    if (!e.horario) continue;
+    if (!porHora.has(e.horario)) porHora.set(e.horario, []);
+    porHora.get(e.horario).push(e);
+  }
+  const r = {
+    reservasAnalisadas: registros.length,
+    mesmoInicio: 0, inicioUnico: 0, inicioEDuracao: 0,
+    inicioDuracaoUnicos: 0, inicioDuracaoENome: 0,
+    inicioDuracaoNomeEServico: 0, horarioSemCorrespondencia: 0,
+    variasCorrespondenciasHorario: 0,
+  };
+  for (const row of registros) {
+    const cand = porHora.get(row.horario) || [];
+    if (!cand.length) { r.horarioSemCorrespondencia++; continue; }
+    r.mesmoInicio++;
+    if (cand.length === 1) r.inicioUnico++;
+    if (cand.length > 1) r.variasCorrespondenciasHorario++;
+    const dur = cand.filter(e => e.duracao === row.duracao);
+    if (!dur.length) continue;
+    r.inicioEDuracao++;
+    if (dur.length === 1) r.inicioDuracaoUnicos++;
+    const nome = normalizar(row.nome);
+    const servico = normalizar(row.servico);
+    const nom = dur.filter(e => nome.length >= 5 &&
+      (" " + e.summary + " ").includes(" " + nome + " "));
+    if (nom.length) r.inicioDuracaoENome++;
+    if (nom.some(e => servico.length >= 4 &&
+      (" " + e.summary + " ").includes(" " + servico + " "))) {
+      r.inicioDuracaoNomeEServico++;
+    }
+  }
+  return r;
+}
+
+let pool;
+try {
+  const [de, ate] = process.argv.slice(2);
+  const inicio = validarDia(de), fim = validarDia(ate);
+  const delta = Date.parse(fim) - Date.parse(inicio);
+  if (delta <= 0 || delta > 30 * 86400000) falhar("JANELA_INVALIDA");
+  for (const flag of [
+    "GOOGLE_CALENDAR_DIRECT_WRITE_ENABLED", "GOOGLE_CALENDAR_CUTOVER_WORKER_ENABLED",
+    "GOOGLE_CALENDAR_CUTOVER_QUEUE_ENABLED",
+  ]) if (process.env[flag] === "true") falhar("ESCRITA_NAO_DESATIVADA");
+
+  const cfg = configuracaoCalendarOAuth();
+  pool = new pg.Pool({ max: 1, connectionTimeoutMillis: 10000 });
+  const con = await pool.connect();
+  let outbox, cancelamentos, credencial, vinculos;
+  try {
+    await con.query("BEGIN TRANSACTION READ ONLY");
+    outbox = (await con.query(
+      "SELECT agendamento_id, event_id, status, " +
+      "TO_CHAR(data_servico,'YYYY-MM-DD') AS data_iso, " +
+      "TO_CHAR(horario,'HH24:MI') AS hora_iso, " +
+      "duracao_minutos, nome_cliente, servico " +
+      "FROM public.pix_calendar_outbox " +
+      "WHERE data_servico >= $1::date AND data_servico < $2::date " +
+      "ORDER BY data_servico,horario,agendamento_id LIMIT 4001",
+      [inicio, fim],
+    )).rows;
+    if (outbox.length > 4000) falhar("LIMITE_POSTGRESQL");
+    cancelamentos = outbox.length ? (await con.query(
+      "SELECT agendamento_id,estado,calendar_estado " +
+      "FROM public.agendamento_cancelamentos " +
+      "WHERE agendamento_id = ANY($1::text[])",
+      [outbox.map(x => x.agendamento_id)],
+    )).rows : [];
+    vinculos = outbox.length ? (await con.query(
+      "SELECT agendamento_id, google_event_id, calendar_id " +
+      "FROM public.google_calendar_event_links " +
+      "WHERE calendar_id=$1 AND agendamento_id = ANY($2::text[]) LIMIT 4001",
+      [cfg.calendarId, outbox.map(x=>x.agendamento_id)],
+    )).rows : [];
+    if (vinculos.length > 4000) falhar("LIMITE_VINCULOS");
+    credencial = (await con.query(
+      "SELECT google_email,refresh_token_encrypted " +
+      "FROM public.google_calendar_oauth_credentials " +
+      "WHERE connection_name = 'isabele'",
+    )).rows[0];
+    await con.query("COMMIT");
+  } catch (e) {
+    await con.query("ROLLBACK").catch(() => {});
+    throw e;
+  } finally { con.release(); }
+  if (credencial?.google_email?.trim().toLowerCase() !== cfg.expectedEmail) {
+    falhar("CONTA_DIVERGENTE");
+  }
+  const refresh = descriptografarCalendarToken(credencial.refresh_token_encrypted, cfg.key);
+  const t = await google("https://oauth2.googleapis.com/token", {
+    method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: cfg.clientId, client_secret: cfg.clientSecret,
+      refresh_token: refresh, grant_type: "refresh_token",
+    }),
+  });
+  if (!t.access_token || (t.refresh_token && t.refresh_token !== refresh)) {
+    falhar("TOKEN_INDISPONIVEL_OU_ROTACIONADO");
+  }
+  const headers = { Authorization: "Bearer " + t.access_token };
+  const me = await google("https://openidconnect.googleapis.com/v1/userinfo", { headers });
+  if (!me.email_verified || me.email?.trim().toLowerCase() !== cfg.expectedEmail) {
+    falhar("IDENTIDADE_DIVERGENTE");
+  }
+
+  const eventos = [];
+  const tokensVistos = new Set();
+  let proxima = "", paginas = 0;
+  for (let p = 0; p < 10; p++) {
+    const u = new URL("https://www.googleapis.com/calendar/v3/calendars/" +
+      encodeURIComponent(cfg.calendarId) + "/events");
+    u.searchParams.set("timeMin", inicio + "T00:00:00-03:00");
+    u.searchParams.set("timeMax", fim + "T00:00:00-03:00");
+    u.searchParams.set("singleEvents", "true");
+    u.searchParams.set("showDeleted", "false");
+    u.searchParams.set("orderBy", "startTime");
+    u.searchParams.set("maxResults", "250");
+    // Titulo fica APENAS na memoria para comparacao; nunca aparece na saida.
+    u.searchParams.set("fields",
+      "kind,nextPageToken,items(id,iCalUID,status,summary,description,start(date,dateTime),end(date,dateTime),recurringEventId,extendedProperties(private))");
+    if (proxima) u.searchParams.set("pageToken", proxima);
+    const page = await google(u, { headers });
+    if (page.kind !== "calendar#events" || !Array.isArray(page.items || [])) {
+      falhar("GOOGLE_PAGINA_INVALIDA");
+    }
+    eventos.push(...(page.items || []));
+    paginas++;
+    if (eventos.length > 1500) falhar("GOOGLE_LIMITE");
+    proxima = page.nextPageToken || "";
+    if (!proxima) break;
+    if (tokensVistos.has(proxima)) falhar("GOOGLE_PAGINA_REPETIDA");
+    tokensVistos.add(proxima);
+  }
+  if (proxima) falhar("GOOGLE_PAGINACAO_INCOMPLETA");
+
+  if (!getApps().length) {
+    initializeApp({ credential: applicationDefault(), projectId: "isabele-nails-app" });
+  }
+  const docs = (await getFirestore().collection("agendamentos")
+    .where("data", ">=", inicio).where("data", "<", fim).limit(4001).get()).docs;
+  if (docs.length > 4000) falhar("FIRESTORE_LIMITE");
+
+  const cancelado = new Set(cancelamentos
+    .filter(x => x.estado === "concluida").map(x => x.agendamento_id));
+  const fsIDs = new Set(docs.map(x => x.id));
+  const pgComData = outbox.map(x => ({
+    agendamentoId: x.agendamento_id,
+    nome: x.nome_cliente, servico: x.servico,
+    horario: x.data_iso + "T" + x.hora_iso, duracao: Number(x.duracao_minutos),
+    status: x.status, cancelado: cancelado.has(x.agendamento_id),
+  }));
+  const calendarComData = eventos.map(x => {
+    const ini = x.start?.dateTime, final = x.end?.dateTime;
+    const duracao = Number.isFinite(Date.parse(ini)) && Number.isFinite(Date.parse(final))
+      ? (Date.parse(final) - Date.parse(ini)) / 60000 : null;
+    return {
+      horario: chaveHorario(ini),
+      duracao, summary: normalizar(x.summary),
+      diaInteiro: Boolean(x.start?.date),
+      comTitulo: Boolean(x.summary),
+      recorrencia: Boolean(x.recurringEventId),
+    };
+  });
+  const ativos = pgComData.filter(x => x.status === "enviado" && !x.cancelado);
+  // A modelagem atual do Firestore utiliza "duracao" e
+  // "duracaoSnapshot"; "duracaoMinutos" normalmente so aparece na API.
+  const fsAgendamentos = docs.map(d => {
+    const x = d.data();
+    const duracaoOriginal = x?.duracaoSnapshot ?? x?.duracao ?? x?.duracaoMinutos;
+    return { horario: String(x?.data || "") + "T" + String(x?.horario || "").slice(0, 5),
+      nome: x?.nomeCliente, servico: x?.servico,
+      duracao: duracaoOriginal == null ? null : Number(duracaoOriginal),
+      fonteDuracao: x?.duracaoSnapshot != null ? "duracaoSnapshot"
+        : x?.duracao != null ? "duracao"
+          : x?.duracaoMinutos != null ? "duracaoMinutos" : "ausente" };
+  });
+  const validosFS = fsAgendamentos.filter(x => /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(x.horario));
+  // Verificar se a referencia do Apps Script foi preservada na identidade
+  // Google ou no metadata do evento. Apenas totais, sem IDs ou descricao.
+  const evidenciaIdentificadores = {
+    referenciaIgualEventsId: 0,
+    referenciaIgualICalUID: 0,
+    referenciaNoTitulo: 0,
+    referenciaNaDescricao: 0,
+    marcadorPrivadoAgendamento: 0,
+  };
+  for (const registro of outbox) {
+    const legacyId = String(registro.event_id || "");
+    for (const ev of eventos) {
+      if (legacyId && ev.id === legacyId) {
+        evidenciaIdentificadores.referenciaIgualEventsId++;
+      }
+      if (legacyId && ev.iCalUID === legacyId) {
+        evidenciaIdentificadores.referenciaIgualICalUID++;
+      }
+      if (legacyId.length >= 8 && typeof ev.summary === "string" &&
+          ev.summary.includes(legacyId)) {
+        evidenciaIdentificadores.referenciaNoTitulo++;
+      }
+      if (legacyId.length >= 8 && typeof ev.description === "string" &&
+          ev.description.includes(legacyId)) {
+        evidenciaIdentificadores.referenciaNaDescricao++;
+      }
+      if (ev.extendedProperties?.private?.isabeleAgendamentoId === registro.agendamento_id) {
+        evidenciaIdentificadores.marcadorPrivadoAgendamento++;
+      }
+    }
+  }
+  // Terceira etapa da conciliacao: ASSOCIACAO POR MARCADOR LEGADO,
+  // nao por coincidencia de horario, nome ou duracao. Nao grava links.
+  // A verificacao usa fronteiras do identificador para evitar que
+  // "evt_abc" encontre acidentalmente "evt_abcdef".
+  function marcadorExato(descricao, idLegado) {
+    if (typeof descricao !== "string" ||
+        typeof idLegado !== "string" ||
+        !/^evt_[A-Za-z0-9_-]{1,128}$/.test(idLegado)) return false;
+    const re = new RegExp("(^|[^A-Za-z0-9_-])" + idLegado +
+      "(?=$|[^A-Za-z0-9_-])");
+    return re.test(descricao);
+  }
+  function textoInclui(titulo, valor, minimo) {
+    const normalizado = normalizar(valor);
+    return normalizado.length >= minimo &&
+      (" " + normalizar(titulo) + " ").includes(" " + normalizado + " ");
+  }
+  const porDoc = new Map(docs.map(d => [d.id, d.data() || {}]));
+  const associacoesPorRegistro = outbox.map(r => ({
+    row: r,
+    matches: eventos.filter(ev => marcadorExato(ev.description, r.event_id)),
+    substring: eventos.filter(ev =>
+      typeof ev.description === "string" &&
+      ev.description.includes(String(r.event_id))).length,
+  }));
+  const reivindicantes = new Map();
+  for (const a of associacoesPorRegistro) {
+    for (const ev of a.matches) {
+      if (!reivindicantes.has(ev.id)) reivindicantes.set(ev.id, new Set());
+      reivindicantes.get(ev.id).add(a.row.agendamento_id);
+    }
+  }
+  const marcadorLegado = {
+    totalOutbox: outbox.length,
+    ausente: 0,
+    somenteSubstring: 0,
+    unico: 0,
+    multiplo: 0,
+    eventoReivindicadoPorVariosAgendamentos: 0,
+    candidatoForteParaRevisao: 0,
+    exigeRevisao: {
+      cancelado: 0, dispensadoOuNaoEnviado: 0,
+      semDocumentoFirestore: 0, horarioDivergente: 0,
+      duracaoDivergente: 0, nomeOuServicoDivergente: 0,
+      firestoreDivergente: 0, recorrencia: 0,
+    },
+  };
+  for (const a of associacoesPorRegistro) {
+    if (a.matches.length === 0) {
+      marcadorLegado.ausente++;
+      if (a.substring > 0) marcadorLegado.somenteSubstring++;
+      continue;
+    }
+    if (a.matches.length > 1) {
+      marcadorLegado.multiplo++;
+      continue;
+    }
+    marcadorLegado.unico++;
+    const ev = a.matches[0], r = a.row;
+    if (reivindicantes.get(ev.id).size > 1) {
+      marcadorLegado.eventoReivindicadoPorVariosAgendamentos++;
+      continue;
+    }
+    const canceladoRegistro = cancelado.has(r.agendamento_id);
+    const enviado = r.status === "enviado";
+    const fs = porDoc.get(r.agendamento_id);
+    const eventoHorario = chaveHorario(ev.start?.dateTime);
+    const duracaoEvento = typeof ev.start?.dateTime === "string" &&
+      typeof ev.end?.dateTime === "string"
+      ? (Date.parse(ev.end.dateTime) - Date.parse(ev.start.dateTime)) / 60000
+      : null;
+    const horarioLegado = r.data_iso + "T" + r.hora_iso;
+    const duracaoLegado = Number(r.duracao_minutos);
+    const tituloValido = textoInclui(ev.summary, r.nome_cliente, 5) &&
+      textoInclui(ev.summary, r.servico, 4);
+    const fsHorario = fs ? String(fs.data || "") + "T" +
+      String(fs.horario || "").slice(0, 5) : "";
+    const fsDuracao = Number(fs?.duracaoSnapshot ?? fs?.duracao ?? fs?.duracaoMinutos);
+    const fsValido = fs && fsHorario === eventoHorario &&
+      Number.isFinite(fsDuracao) && fsDuracao > 0 && fsDuracao === duracaoEvento;
+    const motivo = marcadorLegado.exigeRevisao;
+    // Registrar APENAS o primeiro motivo prioritario, para totais
+    // mutuamente exclusivos. Nenhum caso e liberado automaticamente.
+    if (canceladoRegistro) motivo.cancelado++;
+    else if (!enviado) motivo.dispensadoOuNaoEnviado++;
+    else if (!fs) motivo.semDocumentoFirestore++;
+    else if (ev.recurringEventId) motivo.recorrencia++;
+    else if (horarioLegado !== eventoHorario) motivo.horarioDivergente++;
+    else if (duracaoLegado !== duracaoEvento) motivo.duracaoDivergente++;
+    else if (!tituloValido) motivo.nomeOuServicoDivergente++;
+    else if (!fsValido) motivo.firestoreDivergente++;
+    else marcadorLegado.candidatoForteParaRevisao++;
+  }
+  // Inventario final das divergencias, sem gravar na API nem no banco.
+  // Os detalhes nunca incluem nomes, IDs reais nem descricoes.
+  const ausentes = {
+    cancelamentoConcluido: 0,
+    cancelamentoNaoConcluido: 0,
+    dispensado: 0,
+    enviadoSemCancelamento: 0,
+    outro: 0,
+  };
+  const porCancelamento = new Map(cancelamentos.map(c => [c.agendamento_id, c]));
+  const divergencias = [];
+  let eventosGoogleCancelados = 0;
+  let firestoreEstadoNaoAtivo = 0;
+  for (const a of associacoesPorRegistro) {
+    const row = a.row;
+    const cancellation = porCancelamento.get(row.agendamento_id);
+    if (a.matches.length === 0) {
+      if (cancellation?.estado === "concluida") ausentes.cancelamentoConcluido++;
+      else if (cancellation) ausentes.cancelamentoNaoConcluido++;
+      else if (row.status === "dispensado") ausentes.dispensado++;
+      else if (row.status === "enviado") ausentes.enviadoSemCancelamento++;
+      else ausentes.outro++;
+      continue;
+    }
+    if (a.matches.length !== 1 ||
+        reivindicantes.get(a.matches[0].id).size !== 1) continue;
+    const ev = a.matches[0];
+    const fs = porDoc.get(row.agendamento_id);
+    const horaGoogle = chaveHorario(ev.start?.dateTime);
+    const durGoogle = typeof ev.start?.dateTime === "string" &&
+      typeof ev.end?.dateTime === "string"
+      ? (Date.parse(ev.end.dateTime) - Date.parse(ev.start.dateTime)) / 60000 : null;
+    const durFS = fs?.duracaoSnapshot ?? fs?.duracao ?? fs?.duracaoMinutos;
+    const fsHora = fs ? String(fs.data || "") + "T" +
+      String(fs.horario || "").slice(0, 5) : null;
+    const statusFS = String(fs?.status || "").toLowerCase();
+    const statusGoogle = String(ev.status || "").toLowerCase();
+    if (statusGoogle === "cancelled") eventosGoogleCancelados++;
+    if (fs && !["confirmado", "reagendado", "agendado"].includes(statusFS)) {
+      firestoreEstadoNaoAtivo++;
+    }
+    const dadosDivergentes =
+      Number(row.duracao_minutos) !== durGoogle ||
+      row.data_iso + "T" + row.hora_iso !== horaGoogle ||
+      !fs || fsHora !== horaGoogle || Number(durFS) !== durGoogle ||
+      statusGoogle === "cancelled" || !["confirmado", "reagendado", "agendado"].includes(statusFS);
+    if (!dadosDivergentes || cancellation || row.status !== "enviado") continue;
+    divergencias.push({
+      dia: row.data_iso, hora: row.hora_iso,
+      duracaoOutboxMin: Number(row.duracao_minutos),
+      duracaoGoogleMin: durGoogle,
+      duracaoFirestoreMin: durFS == null ? null : Number(durFS),
+      horarioGoogleIgualOutbox: horaGoogle === row.data_iso + "T" + row.hora_iso,
+      horarioFirestoreIgualGoogle: fsHora === horaGoogle,
+      estadoFirestore: statusFS ? (["confirmado","reagendado","agendado"].includes(statusFS)
+        ? "ativo" : "revisar") : "ausente",
+    });
+  }
+  divergencias.sort((a,b) =>
+    (a.dia + "T" + a.hora).localeCompare(b.dia + "T" + b.hora));
+  // Preflight rigoroso: somente conta reservas candidatas, NUNCA grava
+  // links/IDs Google. Todas as alteracoes/cancelamentos exigem revisao.
+  const statusOrigem = { ativo:0, concluido:0, cancelado:0, desconhecido:0 };
+  const STATUS_ATIVO = new Set(["confirmado","reagendado","agendado"]);
+  const STATUS_CONCLUIDO = new Set([
+    "concluido","concluida","finalizado","finalizada","realizado","realizada",
+    "atendido","atendida",
+  ]);
+  const STATUS_CANCELADO = new Set(["cancelado","cancelada","expirado","expirada"]);
+  function estadoHistorico(valor) {
+    const st = normalizar(String(valor||""));
+    if (STATUS_ATIVO.has(st)) return "ativo";
+    if (STATUS_CONCLUIDO.has(st)) return "concluido";
+    if (STATUS_CANCELADO.has(st)) return "cancelado";
+    return "desconhecido";
+  }
+  for (const d of docs) statusOrigem[estadoHistorico(d.data()?.status)]++;
+  const porVinculo = new Map(vinculos.map(v=>[v.agendamento_id,v]));
+  const preparo = {
+    candidatosParaRevisaoHumana:0,
+    vinculosInseridos:0,
+    bloqueios:{},
+  };
+  function bloqueio(codigo) {
+    preparo.bloqueios[codigo]=(preparo.bloqueios[codigo]||0)+1;
+  }
+  for (const a of associacoesPorRegistro) {
+    const row=a.row, fs=porDoc.get(row.agendamento_id);
+    if (a.matches.length!==1) continue; // ja contabilizado acima
+    const ev=a.matches[0];
+    if (reivindicantes.get(ev.id).size!==1) {bloqueio("evento_compartilhado");continue;}
+    if (porVinculo.has(row.agendamento_id)) {bloqueio("vinculo_ja_existe");continue;}
+    if (porCancelamento.has(row.agendamento_id)) {bloqueio("cancelamento");continue;}
+    if (row.status!=="enviado") {bloqueio("outbox_nao_enviada");continue;}
+    if (ev.status!=="confirmed" || ev.recurringEventId) {bloqueio("evento_invalido");continue;}
+    if (!fs) {bloqueio("firestore_ausente");continue;}
+    if (fs.calendarEventId!==row.event_id) {bloqueio("referencia_firestore");continue;}
+    if (!["ativo","concluido"].includes(estadoHistorico(fs.status))) {
+      bloqueio("status_firestore");continue;
+    }
+    const hora=chaveHorario(ev.start?.dateTime);
+    const dur=typeof ev.start?.dateTime==="string" &&
+      typeof ev.end?.dateTime==="string"
+      ? (Date.parse(ev.end.dateTime)-Date.parse(ev.start.dateTime))/60000 : null;
+    if (row.data_iso+"T"+row.hora_iso!==hora) {bloqueio("horario_outbox");continue;}
+    if (Number(row.duracao_minutos)!==dur) {bloqueio("duracao_outbox");continue;}
+    if (String(fs.data||"")+"T"+String(fs.horario||"").slice(0,5)!==hora) {
+      bloqueio("horario_firestore");continue;
+    }
+    if (Number(fs.duracaoSnapshot??fs.duracao??fs.duracaoMinutos)!==dur) {
+      bloqueio("duracao_firestore");continue;
+    }
+    if (!textoInclui(ev.summary,row.nome_cliente,5) ||
+        !textoInclui(ev.summary,row.servico,4)) {bloqueio("titulo");continue;}
+    preparo.candidatosParaRevisaoHumana++;
+  }
+  const vinculacoesCriadas = 0;
+  console.log(JSON.stringify({
+    resultado: "DIAGNOSTICO_TEMPORAL_SOMENTE_LEITURA",
+    periodo: { inicio, fimExclusivo: fim },
+    fontes: { postgresOutbox: outbox.length, firestore: docs.length,
+      eventosGoogle: eventos.length, paginasGoogle: paginas },
+    referencias: {
+      postgresEventIdsPrefixoEvt: outbox.filter(x => /^evt_[A-Za-z0-9_-]+$/.test(x.event_id)).length,
+      firestoreComIdNaOutbox: docs.filter(d => outbox.some(o=>o.agendamento_id===d.id)).length,
+      registrosOutboxSemDocNoPeriodo: outbox.filter(o=>!fsIDs.has(o.agendamento_id)).length,
+      firestoreComCalendarEventId: docs.filter(d=>Boolean(d.data()?.calendarEventId)).length,
+    },
+    postgres: { status: ocorrencias(outbox, "status"), cancelamentos: cancelado.size,
+      enviadosNaoCancelados: ativos.length },
+    google: { eventosDiaInteiro: calendarComData.filter(x=>x.diaInteiro).length,
+      eventosComInicio: calendarComData.filter(x=>x.horario).length,
+      eventosComTitulo: calendarComData.filter(x=>x.comTitulo).length,
+      recorrencias: calendarComData.filter(x=>x.recorrencia).length },
+    comparacaoOutboxEnviadaNaoCancelada: contarComparacoes(ativos, calendarComData),
+    duracaoFirestore: {
+      fontes: ocorrencias(fsAgendamentos, "fonteDuracao"),
+      duracaoNaoInformadaOuInvalida: fsAgendamentos.filter(x =>
+        !Number.isFinite(x.duracao) || x.duracao <= 0).length,
+    },
+    comparacaoFirestoreDataAtual: contarComparacoes(validosFS, calendarComData),
+    referenciasIdentificadoresGoogle: evidenciaIdentificadores,
+    conciliacaoPorMarcadorLegado: {
+      ...marcadorLegado,
+      registrosInseridos: vinculacoesCriadas,
+    },
+    marcadoresAusentesClassificados: ausentes,
+    estadosAdicionais: { eventosGoogleCancelados, firestoreEstadoNaoAtivo },
+    statusFirestoreClassificados: statusOrigem,
+    preflightVinculosLegados: preparo,
+    divergenciasSemDadosPessoais: divergencias.length <= 15
+      ? divergencias : { total: divergencias.length, detalhesOmitidos: true },
+    aviso: "Candidatos fortes ainda exigem verificacao por ID, status atual e revisao humana; nenhum vinculo foi inserido.",
+  }, null, 2));
+} catch (e) {
+  console.error("DIAGNOSTICO_FALHOU: " + (e.codigo || "ERRO_AMBIENTE"));
+  process.exitCode = 1;
+} finally {
+  if (pool) await pool.end().catch(() => {});
+}
