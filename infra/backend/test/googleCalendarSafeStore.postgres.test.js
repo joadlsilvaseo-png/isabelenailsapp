@@ -115,7 +115,7 @@ test("PostgreSQL 17: idempotencia, timeout, vinculo atomico e legado bloqueado",
     // nao ha caminho para gerar uma segunda intencao.
     await assert.rejects(registrarIntencaoCalendar(pool, {
       ...BASE, chaveIdempotencia: "calendario-intent-teste-a03",
-    }, OPCOES), { codigo: "CRIACAO_NAO_AUTORIZADA" });
+    }, OPCOES), { codigo: "OUTRA_OPERACAO_PENDENTE" });
 
     await assert.rejects(confirmarIntencaoCalendar(pool, {
       operationId: first.operationId, leaseToken: lease1,
