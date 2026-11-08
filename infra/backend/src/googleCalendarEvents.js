@@ -224,7 +224,10 @@ export function criarAdaptadorGoogleCalendar({
      * incompleto: o reconciliador precisa avaliar TODAS as paginas.
      * Nao solicita titulo, descricao, convidados ou nomes de clientes.
      */
-    async listarEventos({ inicio, fim }) {
+    async listarEventos({ inicio, fim, incluirDescricao = false }) {
+      if (incluirDescricao && env.GOOGLE_CALENDAR_AUDIT_ENABLED !== "true") {
+        throw erro("AUDITORIA_NAO_AUTORIZADA", "Consulta detalhada somente em auditoria isolada.");
+      }
       const de = dataComFuso(inicio);
       const ate = dataComFuso(fim);
       if (ate <= de || ate - de > 31 * 24 * 60 * 60 * 1000) {
@@ -241,7 +244,9 @@ export function criarAdaptadorGoogleCalendar({
         url.searchParams.set("showDeleted", "false");
         url.searchParams.set("orderBy", "startTime");
         url.searchParams.set("maxResults", "250");
-        url.searchParams.set("fields", "kind,nextPageToken,items(id,iCalUID,status,start(date,dateTime),end(date,dateTime),recurringEventId,extendedProperties(private))");
+        url.searchParams.set("fields", incluirDescricao
+          ? "kind,nextPageToken,items(id,iCalUID,status,summary,description,etag,start(date,dateTime),end(date,dateTime),recurringEventId,extendedProperties(private))"
+          : "kind,nextPageToken,items(id,iCalUID,status,start(date,dateTime),end(date,dateTime),recurringEventId,extendedProperties(private))");
         if (paginaToken) url.searchParams.set("pageToken", paginaToken);
         const retorno = await requisitar("GET", url.toString());
         if (retorno.status !== 200 || retorno.body?.kind !== "calendar#events" ||
