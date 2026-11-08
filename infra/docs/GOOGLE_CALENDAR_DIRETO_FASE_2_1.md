@@ -52,7 +52,7 @@ O adaptador valida `GOOGLE_CALENDAR_DIRECT_WRITE_ENABLED=true` e OAuth ativo **a
 
 ## Validacao
 
-`node test/googleCalendarEvents.test.js` exercita 13 casos com HTTP simulado. `npm test` incorpora a suite no CI.
+`node test/googleCalendarEvents.test.js` exercita 14 casos com HTTP simulado. `npm test` incorpora a suite no CI.
 
 **Nao testa escrita real, nao chama a conta Google da profissional e nao modifica a base de dados.**
 
