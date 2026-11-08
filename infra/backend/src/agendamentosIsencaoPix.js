@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { autorizarCriacaoNovoCalendar } from "./googleCalendarNewBookingAuth.js";
 import { validarHorarioPix } from "./pixDisponibilidade.js";
 import { validarServicoDezembro2026 } from "./agendamentoRegras.mjs";
 import { possuiBloqueio } from "./agendaBloqueios.js";
@@ -315,17 +316,25 @@ export async function criarAgendamentoIsento({ pool, db, uid, dados, dependencie
 
     // Somente um agendamento confirmado entra na fila duravel do Calendar.
     // A mesma fila e processada pelo worker para PIX pago e sinal isento.
-    await conexao.query(`
+    const insercaoOutbox = await conexao.query(`
       INSERT INTO public.pix_calendar_outbox (
         event_id, agendamento_id, nome_cliente, servico,
         data_servico, horario, duracao_minutos
       ) VALUES ($1, $2, $3, $4, $5::date, $6::time, $7)
       ON CONFLICT (event_id) DO NOTHING
+      RETURNING id
     `, [
       `evt_${agendamentoId}`, agendamentoId, nomeCliente,
       String(servico.nome || "Serviço").slice(0, 120),
       data, horario, duracao
     ]);
+    if (insercaoOutbox.rows?.[0]?.id != null) {
+      await autorizarCriacaoNovoCalendar(conexao, {
+        outboxId: insercaoOutbox.rows[0].id,
+        agendamentoId,
+        env: dependencies.env || process.env,
+      });
+    }
 
     await conexao.query("COMMIT");
     confirmouSql = true;
