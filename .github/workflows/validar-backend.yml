@@ -108,6 +108,11 @@ jobs:
           node --check src/pixCalendarWorker.js
           node --check scripts/calendarAuditOAuthStageStdin.mjs
           node --check scripts/calendarAuditTemporalStdin.mjs
+          node --check scripts/calendarLegacyReview.mjs
+          node --check src/googleCalendarDirectBridge.js
+          node --check src/googleCalendarNewBookingAuth.js
+          node --check src/googleCalendarLegacyCandidates.js
+          node --check ../../agendamento.js
           node --check src/pixReagendamentoPago.js
           node --check src/pixReagendamentoPagoOperacao.js
           node --check src/agendamentosIsencaoPix.js
