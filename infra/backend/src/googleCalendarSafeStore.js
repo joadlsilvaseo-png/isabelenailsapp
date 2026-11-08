@@ -192,7 +192,7 @@ export async function reivindicarIntencaoCalendar(pool, {
   calendarId,
 }, { env = process.env } = {}) {
   somenteWorker(env);
-  const calendar = validar(calendarId, /^\\S{1,300}$/, "CALENDARIO_INVALIDO");
+  const calendar = validar(calendarId, /^\S{1,300}$/, "CALENDARIO_INVALIDO");
   const leaseToken = randomUUID();
   const r = await pool.query(
     `WITH proxima AS (
