@@ -155,6 +155,20 @@ export async function registrarIntencaoCalendar(pool, {
         [id],
       );
       if (pendencias.rows.length) throw erro("LEGADO_AGUARDANDO_RECONCILIACAO");
+      // Ausencia de candidatos NAO comprova que uma reserva e nova!
+      // Um fluxo futuro deve autorizar expressamente reservas nascidas
+      // APOS o corte validado; nunca fazer backfill automatico.
+      const liberacao = await conexao.query(
+        `SELECT calendar_id, autorizacao, consumido_em
+         FROM public.google_calendar_creation_authorizations
+         WHERE agendamento_id = $1 FOR UPDATE`, [id],
+      );
+      const autorizado = liberacao.rows[0];
+      if (!autorizado || autorizado.calendar_id !== calendar ||
+          autorizado.autorizacao !== "nova_reserva_verificada" ||
+          autorizado.consumido_em !== null) {
+        throw erro("CRIACAO_NAO_AUTORIZADA");
+      }
     } else if (!vinculo || vinculo.google_event_id !== eventId ||
                vinculo.calendar_id !== calendar || vinculo.situacao !== "ativo") {
       throw erro("EVENTO_SEM_VINCULO_CONFIRMADO");
@@ -178,6 +192,16 @@ export async function registrarIntencaoCalendar(pool, {
        ) VALUES ($1,$2,$3,$4,$5,$6,$7,'pendente')`,
       [operationId, chave, id, calendar, tipo, eventId, fingerprint],
     );
+    if (tipo === "criar") {
+      const consumida = await conexao.query(
+        `UPDATE public.google_calendar_creation_authorizations
+         SET consumido_em = NOW()
+         WHERE agendamento_id = $1 AND calendar_id = $2
+           AND autorizacao = 'nova_reserva_verificada' AND consumido_em IS NULL
+         RETURNING agendamento_id`, [id, calendar],
+      );
+      if (consumida.rows.length !== 1) throw erro("CRIACAO_NAO_AUTORIZADA");
+    }
     return { operationId, estado: "pendente", jaRegistrada: false };
   });
 }
