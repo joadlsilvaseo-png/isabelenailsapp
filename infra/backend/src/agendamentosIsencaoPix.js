@@ -535,7 +535,32 @@ export async function reagendarComBloqueio({ pool, db, uid, dados, dependencies 
     });
 
     await conexao.query("COMMIT");
-    return { agendamentoId, calendarEventId: eventId, duracaoMinutos: duracao, reagendado: documentoAlterado };
+    // A sincronizacao direta e feita APOS o COMMIT. Em erro remoto,
+    // nao apagar nem reverter a reserva confirmada localmente.
+    // A operacao e idempotente pela chave persistente no Firestore.
+    let sincronizacaoCalendar = null;
+    if (dependencies.enviarCalendarSemPix) {
+      if (documentoAlterado) {
+        try {
+          await dependencies.enviarCalendarSemPix({
+            agendamentoId, operationId: operacaoId,
+            nomeCliente: String(dadosAtuais.nomeCliente || ""),
+            servico: String(servico.nome || "Serviço"),
+            data, horario, duracao,
+          });
+          sincronizacaoCalendar = "confirmada";
+        } catch (e) {
+          console.warn("[Calendar Direto] Reagendamento registrado, sincronizacao pendente:", e.codigo || "SEM_CONFIRMACAO");
+          sincronizacaoCalendar = "pendente";
+        }
+      } else sincronizacaoCalendar = "sem_alteracao";
+    }
+    return {
+      agendamentoId, calendarEventId: eventId,
+      duracaoMinutos: duracao, reagendado: documentoAlterado,
+      ...(dependencies.enviarCalendarSemPix
+        ? { calendarDiretoHabilitado: true, sincronizacaoCalendar } : {}),
+    };
   } catch (erro) {
     await conexao.query("ROLLBACK").catch(() => {});
     if (documentoAlterado && documentoAnterior) {
