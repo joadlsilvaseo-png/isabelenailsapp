@@ -61,6 +61,12 @@ export function criarPonteCalendarDireto(pool,{
        calendarId.length>300||/\s/.test(calendarId)){
       falhar("CUTOVER_FLAGS_INCOMPLETAS");
     }
+    if(fluxo==="criar_pix"){
+      const cutoff=String(env.GOOGLE_CALENDAR_CUTOVER_STARTED_AT||"");
+      if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})$/.test(cutoff)||
+         !Number.isFinite(Date.parse(cutoff))||
+         Date.parse(cutoff)>Date.now()+60000)falhar("CUTOVER_START_INVALIDO");
+    }
     return true;
   }
   const adaptador=()=>client ||= adapterFactory();
