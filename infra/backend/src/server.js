@@ -26,6 +26,7 @@ import { atenderFotosPerfil } from "./fotosPerfil.js";
 import { atenderAlteracaoServico, iniciarWorkerAlteracaoServico } from "./agendamentoAlteracaoServico.js";
 import { atenderAssistenteEncaixes } from "./assistenteEncaixes.js";
 import { iniciarMonitorOportunidades } from "./assistenteEncaixesMonitor.js";
+import { atenderGoogleCalendarOAuth } from "./googleCalendarOAuth.js";
 
 const { Pool } = pg;
 
@@ -41,6 +42,13 @@ if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
 
 const server = http.createServer(async (req, res) => {
   res.setHeader("Content-Type", "application/json; charset=utf-8");
+
+  // Integracao OAuth Google Calendar: rotas isoladas e desativadas por padrao.
+  // Nenhum endpoint de agendamento ou worker usa este modulo nesta fase.
+  if (new URL(req.url, "http://localhost").pathname.startsWith("/oauth/google/")) {
+    await atenderGoogleCalendarOAuth(req, res, pool);
+    return;
+  }
 
   if (req.method === "GET" && req.url === "/push/public-key") {
     res.writeHead(200);

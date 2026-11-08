@@ -70,6 +70,11 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f infra/backend/test/sql/fixture_reagendamento_pago_pg17.sql
           psql -v ON_ERROR_STOP=1 -f infra/migrations/007_pix_reservas_horarios.sql
           psql -v ON_ERROR_STOP=1 -f infra/migrations/021_pix_reagendamentos_pagos.sql
+      - name: Validar migração OAuth 023 em PostgreSQL 17 isolado
+        run: |
+          psql -v ON_ERROR_STOP=1 -f infra/migrations/023_google_calendar_oauth.sql
+          psql -v ON_ERROR_STOP=1 -f infra/migrations/023_google_calendar_oauth.sql
+          test "$(psql -v ON_ERROR_STOP=1 -Atc "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('google_calendar_oauth_states','google_calendar_oauth_credentials');")" = "2"
       - name: Confirmar preflight e índices de segurança
         run: |
           psql -v ON_ERROR_STOP=1 -Atc "SELECT COUNT(*) FROM information_schema.columns WHERE table_name='pix_reagendamentos_pagos';" | grep -qx 27
