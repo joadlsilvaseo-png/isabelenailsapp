@@ -81,7 +81,7 @@ try{
   ]);
   if(cancel.rows.length>4000||links.rows.length>4000)falhar("INVENTARIO_INCOMPLETO");
   const data=prepararCandidatosLegados({
-    outbox:rows.rows,firestore:snap.docs.map(d=>({id:d.id,...d.data()})),
+    outbox:rows.rows,firestore:snap.docs.map(d=>({...d.data(),id:d.id})),
     cancelamentos:cancel.rows,eventos:remote.eventos,vinculos:links.rows,
     calendarId:cfg.calendarId,
   });
