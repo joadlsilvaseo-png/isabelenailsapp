@@ -41,9 +41,21 @@ Sete fluxos tratados separadamente:
 
 **Nenhuma dessas flags esta ligada, nem inserida no Docker Compose, nem consultada pelos workers atuais.** Mesmo que um diagnostico retorne `pronto=true` em simulacao, nao autoriza ativar produção: ainda faltam conciliacao real, operacoes legadas, roteamento por fluxo, garantias de retry e rollback.
 
-### 3. Testes automatizados
+### 3. Recuperacao de criacao/alteracao apos timeout (somente leitura no Google)
 
-- `infra/backend/test/googleCalendarRegistroConfirmado.test.js`: 13 testes com PostgreSQL simulado: transacoes, idempotencia, vinculo, troca de identidade, colisao, operacao preexistente e bloqueio de legado.
+`infra/backend/src/googleCalendarRecuperacaoIncerta.js` exporta
+`verificarOperacaoGoogleIncerta`. A rotina nao e chamada por nenhum worker
+e so pode operar com as tres flags globais de cutover ativas futuramente.
+
+- Aceita apenas operacoes ja persistidas em `aguardando_confirmacao`, da agenda e fingerprint corretos.
+- Para criacao, calcula `events.id` deterministico da reserva; para reagendamento/alteracao exige ID remoto previamente persistido.
+- Executa **somente `events.get`** no Google. Se nao localizar o evento, retorna `ainda_sem_confirmacao`, **sem POST novo**, sem liberar a tentativa e sem mudar o estado em banco.
+- Se localizar um comprovante confirmado com marcador privado da VPS, delega a finalizacao transacional de vínculo; se nao, bloqueia.
+- Nao tenta confirmar cancelamentos por este caminho: DELETE requer contrato proprio de verificacao e recuperacao.
+
+### 4. Testes automatizados
+
+- `infra/backend/test/googleCalendarRegistroConfirmado.test.js`: 15 testes com PostgreSQL simulado: transacoes, idempotencia, vinculo, troca de identidade, colisao, operacao preexistente e bloqueio de legado.
 - `infra/backend/test/googleCalendarCutoverReadiness.test.js`: 8 testes de travas de transicao e aprovacao por fluxo.
 - Ambas suites integradas ao `npm test` e ao CI.
 
