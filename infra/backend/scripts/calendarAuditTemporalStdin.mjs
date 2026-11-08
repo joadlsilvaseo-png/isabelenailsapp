@@ -115,7 +115,7 @@ try {
   const cfg = configuracaoCalendarOAuth();
   pool = new pg.Pool({ max: 1, connectionTimeoutMillis: 10000 });
   const con = await pool.connect();
-  let outbox, cancelamentos, credencial;
+  let outbox, cancelamentos, credencial, vinculos;
   try {
     await con.query("BEGIN TRANSACTION READ ONLY");
     outbox = (await con.query(
@@ -135,6 +135,13 @@ try {
       "WHERE agendamento_id = ANY($1::text[])",
       [outbox.map(x => x.agendamento_id)],
     )).rows : [];
+    vinculos = outbox.length ? (await con.query(
+      "SELECT agendamento_id, google_event_id, calendar_id " +
+      "FROM public.google_calendar_event_links " +
+      "WHERE calendar_id=$1 AND agendamento_id = ANY($2::text[]) LIMIT 4001",
+      [cfg.calendarId, outbox.map(x=>x.agendamento_id)],
+    )).rows : [];
+    if (vinculos.length > 4000) falhar("LIMITE_VINCULOS");
     credencial = (await con.query(
       "SELECT google_email,refresh_token_encrypted " +
       "FROM public.google_calendar_oauth_credentials " +
@@ -421,6 +428,62 @@ try {
   }
   divergencias.sort((a,b) =>
     (a.dia + "T" + a.hora).localeCompare(b.dia + "T" + b.hora));
+  // Preflight rigoroso: somente conta reservas candidatas, NUNCA grava
+  // links/IDs Google. Todas as alteracoes/cancelamentos exigem revisao.
+  const statusOrigem = { ativo:0, concluido:0, cancelado:0, desconhecido:0 };
+  const STATUS_ATIVO = new Set(["confirmado","reagendado","agendado"]);
+  const STATUS_CONCLUIDO = new Set([
+    "concluido","concluida","finalizado","finalizada","realizado","realizada",
+    "atendido","atendida",
+  ]);
+  const STATUS_CANCELADO = new Set(["cancelado","cancelada","expirado","expirada"]);
+  function estadoHistorico(valor) {
+    const st = normalizar(String(valor||""));
+    if (STATUS_ATIVO.has(st)) return "ativo";
+    if (STATUS_CONCLUIDO.has(st)) return "concluido";
+    if (STATUS_CANCELADO.has(st)) return "cancelado";
+    return "desconhecido";
+  }
+  for (const d of docs) statusOrigem[estadoHistorico(d.data()?.status)]++;
+  const porVinculo = new Map(vinculos.map(v=>[v.agendamento_id,v]));
+  const preparo = {
+    candidatosParaRevisaoHumana:0,
+    vinculosInseridos:0,
+    bloqueios:{},
+  };
+  function bloqueio(codigo) {
+    preparo.bloqueios[codigo]=(preparo.bloqueios[codigo]||0)+1;
+  }
+  for (const a of associacoesPorRegistro) {
+    const row=a.row, fs=porDoc.get(row.agendamento_id);
+    if (a.matches.length!==1) continue; // ja contabilizado acima
+    const ev=a.matches[0];
+    if (reivindicantes.get(ev.id).size!==1) {bloqueio("evento_compartilhado");continue;}
+    if (porVinculo.has(row.agendamento_id)) {bloqueio("vinculo_ja_existe");continue;}
+    if (porCancelamento.has(row.agendamento_id)) {bloqueio("cancelamento");continue;}
+    if (row.status!=="enviado") {bloqueio("outbox_nao_enviada");continue;}
+    if (ev.status!=="confirmed" || ev.recurringEventId) {bloqueio("evento_invalido");continue;}
+    if (!fs) {bloqueio("firestore_ausente");continue;}
+    if (fs.calendarEventId!==row.event_id) {bloqueio("referencia_firestore");continue;}
+    if (!["ativo","concluido"].includes(estadoHistorico(fs.status))) {
+      bloqueio("status_firestore");continue;
+    }
+    const hora=chaveHorario(ev.start?.dateTime);
+    const dur=typeof ev.start?.dateTime==="string" &&
+      typeof ev.end?.dateTime==="string"
+      ? (Date.parse(ev.end.dateTime)-Date.parse(ev.start.dateTime))/60000 : null;
+    if (row.data_iso+"T"+row.hora_iso!==hora) {bloqueio("horario_outbox");continue;}
+    if (Number(row.duracao_minutos)!==dur) {bloqueio("duracao_outbox");continue;}
+    if (String(fs.data||"")+"T"+String(fs.horario||"").slice(0,5)!==hora) {
+      bloqueio("horario_firestore");continue;
+    }
+    if (Number(fs.duracaoSnapshot??fs.duracao??fs.duracaoMinutos)!==dur) {
+      bloqueio("duracao_firestore");continue;
+    }
+    if (!textoInclui(ev.summary,row.nome_cliente,5) ||
+        !textoInclui(ev.summary,row.servico,4)) {bloqueio("titulo");continue;}
+    preparo.candidatosParaRevisaoHumana++;
+  }
   const vinculacoesCriadas = 0;
   console.log(JSON.stringify({
     resultado: "DIAGNOSTICO_TEMPORAL_SOMENTE_LEITURA",
@@ -453,6 +516,8 @@ try {
     },
     marcadoresAusentesClassificados: ausentes,
     estadosAdicionais: { eventosGoogleCancelados, firestoreEstadoNaoAtivo },
+    statusFirestoreClassificados: statusOrigem,
+    preflightVinculosLegados: preparo,
     divergenciasSemDadosPessoais: divergencias.length <= 15
       ? divergencias : { total: divergencias.length, detalhesOmitidos: true },
     aviso: "Candidatos fortes ainda exigem verificacao por ID, status atual e revisao humana; nenhum vinculo foi inserido.",
