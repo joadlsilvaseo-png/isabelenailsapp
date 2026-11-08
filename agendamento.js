@@ -1103,6 +1103,20 @@ async function inicializarAgendamento() {
               : "confirmacao.html";
             return;
           }
+          if (resultadoReagendamento.calendarDiretoHabilitado === true) {
+            // A API ja assumiu a sincronizacao; duplicar pelo antigo
+            // Apps Script criaria operacoes concorrentes no mesmo evento.
+            if (resultadoReagendamento.sincronizacaoCalendar === "pendente") {
+              window.alert("O reagendamento foi salvo no sistema, mas a sincronização com o Google Calendar está pendente. Confira o atendimento antes de tentar novamente.");
+            }
+            localStorage.setItem("dataAgendamento", data);
+            localStorage.setItem("horaAgendamento", horario);
+            localStorage.setItem("nomeCliente", payloadWebhook.nomeCliente);
+            window.location.href = origemAdmin
+              ? "admin-agendamentos.html"
+              : "confirmacao.html";
+            return;
+          }
         } else {
           throw new Error("Confirme o novo agendamento pelo fluxo seguro da agenda.");
         }
