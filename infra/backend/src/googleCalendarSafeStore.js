@@ -147,6 +147,12 @@ export async function registrarIntencaoCalendar(pool, {
        WHERE agendamento_id = $1 FOR UPDATE`, [id],
     );
     const vinculo = antigo.rows[0];
+    const ativa = await conexao.query(
+      `SELECT operation_id FROM public.google_calendar_sync_operations
+       WHERE agendamento_id = $1 AND estado = ANY($2::text[])
+       LIMIT 1 FOR UPDATE`, [id, ATIVOS],
+    );
+    if (ativa.rows.length) throw erro("OUTRA_OPERACAO_PENDENTE");
     if (tipo === "criar") {
       if (vinculo) throw erro("AGENDAMENTO_JA_VINCULADO");
       const pendencias = await conexao.query(
@@ -178,12 +184,6 @@ export async function registrarIntencaoCalendar(pool, {
       throw erro("EVENTO_LEGADO_NAO_MIGRADO");
     }
 
-    const ativa = await conexao.query(
-      `SELECT operation_id FROM public.google_calendar_sync_operations
-       WHERE agendamento_id = $1 AND estado = ANY($2::text[])
-       LIMIT 1 FOR UPDATE`, [id, ATIVOS],
-    );
-    if (ativa.rows.length) throw erro("OUTRA_OPERACAO_PENDENTE");
     const operationId = randomUUID();
     await conexao.query(
       `INSERT INTO public.google_calendar_sync_operations (
