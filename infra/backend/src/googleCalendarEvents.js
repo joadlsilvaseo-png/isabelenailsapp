@@ -205,6 +205,9 @@ export function criarAdaptadorGoogleCalendar({
       const atual = await buscar(id);
       if (!atual) throw erro("EVENTO_GOOGLE_AUSENTE", "Evento para atualizacao nao encontrado.");
       exigirPropriedade(atual, idAgendamento);
+      if (atual.status === "cancelled") {
+        throw erro("EVENTO_GOOGLE_CANCELADO", "Evento cancelado nao pode ser atualizado.");
+      }
       if (typeof atual.etag !== "string" || !atual.etag) {
         throw erro("ETAG_GOOGLE_AUSENTE", "Versao do evento nao confirmada.");
       }
@@ -223,6 +226,9 @@ export function criarAdaptadorGoogleCalendar({
       const atual = await buscar(id);
       if (!atual) return { eventId: id, excluido: false, jaAusente: true };
       exigirPropriedade(atual, idAgendamento);
+      if (atual.status === "cancelled") {
+        return { eventId: id, excluido: false, jaAusente: true };
+      }
       if (typeof atual.etag !== "string" || !atual.etag) {
         throw erro("ETAG_GOOGLE_AUSENTE", "Versao do evento nao confirmada.");
       }
