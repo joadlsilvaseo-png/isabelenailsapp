@@ -176,6 +176,51 @@ export function criarAdaptadorGoogleCalendar({
   }
 
   return {
+    /**
+     * Inventario SOMENTE LEITURA e com limite fechado. Nunca retorna resultado
+     * incompleto: o reconciliador precisa avaliar TODAS as paginas.
+     * Nao solicita titulo, descricao, convidados ou nomes de clientes.
+     */
+    async listarEventos({ inicio, fim }) {
+      const de = dataComFuso(inicio);
+      const ate = dataComFuso(fim);
+      if (ate <= de || ate - de > 31 * 24 * 60 * 60 * 1000) {
+        throw erro("JANELA_CALENDAR_INVALIDA", "Inventario exige janela de ate 31 dias.");
+      }
+      const encontrados = [];
+      const paginasVistas = new Set();
+      let paginaToken = "";
+      for (let pagina = 1; pagina <= 10; pagina++) {
+        const url = new URL(urlBase);
+        url.searchParams.set("timeMin", inicio);
+        url.searchParams.set("timeMax", fim);
+        url.searchParams.set("singleEvents", "true");
+        url.searchParams.set("showDeleted", "false");
+        url.searchParams.set("orderBy", "startTime");
+        url.searchParams.set("maxResults", "250");
+        url.searchParams.set("fields", "kind,nextPageToken,items(id,iCalUID,status,start(date,dateTime),end(date,dateTime),recurringEventId,extendedProperties(private))");
+        if (paginaToken) url.searchParams.set("pageToken", paginaToken);
+        const retorno = await requisitar("GET", url.toString());
+        if (retorno.status !== 200 || retorno.body?.kind !== "calendar#events" ||
+            !Array.isArray(retorno.body.items || [])) {
+          throw erro("LISTAGEM_GOOGLE_INVALIDA", "Google Calendar retornou pagina inesperada.");
+        }
+        const itens = retorno.body.items || [];
+        if (encontrados.length + itens.length > 1500) {
+          throw erro("INVENTARIO_CALENDAR_EXCEDE_LIMITE", "Inventario excedeu limite de eventos.");
+        }
+        encontrados.push(...itens);
+        const proxima = retorno.body.nextPageToken;
+        if (!proxima) return { eventos: encontrados, paginas: pagina, completo: true };
+        if (typeof proxima !== "string" || proxima.length > 2048 || paginasVistas.has(proxima)) {
+          throw erro("PAGINACAO_GOOGLE_INVALIDA", "Google Calendar retornou paginacao invalida.");
+        }
+        paginasVistas.add(proxima);
+        paginaToken = proxima;
+      }
+      throw erro("INVENTARIO_CALENDAR_INCOMPLETO", "Mais de dez paginas; dividir a janela.");
+    },
+
     async consultarEvento({ eventId }) {
       return buscar(eventId); // Somente leitura, nenhum write flag.
     },
