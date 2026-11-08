@@ -281,6 +281,14 @@ export function criarAdaptadorGoogleCalendar({
       const atual = await buscarLegado(idEvento);
       if (!atual) throw erro("GOOGLE_LEGADO_NAO_ENCONTRADO", "Evento legado ausente.");
       validarMarcadorLegado(atual, agendamentoId, legacyEventId);
+      // Requisicoes repetidas apos timeout nao podem sobrescrever o evento
+      // novamente. Se ja esta no estado desejado, somente confirmar.
+      const desejado = montarDados({ agendamentoId, nomeCliente, servico, inicio, fim });
+      if (Date.parse(atual.start?.dateTime) === Date.parse(inicio) &&
+          Date.parse(atual.end?.dateTime) === Date.parse(fim) &&
+          atual.summary === desejado.summary) {
+        return { eventId: idEvento, atualizado: false, jaEstavaAtualizado: true };
+      }
       const { extendedProperties: _semAlterarPropriedades, ...mudancas } =
         montarDados({ agendamentoId, nomeCliente, servico, inicio, fim });
       const resposta = await requisitar(
