@@ -35,7 +35,7 @@ export async function levantarConciliacaoCalendar({
   if (dtAte <= dtDe || dtAte - dtDe > 30 * 86400000) throw erro("PERIODO_INVALIDO");
 
   // Buscar por fonte: nao ha JOIN entre contas de diferentes sistemas.
-  const [snapshot, outboxResult, linksResult, remoto] = await Promise.all([
+  const [snapshot, outboxResult, remoto] = await Promise.all([
     firestore.collection("agendamentos")
       .where("data", ">=", de).where("data", "<", ate).limit(4001).get(),
     pool.query(
@@ -44,11 +44,6 @@ export async function levantarConciliacaoCalendar({
        ORDER BY data_servico, agendamento_id LIMIT 4001`,
       [de, ate],
     ),
-    pool.query(
-      `SELECT agendamento_id, google_event_id, origem FROM public.google_calendar_event_links
-       WHERE calendar_id = $1 ORDER BY agendamento_id LIMIT 4001`,
-      [calendarId],
-    ),
     adaptador.listarEventos({
       inicio: de + "T00:00:00-03:00", fim: ate + "T00:00:00-03:00",
     }),
@@ -56,7 +51,6 @@ export async function levantarConciliacaoCalendar({
   const docs = snapshot?.docs;
   if (!Array.isArray(docs) || docs.length > 4000 ||
       !Array.isArray(outboxResult?.rows) || outboxResult.rows.length > 4000 ||
-      !Array.isArray(linksResult?.rows) || linksResult.rows.length > 4000 ||
       remoto?.completo !== true || !Array.isArray(remoto?.eventos)) {
     throw erro("INVENTARIO_INCOMPLETO");
   }
@@ -74,6 +68,22 @@ export async function levantarConciliacaoCalendar({
     ...remoto.eventos.map(e => e.extendedProperties?.private?.isabeleAgendamentoId)
       .filter(Boolean),
   ]);
+  // Consultar SOMENTE vinculos relevantes para esta janela.
+  // Fazer SELECT global LIMIT 4001 descartava meses recentes quando a tabela
+  // possuia historico suficiente: erro perigoso por falso "vinculo ausente".
+  const listaIds = [...idsNaJanela].filter(id => typeof id === "string");
+  if (listaIds.length > 4000) throw erro("INVENTARIO_INCOMPLETO");
+  const linksResult = listaIds.length
+    ? await pool.query(
+      `SELECT agendamento_id, google_event_id, origem
+       FROM public.google_calendar_event_links
+       WHERE calendar_id = $1 AND agendamento_id = ANY($2::text[])
+       ORDER BY agendamento_id LIMIT 4001`, [calendarId, listaIds],
+    )
+    : { rows: [] };
+  if (!Array.isArray(linksResult?.rows) || linksResult.rows.length > 4000) {
+    throw erro("INVENTARIO_INCOMPLETO");
+  }
   const vinculosDaJanela = linksResult.rows.filter(v => idsNaJanela.has(v.agendamento_id));
   const relatorio = conciliarEventosGoogle({
     agendamentos,
