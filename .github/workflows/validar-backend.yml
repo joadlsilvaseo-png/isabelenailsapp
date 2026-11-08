@@ -174,3 +174,42 @@ jobs:
         env:
           PGTEST_URL: postgres://isabele_ci:ci_local_only@127.0.0.1:5432/isabele_ci
         run: node test/agendamentoAlteracaoServicoPostgres.integration.js
+
+  validar-migracao-024-google-calendar:
+    name: Migracao 024 e vinculos Calendar — PostgreSQL 17 isolado
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: isabele_ci
+          POSTGRES_PASSWORD: teste_isolado
+          POSTGRES_DB: isabele_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U isabele_ci -d isabele_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 15
+    env:
+      PGPASSWORD: teste_isolado
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: isabele_ci
+      PGDATABASE: isabele_ci
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validar esquema aditivo e reexecucao sem duplicar estruturas
+        run: |
+          psql -v ON_ERROR_STOP=1 -f infra/migrations/023_google_calendar_oauth.sql
+          psql -v ON_ERROR_STOP=1 -f infra/migrations/024_google_calendar_event_links.sql
+          psql -v ON_ERROR_STOP=1 -f infra/migrations/024_google_calendar_event_links.sql
+      - name: Testar constraints, idempotencia e conciliacao (transacao revertida)
+        run: |
+          psql -v ON_ERROR_STOP=1 -f infra/backend/test/sql/assert_google_calendar_links_pg17.sql
+          test "$(psql -v ON_ERROR_STOP=1 -Atc "SELECT (SELECT COUNT(*) FROM public.google_calendar_event_links), (SELECT COUNT(*) FROM public.google_calendar_sync_operations), (SELECT COUNT(*) FROM public.google_calendar_reconciliation_candidates);" -F '|')" = "0|0|0"
+      - name: Confirmar indices de seguranca e ausencia de dependencias legadas
+        run: |
+          test "$(psql -v ON_ERROR_STOP=1 -Atc "SELECT COUNT(*) FROM pg_indexes WHERE schemaname='public' AND indexname IN ('ux_google_calendar_operacao_ativa','idx_google_calendar_operacoes_pendentes','idx_google_calendar_operacoes_lease','idx_google_calendar_candidatos_pendentes','idx_google_calendar_candidatos_evento');")" = "5"
+          test "$(psql -v ON_ERROR_STOP=1 -Atc "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('pix_calendar_outbox','pix_cobrancas','pix_reservas');")" = "0"
