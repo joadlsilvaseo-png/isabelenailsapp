@@ -213,6 +213,8 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f infra/migrations/024_google_calendar_event_links.sql
           psql -v ON_ERROR_STOP=1 -f infra/migrations/025_google_calendar_lease_fencing.sql
           psql -v ON_ERROR_STOP=1 -f infra/migrations/025_google_calendar_lease_fencing.sql
+          psql -v ON_ERROR_STOP=1 -f infra/migrations/026_google_calendar_creation_authorizations.sql
+          psql -v ON_ERROR_STOP=1 -f infra/migrations/026_google_calendar_creation_authorizations.sql
       - name: Testar constraints, idempotencia e conciliacao (transacao revertida)
         run: |
           psql -v ON_ERROR_STOP=1 -f infra/backend/test/sql/assert_google_calendar_links_pg17.sql
@@ -226,3 +228,5 @@ jobs:
           test "$(psql -v ON_ERROR_STOP=1 -Atc "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('pix_calendar_outbox','pix_cobrancas','pix_reservas');")" = "0"
           test "$(psql -v ON_ERROR_STOP=1 -Atc "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='google_calendar_sync_operations' AND column_name='lease_token';")" = "1"
           test "$(psql -v ON_ERROR_STOP=1 -Atc "SELECT COUNT(*) FROM pg_indexes WHERE schemaname='public' AND indexname='idx_google_calendar_lease_token';")" = "1"
+          test "$(psql -v ON_ERROR_STOP=1 -Atc "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name='google_calendar_creation_authorizations';")" = "1"
+          test "$(psql -v ON_ERROR_STOP=1 -Atc "SELECT COUNT(*) FROM pg_indexes WHERE schemaname='public' AND indexname='idx_google_calendar_autorizacoes_nao_consumidas';")" = "1"
