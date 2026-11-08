@@ -5,7 +5,9 @@
  * Nenhum candidato e convertido automaticamente em vinculo confirmado.
  */
 const ID_AGENDAMENTO = /^[a-zA-Z0-9_-]{1,128}$/;
-// IDs retornados pelo Google para instancias recorrentes podem ter sufixos\n// e diferir das regras restritivas de IDs customizados de events.insert.\nconst ID_GOOGLE = /^[a-zA-Z0-9_-]{5,1024}$/;
+// IDs retornados pelo Google para instancias recorrentes podem ter sufixos
+// distintos das regras de IDs customizados de events.insert.
+const ID_GOOGLE = /^[a-zA-Z0-9_-]{5,1024}$/;
 
 function erro(codigo) {
   return Object.assign(new Error("Inventario Calendar inconsistente: " + codigo), { codigo });
