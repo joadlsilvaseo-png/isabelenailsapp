@@ -179,7 +179,7 @@ try {
     u.searchParams.set("maxResults", "250");
     // Titulo fica APENAS na memoria para comparacao; nunca aparece na saida.
     u.searchParams.set("fields",
-      "kind,nextPageToken,items(id,iCalUID,status,summary,start(date,dateTime),end(date,dateTime),recurringEventId)");
+      "kind,nextPageToken,items(id,iCalUID,status,summary,description,start(date,dateTime),end(date,dateTime),recurringEventId,extendedProperties(private))");
     if (proxima) u.searchParams.set("pageToken", proxima);
     const page = await google(u, { headers });
     if (page.kind !== "calendar#events" || !Array.isArray(page.items || [])) {
@@ -224,12 +224,50 @@ try {
     };
   });
   const ativos = pgComData.filter(x => x.status === "enviado" && !x.cancelado);
+  // A modelagem atual do Firestore utiliza "duracao" e
+  // "duracaoSnapshot"; "duracaoMinutos" normalmente so aparece na API.
   const fsAgendamentos = docs.map(d => {
     const x = d.data();
+    const duracaoOriginal = x?.duracaoSnapshot ?? x?.duracao ?? x?.duracaoMinutos;
     return { horario: String(x?.data || "") + "T" + String(x?.horario || "").slice(0, 5),
-      nome: x?.nomeCliente, servico: x?.servico, duracao: Number(x?.duracaoMinutos || 0) };
+      nome: x?.nomeCliente, servico: x?.servico,
+      duracao: duracaoOriginal == null ? null : Number(duracaoOriginal),
+      fonteDuracao: x?.duracaoSnapshot != null ? "duracaoSnapshot"
+        : x?.duracao != null ? "duracao"
+          : x?.duracaoMinutos != null ? "duracaoMinutos" : "ausente" };
   });
   const validosFS = fsAgendamentos.filter(x => /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(x.horario));
+  // Verificar se a referencia do Apps Script foi preservada na identidade
+  // Google ou no metadata do evento. Apenas totais, sem IDs ou descricao.
+  const evidenciaIdentificadores = {
+    referenciaIgualEventsId: 0,
+    referenciaIgualICalUID: 0,
+    referenciaNoTitulo: 0,
+    referenciaNaDescricao: 0,
+    marcadorPrivadoAgendamento: 0,
+  };
+  for (const registro of outbox) {
+    const legacyId = String(registro.event_id || "");
+    for (const ev of eventos) {
+      if (legacyId && ev.id === legacyId) {
+        evidenciaIdentificadores.referenciaIgualEventsId++;
+      }
+      if (legacyId && ev.iCalUID === legacyId) {
+        evidenciaIdentificadores.referenciaIgualICalUID++;
+      }
+      if (legacyId.length >= 8 && typeof ev.summary === "string" &&
+          ev.summary.includes(legacyId)) {
+        evidenciaIdentificadores.referenciaNoTitulo++;
+      }
+      if (legacyId.length >= 8 && typeof ev.description === "string" &&
+          ev.description.includes(legacyId)) {
+        evidenciaIdentificadores.referenciaNaDescricao++;
+      }
+      if (ev.extendedProperties?.private?.isabeleAgendamentoId === registro.agendamento_id) {
+        evidenciaIdentificadores.marcadorPrivadoAgendamento++;
+      }
+    }
+  }
   console.log(JSON.stringify({
     resultado: "DIAGNOSTICO_TEMPORAL_SOMENTE_LEITURA",
     periodo: { inicio, fimExclusivo: fim },
@@ -248,7 +286,13 @@ try {
       eventosComTitulo: calendarComData.filter(x=>x.comTitulo).length,
       recorrencias: calendarComData.filter(x=>x.recorrencia).length },
     comparacaoOutboxEnviadaNaoCancelada: contarComparacoes(ativos, calendarComData),
+    duracaoFirestore: {
+      fontes: ocorrencias(fsAgendamentos, "fonteDuracao"),
+      duracaoNaoInformadaOuInvalida: fsAgendamentos.filter(x =>
+        !Number.isFinite(x.duracao) || x.duracao <= 0).length,
+    },
     comparacaoFirestoreDataAtual: contarComparacoes(validosFS, calendarComData),
+    referenciasIdentificadoresGoogle: evidenciaIdentificadores,
     aviso: "Correspondencia temporal e nome sao apenas indicios, nunca aprovacao automatica.",
   }, null, 2));
 } catch (e) {
