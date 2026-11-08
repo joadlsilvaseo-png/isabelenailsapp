@@ -247,7 +247,7 @@ export function criarRepositorioCalendarCutover(pool, {
         op.calendar_id === calendarId, "LEASE_PERDIDO");
       confirmar(op.google_event_id === gerarIdEventoGoogle(op.agendamento_id),
         "EVENTO_CRIACAO_DIVERGENTE");
-      confirmar(evento?.id === op.google_event_id && evento.status !== "cancelled" &&
+      confirmar(evento?.id === op.google_event_id && evento.status === "confirmed" &&
         evento.extendedProperties?.private?.isabeleOrigem === "isabele-vps" &&
         evento.extendedProperties?.private?.isabeleAgendamentoId === op.agendamento_id,
         "EVENTO_GOOGLE_NAO_VERIFICADO");
