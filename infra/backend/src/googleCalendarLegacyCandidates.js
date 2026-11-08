@@ -20,7 +20,7 @@ const FMT = new Intl.DateTimeFormat("en-US", {
 const ESTADOS_PERMITIDOS = new Set([
   "confirmado", "reagendado", "agendado",
   "concluido", "concluida", "finalizado", "finalizada",
-  "realizado", "realizada",
+  "realizado", "realizada", "atendido", "atendida",
 ]);
 
 function falhar(codigo) {
