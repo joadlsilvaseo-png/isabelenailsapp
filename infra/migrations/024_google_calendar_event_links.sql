@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS public.google_calendar_event_links (
     calendar_id TEXT NOT NULL
         CHECK (char_length(calendar_id) BETWEEN 1 AND 300 AND calendar_id !~ '[[:space:]]'),
     google_event_id TEXT NOT NULL
-        CHECK (google_event_id ~ '^[A-Za-z0-9_-]{5,1024}$'),
+        CHECK ((google_event_id ~ '^[A-Za-z0-9_-]+$' AND char_length(google_event_id) BETWEEN 5 AND 1024)),
     origem TEXT NOT NULL
         CHECK (origem IN ('vps', 'legado_validado')),
     metodo_verificacao TEXT NOT NULL
@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS public.google_calendar_sync_operations (
     tipo TEXT NOT NULL
         CHECK (tipo IN ('criar', 'reagendar', 'cancelar', 'alterar_servico')),
     google_event_id TEXT
-        CHECK (google_event_id IS NULL OR google_event_id ~ '^[A-Za-z0-9_-]{5,1024}$'),
+        CHECK (google_event_id IS NULL OR (google_event_id ~ '^[A-Za-z0-9_-]+$' AND char_length(google_event_id) BETWEEN 5 AND 1024)),
     fingerprint_pedido CHAR(64) NOT NULL
         CHECK (fingerprint_pedido ~ '^[a-f0-9]{64}$'),
     estado TEXT NOT NULL DEFAULT 'pendente'
@@ -104,7 +104,7 @@ CREATE TABLE IF NOT EXISTS public.google_calendar_reconciliation_candidates (
     calendar_id TEXT NOT NULL
         CHECK (char_length(calendar_id) BETWEEN 1 AND 300 AND calendar_id !~ '[[:space:]]'),
     google_event_id TEXT NOT NULL
-        CHECK (google_event_id ~ '^[A-Za-z0-9_-]{5,1024}$'),
+        CHECK ((google_event_id ~ '^[A-Za-z0-9_-]+$' AND char_length(google_event_id) BETWEEN 5 AND 1024)),
     legacy_event_id TEXT
         CHECK (legacy_event_id IS NULL OR char_length(legacy_event_id) BETWEEN 1 AND 1024),
     fonte TEXT NOT NULL
