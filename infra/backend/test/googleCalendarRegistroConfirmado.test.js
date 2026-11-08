@@ -171,3 +171,25 @@ test("estado concluido com vinculo divergente falha fechado", async () => {
   await assert.rejects(call(t), { codigo: "RESULTADO_CONCLUIDO_DIVERGENTE" });
   assert.equal(t.chamadas.at(-1).sql, "ROLLBACK");
 });
+
+test("comprovante sem status confirmed ou cancelado nao pode concluir", async () => {
+  for (const status of [undefined, "cancelled", "tentative"]) {
+    const t = fakeDb();
+    const google = evento();
+    if (status === undefined) delete google.status;
+    else google.status = status;
+    await assert.rejects(call(t, { evento: google }), { codigo: "EVENTO_NAO_CONFIRMADO" });
+    assert.equal(t.chamadas.at(-1).sql, "ROLLBACK");
+    assert.equal(t.link, null);
+  }
+});
+
+test("repeticao nao confirma evento associado a vinculo cancelado", async () => {
+  const t = fakeDb({
+    estado: "concluida", googleEventId: EVENT_ID,
+    previo: { agendamento_id: AG, google_event_id: EVENT_ID,
+      calendar_id: CAL, origem: "vps", situacao: "cancelado" },
+  });
+  await assert.rejects(call(t), { codigo: "RESULTADO_CONCLUIDO_DIVERGENTE" });
+  assert.equal(t.chamadas.at(-1).sql, "ROLLBACK");
+});
