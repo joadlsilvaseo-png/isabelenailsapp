@@ -28,7 +28,7 @@ export async function verificarOperacaoGoogleIncerta({
   }
   if (!pool?.query || !adaptador?.consultarEvento ||
       typeof operationId !== "string" ||
-      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(operationId) ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(operationId) ||
       typeof fingerprint !== "string" || !/^[0-9a-f]{64}$/.test(fingerprint) ||
       typeof calendarId !== "string" || !calendarId || /\s/.test(calendarId)) {
     throw erro("PARAMETROS_INVALIDOS");
