@@ -37,7 +37,6 @@
   <link rel="stylesheet" href="base.css?v=1.0.4">
 
   <link rel="stylesheet" href="principal.css?v=1.1.3">
-  <link rel="stylesheet" href="googleCalendarConnectUI.css?v=1">
   <link rel="stylesheet" href="admin-bottom-nav.css?v=1">
   <link rel="stylesheet" href="./assistenteGestao.css?v=3">
 </head>
@@ -301,27 +300,6 @@
             </div>
 
           </div>
-
-          <!-- Conexão temporária Google Calendar: disponível apenas na área admin. -->
-          <section id="google-calendar-connect-card" class="google-calendar-connect-card" aria-labelledby="google-calendar-connect-title" hidden>
-            <div class="google-calendar-connect-heading">
-              <span class="google-calendar-connect-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none">
-                  <rect x="3" y="5" width="18" height="16" rx="3" stroke="currentColor" stroke-width="1.8"/>
-                  <path d="M7 3v4M17 3v4M3 10h18M8 15h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                </svg>
-              </span>
-              <div>
-                <h3 id="google-calendar-connect-title">Conectar Google Calendar</h3>
-                <p>Autorização da agenda da Isabele. Uso temporário para concluir a integração.</p>
-              </div>
-            </div>
-            <p id="google-calendar-connect-status" class="google-calendar-connect-status" role="status" aria-live="polite">Aguardando autenticação da administradora...</p>
-            <button id="google-calendar-connect-button" class="google-calendar-connect-button" type="button" disabled>
-              Conectar conta Google
-            </button>
-            <p class="google-calendar-connect-note">A conexão não cria nem altera agendamentos. Selecione somente a conta Google da Isabele.</p>
-          </section>
 
           <div class="admin-actions-grid" aria-label="Áreas administrativas">
 
@@ -787,7 +765,7 @@
 
   <script type="module" src="vitrine.js?v=1.0.1" defer></script>
 
-  <script type="module" src="principal.js?v=1.3.2"></script>
+  <script type="module" src="principal.js?v=1.3.3"></script>
 
   <script src="app.js?v=2.0.0" defer></script>
   <script type="module" src="foto-perfil-preview.js?v=2"></script>
