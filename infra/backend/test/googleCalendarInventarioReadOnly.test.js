@@ -177,3 +177,20 @@ test("fontes incompletas bloqueiam qualquer relatorio", async () => {
   await assert.rejects(levantarConciliacaoCalendar({ ...args, ...muitos }),
     { codigo: "INVENTARIO_INCOMPLETO" });
 });
+
+test("vinculos historicos fora da janela nao viram falsos eventos ausentes", async () => {
+  const f = fontes({
+    docs: [{ id: "ag01", calendarEventId: "evento1" }],
+    links: [
+      { agendamento_id: "ag01", google_event_id: "evento1", origem: "legado_validado" },
+      { agendamento_id: "foraDoMes", google_event_id: "evento2", origem: "legado_validado" },
+    ],
+    google: { completo: true, paginas: 1,
+      eventos: [{ id: "evento1", status: "confirmed" }] },
+  });
+  const relatorio = await levantarConciliacaoCalendar({ ...args, ...f });
+  assert.equal(relatorio.fontes.vinculosConfirmados, 1);
+  assert.equal(relatorio.resumo.agendamentos, 1);
+  assert.equal(relatorio.resumo.situacoes.vinculo_confirmado, 1);
+  assert.equal(relatorio.resumo.situacoes.vinculo_ausente, undefined);
+});
