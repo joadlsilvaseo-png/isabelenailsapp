@@ -23,6 +23,7 @@ function validar(valor, regex, codigo) {
   return valor;
 }
 function serializar(valor) {
+  if (valor === undefined) throw erro("PEDIDO_INVALIDO");
   if (valor === null || typeof valor === "string" || typeof valor === "boolean" ||
       (typeof valor === "number" && Number.isFinite(valor))) {
     return JSON.stringify(valor);
@@ -120,6 +121,19 @@ export async function registrarIntencaoCalendar(pool, {
       "SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))",
       [id],
     );
+    // Segunda leitura apos o advisory lock: chamadas simultaneas com a
+    // mesma chave devem devolver a operacao criada pela primeira transacao.
+    const depoisDoLock = await conexao.query(
+      `SELECT operation_id, agendamento_id, calendar_id, tipo, google_event_id,
+              fingerprint_pedido, estado
+       FROM public.google_calendar_sync_operations
+       WHERE chave_idempotencia = $1 FOR UPDATE`, [chave],
+    );
+    if (depoisDoLock.rows.length) {
+      confirmarOperacao(depoisDoLock.rows[0], esperado);
+      return { operationId: depoisDoLock.rows[0].operation_id,
+        estado: depoisDoLock.rows[0].estado, jaRegistrada: true };
+    }
     const antigo = await conexao.query(
       `SELECT google_event_id, calendar_id, origem, situacao
        FROM public.google_calendar_event_links
