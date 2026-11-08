@@ -82,7 +82,7 @@ test("PostgreSQL 17: idempotencia, timeout, vinculo atomico e legado bloqueado",
 
     await assert.rejects(registrarIntencaoCalendar(pool, {
       ...BASE, chaveIdempotencia: "calendario-intent-teste-a02",
-    }, OPCOES), { codigo: "CRIACAO_NAO_AUTORIZADA" });
+    }, OPCOES), { codigo: "OUTRA_OPERACAO_PENDENTE" });
 
     const pending = await pool.query(
       "SELECT google_event_id, fingerprint_pedido, estado FROM public.google_calendar_sync_operations WHERE operation_id = $1",
