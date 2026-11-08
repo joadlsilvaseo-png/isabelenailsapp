@@ -48,6 +48,13 @@ function somenteFila(env) {
     throw erro("FILA_DESATIVADA");
   }
 }
+function somenteWorker(env) {
+  somenteFila(env);
+  if (env.GOOGLE_CALENDAR_DIRECT_WRITE_ENABLED !== "true" ||
+      env.GOOGLE_CALENDAR_CUTOVER_WORKER_ENABLED !== "true") {
+    throw erro("WORKER_DESATIVADO");
+  }
+}
 async function transacao(pool, callback) {
   if (typeof pool?.connect !== "function") throw erro("BANCO_INDISPONIVEL");
   const conexao = await pool.connect();
@@ -176,19 +183,54 @@ export async function registrarIntencaoCalendar(pool, {
 }
 
 /**
+ * Reclama UMA intencao pendente apenas quando o cutover foi habilitado
+ * separadamente. Nunca recupera automaticamente "processando" com lease
+ * expirado ou "aguardando_confirmacao": precisam de conciliacao remota.
+ * O leaseToken e fencing token entre diferentes containers.
+ */
+export async function reivindicarIntencaoCalendar(pool, {
+  calendarId,
+}, { env = process.env } = {}) {
+  somenteWorker(env);
+  const calendar = validar(calendarId, /^\\S{1,300}$/, "CALENDARIO_INVALIDO");
+  const leaseToken = randomUUID();
+  const r = await pool.query(
+    `WITH proxima AS (
+       SELECT operation_id FROM public.google_calendar_sync_operations
+       WHERE calendar_id = $1 AND estado = 'pendente'
+         AND proxima_tentativa_em <= NOW()
+       ORDER BY criado_em, operation_id
+       LIMIT 1 FOR UPDATE SKIP LOCKED
+     )
+     UPDATE public.google_calendar_sync_operations AS op
+     SET estado = 'processando', lease_token = $2,
+         tentativas = tentativas + 1,
+         bloqueado_ate = NOW() + INTERVAL '2 minutes',
+         atualizado_em = NOW()
+     FROM proxima
+     WHERE op.operation_id = proxima.operation_id
+     RETURNING op.operation_id, op.agendamento_id, op.calendar_id,
+               op.google_event_id, op.tipo, op.lease_token`,
+    [calendar, leaseToken],
+  );
+  return r.rows[0] || null;
+}
+
+/**
  * Finalizacao somente apos o Google devolver comprovacao do MESMO evento
  * e marcador privado, sem inferir sucesso a partir de timeout ou HTTP 202.
  * Vinculo e estado da outbox sao alterados na mesma transacao PG.
  */
 export async function confirmarIntencaoCalendar(pool, {
-  operationId, googleEvent,
+  operationId, leaseToken, googleEvent,
 }, { env = process.env } = {}) {
-  somenteFila(env);
+  somenteWorker(env);
   const opId = validar(operationId, /^[0-9a-f-]{36}$/i, "OPERACAO_INVALIDA");
+  const lease = validar(leaseToken, /^[0-9a-f-]{36}$/i, "LEASE_INVALIDO");
   if (!googleEvent || typeof googleEvent !== "object") throw erro("CONFIRMACAO_AUSENTE");
   return transacao(pool, async con => {
     const r = await con.query(
-      `SELECT operation_id, agendamento_id, calendar_id, google_event_id, tipo, estado
+      `SELECT operation_id, agendamento_id, calendar_id, google_event_id, tipo, estado, lease_token
        FROM public.google_calendar_sync_operations
        WHERE operation_id = $1 FOR UPDATE`, [opId],
     );
@@ -198,6 +240,7 @@ export async function confirmarIntencaoCalendar(pool, {
     if (!["processando", "aguardando_confirmacao"].includes(op.estado)) {
       throw erro("OPERACAO_SEM_CONFIRMACAO");
     }
+    if (op.lease_token !== lease) throw erro("LEASE_OBSOLETO");
     if (googleEvent.id !== op.google_event_id) throw erro("EVENTO_NAO_CONFIRMADO");
     if (op.tipo === "cancelar") {
       if (googleEvent.status !== "cancelled" && googleEvent.ausenteConfirmado !== true) {
@@ -248,28 +291,31 @@ export async function confirmarIntencaoCalendar(pool, {
     await con.query(
       `UPDATE public.google_calendar_sync_operations
        SET estado = 'concluida', concluido_em = NOW(), atualizado_em = NOW(),
-           bloqueado_ate = NULL, ultimo_codigo_erro = NULL
-       WHERE operation_id = $1 AND estado IN ('processando','aguardando_confirmacao')`,
-      [opId],
+           bloqueado_ate = NULL, lease_token = NULL, ultimo_codigo_erro = NULL
+       WHERE operation_id = $1 AND lease_token = $2
+         AND estado IN ('processando','aguardando_confirmacao')`,
+      [opId, lease],
     );
     return { jaConcluida: false, operationId: opId };
   });
 }
 
 export async function suspenderIntencaoIncerta(pool, {
-  operationId, codigo = "GOOGLE_CALENDAR_SEM_CONFIRMACAO",
+  operationId, leaseToken, codigo = "GOOGLE_CALENDAR_SEM_CONFIRMACAO",
 }, { env = process.env } = {}) {
-  somenteFila(env);
+  somenteWorker(env);
   const opId = validar(operationId, /^[0-9a-f-]{36}$/i, "OPERACAO_INVALIDA");
+  const lease = validar(leaseToken, /^[0-9a-f-]{36}$/i, "LEASE_INVALIDO");
   const cod = validar(codigo, /^[A-Z0-9_]{1,64}$/, "CODIGO_INVALIDO");
   // Nunca voltar automaticamente uma operacao incerta a 'pendente'.
   const r = await pool.query(
     `UPDATE public.google_calendar_sync_operations
      SET estado = 'aguardando_confirmacao', bloqueado_ate = NULL,
          ultimo_codigo_erro = $2, atualizado_em = NOW()
-     WHERE operation_id = $1 AND estado = 'processando'
+     WHERE operation_id = $1 AND lease_token = $3
+       AND estado = 'processando'
      RETURNING operation_id`,
-    [opId, cod],
+    [opId, cod, lease],
   );
   if (r.rows.length !== 1) throw erro("ESTADO_DIVERGENTE");
   return { operationId: opId, estado: "aguardando_confirmacao" };
