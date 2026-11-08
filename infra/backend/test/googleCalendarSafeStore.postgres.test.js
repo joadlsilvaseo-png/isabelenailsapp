@@ -4,12 +4,17 @@ import pg from "pg";
 import { gerarIdEventoGoogle } from "../src/googleCalendarEvents.js";
 import {
   fingerprintIntencaoCalendar, registrarIntencaoCalendar,
-  confirmarIntencaoCalendar, suspenderIntencaoIncerta,
+  reivindicarIntencaoCalendar, confirmarIntencaoCalendar, suspenderIntencaoIncerta,
 } from "../src/googleCalendarSafeStore.js";
 
 const { Pool } = pg;
 const FLAGS = { GOOGLE_CALENDAR_CUTOVER_QUEUE_ENABLED: "true" };
 const OPCOES = { env: FLAGS };
+const WORKER_OPCOES = { env: {
+  ...FLAGS,
+  GOOGLE_CALENDAR_DIRECT_WRITE_ENABLED: "true",
+  GOOGLE_CALENDAR_CUTOVER_WORKER_ENABLED: "true",
+} };
 const CALENDAR = "teste@example.com";
 const ID = "calfase3-a";
 const EVENTO = gerarIdEventoGoogle(ID);
@@ -72,14 +77,24 @@ test("PostgreSQL 17: idempotencia, timeout, vinculo atomico e legado bloqueado",
     assert.match(pending.rows[0].fingerprint_pedido, /^[a-f0-9]{64}$/);
     assert.equal(pending.rows[0].estado, "pendente");
 
-    // Simulacao do futuro worker: apenas altera a tabela temporaria de CI.
-    await pool.query(
-      "UPDATE public.google_calendar_sync_operations SET estado = 'processando' WHERE operation_id = $1",
-      [first.operationId],
-    );
-    const suspensa = await suspenderIntencaoIncerta(pool, {
+    // O futuro worker so pode reivindicar sob tres flags explicitas.
+    const primeiraReivindicacao = await reivindicarIntencaoCalendar(pool, {
+      calendarId: CALENDAR,
+    }, WORKER_OPCOES);
+    assert.equal(primeiraReivindicacao.operation_id, first.operationId);
+    assert.equal(primeiraReivindicacao.google_event_id, EVENTO);
+    const lease1 = primeiraReivindicacao.lease_token;
+    assert.ok(lease1);
+    assert.equal(await reivindicarIntencaoCalendar(pool, {
+      calendarId: CALENDAR,
+    }, WORKER_OPCOES), null);
+    await assert.rejects(suspenderIntencaoIncerta(pool, {
       operationId: first.operationId,
-    }, OPCOES);
+      leaseToken: "00000000-0000-4000-8000-000000000000",
+    }, WORKER_OPCOES), { codigo: "ESTADO_DIVERGENTE" });
+    const suspensa = await suspenderIntencaoIncerta(pool, {
+      operationId: first.operationId, leaseToken: lease1,
+    }, WORKER_OPCOES);
     assert.equal(suspensa.estado, "aguardando_confirmacao");
     await assert.rejects(registrarIntencaoCalendar(pool, {
       ...BASE, chaveIdempotencia: "calendario-intent-teste-a03",
@@ -95,13 +110,18 @@ test("PostgreSQL 17: idempotencia, timeout, vinculo atomico e legado bloqueado",
       "SELECT COUNT(*)::int AS n FROM public.google_calendar_event_links WHERE agendamento_id=$1", [ID],
     );
     assert.equal(before.rows[0].n, 0);
+    await assert.rejects(confirmarIntencaoCalendar(pool, {
+      operationId: first.operationId,
+      leaseToken: "00000000-0000-4000-8000-000000000000",
+      googleEvent: GOOGLE_OK,
+    }, WORKER_OPCOES), { codigo: "LEASE_OBSOLETO" });
     const confirmada = await confirmarIntencaoCalendar(pool, {
-      operationId: first.operationId, googleEvent: GOOGLE_OK,
-    }, OPCOES);
+      operationId: first.operationId, leaseToken: lease1, googleEvent: GOOGLE_OK,
+    }, WORKER_OPCOES);
     assert.equal(confirmada.jaConcluida, false);
     assert.equal((await confirmarIntencaoCalendar(pool, {
-      operationId: first.operationId, googleEvent: GOOGLE_OK,
-    }, OPCOES)).jaConcluida, true);
+      operationId: first.operationId, leaseToken: lease1, googleEvent: GOOGLE_OK,
+    }, WORKER_OPCOES)).jaConcluida, true);
 
     const link = await pool.query(
       "SELECT google_event_id, origem, situacao FROM public.google_calendar_event_links WHERE agendamento_id=$1",
@@ -126,33 +146,31 @@ test("PostgreSQL 17: idempotencia, timeout, vinculo atomico e legado bloqueado",
       pedido: { inicio: "2026-12-02T12:00:00-03:00" },
     }, OPCOES);
     assert.equal(alterar.estado, "pendente");
-    await pool.query(
-      "UPDATE public.google_calendar_sync_operations SET estado = 'processando' WHERE operation_id=$1",
-      [alterar.operationId],
-    );
+    const leaseAlterar = (await reivindicarIntencaoCalendar(pool, {
+      calendarId: CALENDAR,
+    }, WORKER_OPCOES)).lease_token;
     await assert.rejects(confirmarIntencaoCalendar(pool, {
-      operationId: alterar.operationId,
+      operationId: alterar.operationId, leaseToken: leaseAlterar,
       googleEvent: { id: EVENTO, status: "confirmed" }, // Sem marcador
     }, OPCOES), { codigo: "MARCADOR_GOOGLE_DIVERGENTE" });
     assert.equal((await confirmarIntencaoCalendar(pool, {
-      operationId: alterar.operationId, googleEvent: GOOGLE_OK,
-    }, OPCOES)).jaConcluida, false);
+      operationId: alterar.operationId, leaseToken: leaseAlterar, googleEvent: GOOGLE_OK,
+    }, WORKER_OPCOES)).jaConcluida, false);
 
     const cancelar = await registrarIntencaoCalendar(pool, {
       ...BASE, chaveIdempotencia: "calendario-intent-teste-a06",
       tipo: "cancelar", googleEventId: EVENTO, pedido: { acao: "cancelar" },
     }, OPCOES);
-    await pool.query(
-      "UPDATE public.google_calendar_sync_operations SET estado = 'processando' WHERE operation_id=$1",
-      [cancelar.operationId],
-    );
+    const leaseCancelar = (await reivindicarIntencaoCalendar(pool, {
+      calendarId: CALENDAR,
+    }, WORKER_OPCOES)).lease_token;
     await assert.rejects(confirmarIntencaoCalendar(pool, {
-      operationId: cancelar.operationId, googleEvent: GOOGLE_OK,
-    }, OPCOES), { codigo: "CANCELAMENTO_NAO_CONFIRMADO" });
+      operationId: cancelar.operationId, leaseToken: leaseCancelar, googleEvent: GOOGLE_OK,
+    }, WORKER_OPCOES), { codigo: "CANCELAMENTO_NAO_CONFIRMADO" });
     await confirmarIntencaoCalendar(pool, {
-      operationId: cancelar.operationId,
+      operationId: cancelar.operationId, leaseToken: leaseCancelar,
       googleEvent: { id: EVENTO, status: "cancelled" },
-    }, OPCOES);
+    }, WORKER_OPCOES);
     const after = await pool.query(
       "SELECT situacao FROM public.google_calendar_event_links WHERE agendamento_id=$1", [ID],
     );
