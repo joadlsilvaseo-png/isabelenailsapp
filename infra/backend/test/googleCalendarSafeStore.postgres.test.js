@@ -55,9 +55,24 @@ test("PostgreSQL 17: idempotencia, timeout, vinculo atomico e legado bloqueado",
   const pool = new Pool({ max: 3 });
   try {
     // O banco de CI e descartavel. Todos os registros sao ficticios.
+    // A falta de comprovacao de "reserva nova" impede ate um agendamento
+    // sem nenhum evento vinculado ou candidato de legado.
+    await assert.rejects(registrarIntencaoCalendar(pool, BASE, OPCOES),
+      { codigo: "CRIACAO_NAO_AUTORIZADA" });
+    await pool.query(
+      `INSERT INTO public.google_calendar_creation_authorizations
+       (agendamento_id, calendar_id, autorizacao, evidencia_sha256, autorizado_por)
+       VALUES ($1,$2,'nova_reserva_verificada',$3,'teste-ci')`,
+      [ID, CALENDAR, "a".repeat(64)],
+    );
     const first = await registrarIntencaoCalendar(pool, BASE, OPCOES);
     assert.equal(first.jaRegistrada, false);
     assert.equal(first.estado, "pendente");
+    const liberacao = await pool.query(
+      "SELECT consumido_em IS NOT NULL AS usado FROM public.google_calendar_creation_authorizations WHERE agendamento_id=$1",
+      [ID],
+    );
+    assert.equal(liberacao.rows[0].usado, true);
     const second = await registrarIntencaoCalendar(pool, BASE, OPCOES);
     assert.deepEqual(second, { ...first, jaRegistrada: true });
 
@@ -67,7 +82,7 @@ test("PostgreSQL 17: idempotencia, timeout, vinculo atomico e legado bloqueado",
 
     await assert.rejects(registrarIntencaoCalendar(pool, {
       ...BASE, chaveIdempotencia: "calendario-intent-teste-a02",
-    }, OPCOES), { codigo: "OUTRA_OPERACAO_PENDENTE" });
+    }, OPCOES), { codigo: "CRIACAO_NAO_AUTORIZADA" });
 
     const pending = await pool.query(
       "SELECT google_event_id, fingerprint_pedido, estado FROM public.google_calendar_sync_operations WHERE operation_id = $1",
