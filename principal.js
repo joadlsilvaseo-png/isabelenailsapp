@@ -4,6 +4,7 @@ import {
 } from "./notificationService.js";
 import { auth, db } from "./firebase-config.js";
 import { iniciarCentralNotificacoes } from "./centralNotificacoesUI.js";
+import { iniciarConexaoGoogleCalendarMobile } from "./googleCalendarConnectUI.js?v=1";
 import { consultarFotoPerfil } from "./foto-perfil-api.js";
 import { montarPerfilClienteAuth, podeRecuperarPerfilCliente } from "./clientePerfilIntegridade.js";
 
@@ -732,6 +733,7 @@ async function handleAuthenticatedUser(user, elements) {
 
     if (accessProfile.role === "admin") {
       configureAdminInterface(user, accessProfile, elements);
+      iniciarConexaoGoogleCalendarMobile(user);
       void iniciarAssistenteGestao({ user, contexto: "home" });
     } else {
       configureClientInterface(user, accessProfile, elements);
