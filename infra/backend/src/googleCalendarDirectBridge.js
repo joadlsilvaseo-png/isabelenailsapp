@@ -12,6 +12,7 @@ const FLUXOS = {
   criar_pix: "GOOGLE_CALENDAR_DIRECT_CRIAR_PIX_ENABLED",
   cancelar: "GOOGLE_CALENDAR_DIRECT_CANCELAR_ENABLED",
   reagendar_pago: "GOOGLE_CALENDAR_DIRECT_REAGENDAR_PAGO_ENABLED",
+  reagendar_isento: "GOOGLE_CALENDAR_DIRECT_REAGENDAR_ISENTO_ENABLED",
   alterar_servico: "GOOGLE_CALENDAR_DIRECT_ALTERAR_SERVICO_ENABLED",
 };
 const GERAIS = ["GOOGLE_CALENDAR_OAUTH_ENABLED","GOOGLE_CALENDAR_DIRECT_WRITE_ENABLED",
@@ -175,6 +176,13 @@ export function criarPonteCalendarDireto(pool,{
         agendamentoId:legacy.slice(4),
         chave:"imn-reagendar-"+String(payload.operationId||""),
         nomeCliente:payload.nomeCliente,servico:payload.servico,...p});
+    },
+    reagendarIsento({agendamentoId,operationId,nomeCliente,servico,data,horario,duracao}) {
+      const id=validarAg(agendamentoId);
+      const p=periodo(data,horario,duracao);
+      return enviar({fluxo:"reagendar_isento",tipo:"reagendar",
+        agendamentoId:id,chave:"imn-reagendar-isento-"+String(operationId||""),
+        nomeCliente,servico,...p});
     },
     alterarServico(row) {
       const legacy=String(row.calendar_event_id||"");
