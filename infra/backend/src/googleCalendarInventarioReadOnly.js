@@ -66,17 +66,26 @@ export async function levantarConciliacaoCalendar({
     calendarEventId: doc.data()?.calendarEventId || null,
   }));
 
+  // Vinculos de OUTROS meses nao podem aparecer como "evento ausente":
+  // o intervalo solicitado e propositalmente limitado a ate 30 dias.
+  const idsNaJanela = new Set([
+    ...agendamentos.map(a => a.id),
+    ...outboxResult.rows.map(o => o.agendamento_id),
+    ...remoto.eventos.map(e => e.extendedProperties?.private?.isabeleAgendamentoId)
+      .filter(Boolean),
+  ]);
+  const vinculosDaJanela = linksResult.rows.filter(v => idsNaJanela.has(v.agendamento_id));
   const relatorio = conciliarEventosGoogle({
     agendamentos,
     outbox: outboxResult.rows,
-    vinculos: linksResult.rows,
+    vinculos: vinculosDaJanela,
     eventos: remoto.eventos,
   });
   return {
     ...relatorio,
     intervalo: { inicio: de, fimExclusivo: ate },
     fontes: { firestore: docs.length, pixOutbox: outboxResult.rows.length,
-      vinculosConfirmados: linksResult.rows.length, paginasGoogle: remoto.paginas },
+      vinculosConfirmados: vinculosDaJanela.length, paginasGoogle: remoto.paginas },
     nenhumaAlteracaoRealizada: true,
   };
 }
