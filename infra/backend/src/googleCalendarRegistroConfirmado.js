@@ -23,7 +23,7 @@ function checkEvento(agendamentoId, evento, tipo) {
       evento.extendedProperties?.private?.isabeleOrigem !== "isabele-vps") {
     throw erro("EVENTO_NAO_VERIFICADO");
   }
-  if (evento.status === "cancelled") throw erro("EVENTO_CANCELADO");
+  if (evento.status !== "confirmed") throw erro("EVENTO_NAO_CONFIRMADO");
   if (tipo === "criar" && evento.id !== gerarIdEventoGoogle(agendamentoId)) {
     throw erro("EVENTO_ID_NAO_DETERMINISTICO");
   }
@@ -90,7 +90,8 @@ export async function concluirOperacaoGoogleConfirmada({
       );
       const link = linkResult.rows?.[0];
       if (!link || link.calendar_id !== calendarId ||
-          link.google_event_id !== googleEventId || link.origem !== "vps") {
+          link.google_event_id !== googleEventId || link.origem !== "vps" ||
+          link.situacao !== "ativo") {
         throw erro("RESULTADO_CONCLUIDO_DIVERGENTE");
       }
       await con.query("COMMIT");
