@@ -200,6 +200,12 @@ jobs:
       PGDATABASE: isabele_ci
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Dependencias Node para testes transacionais do Calendar
+        working-directory: infra/backend
+        run: npm install --no-package-lock --ignore-scripts
       - name: Validar esquema aditivo e reexecucao sem duplicar estruturas
         run: |
           psql -v ON_ERROR_STOP=1 -f infra/migrations/023_google_calendar_oauth.sql
@@ -209,6 +215,9 @@ jobs:
         run: |
           psql -v ON_ERROR_STOP=1 -f infra/backend/test/sql/assert_google_calendar_links_pg17.sql
           test "$(psql -v ON_ERROR_STOP=1 -Atc "SELECT (SELECT COUNT(*) FROM public.google_calendar_event_links), (SELECT COUNT(*) FROM public.google_calendar_sync_operations), (SELECT COUNT(*) FROM public.google_calendar_reconciliation_candidates);" -F '|')" = "0|0|0"
+      - name: Validar transacoes Node e recuperacao de timeout no PG17
+        working-directory: infra/backend
+        run: node --test test/googleCalendarSafeStore.postgres.test.js
       - name: Confirmar indices de seguranca e ausencia de dependencias legadas
         run: |
           test "$(psql -v ON_ERROR_STOP=1 -Atc "SELECT COUNT(*) FROM pg_indexes WHERE schemaname='public' AND indexname IN ('ux_google_calendar_operacao_ativa','idx_google_calendar_operacoes_pendentes','idx_google_calendar_operacoes_lease','idx_google_calendar_candidatos_pendentes','idx_google_calendar_candidatos_evento');")" = "5"
