@@ -176,7 +176,7 @@ jobs:
         run: node test/agendamentoAlteracaoServicoPostgres.integration.js
 
   validar-migracao-024-google-calendar:
-    name: Migracao 024 e vinculos Calendar — PostgreSQL 17 isolado
+    name: Migracoes 024-025 e cutover Calendar — PostgreSQL 17 isolado
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -200,16 +200,29 @@ jobs:
       PGDATABASE: isabele_ci
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Instalar dependencias de teste do backend
+        working-directory: infra/backend
+        run: npm install --no-package-lock --ignore-scripts
       - name: Validar esquema aditivo e reexecucao sem duplicar estruturas
         run: |
           psql -v ON_ERROR_STOP=1 -f infra/migrations/023_google_calendar_oauth.sql
           psql -v ON_ERROR_STOP=1 -f infra/migrations/024_google_calendar_event_links.sql
           psql -v ON_ERROR_STOP=1 -f infra/migrations/024_google_calendar_event_links.sql
-      - name: Testar constraints, idempotencia e conciliacao (transacao revertida)
+          psql -v ON_ERROR_STOP=1 -f infra/migrations/025_google_calendar_operation_lease.sql
+          psql -v ON_ERROR_STOP=1 -f infra/migrations/025_google_calendar_operation_lease.sql
+      - name: Testar vinculos, idempotencia, conflito e lease (ROLLBACK)
         run: |
           psql -v ON_ERROR_STOP=1 -f infra/backend/test/sql/assert_google_calendar_links_pg17.sql
+          psql -v ON_ERROR_STOP=1 -f infra/backend/test/sql/assert_google_calendar_lease_025_pg17.sql
           test "$(psql -v ON_ERROR_STOP=1 -Atc "SELECT (SELECT COUNT(*) FROM public.google_calendar_event_links), (SELECT COUNT(*) FROM public.google_calendar_sync_operations), (SELECT COUNT(*) FROM public.google_calendar_reconciliation_candidates);" -F '|')" = "0|0|0"
-      - name: Confirmar indices de seguranca e ausencia de dependencias legadas
+      - name: Confirmar indices e ausencia de dependencias financeiras legadas
         run: |
           test "$(psql -v ON_ERROR_STOP=1 -Atc "SELECT COUNT(*) FROM pg_indexes WHERE schemaname='public' AND indexname IN ('ux_google_calendar_operacao_ativa','idx_google_calendar_operacoes_pendentes','idx_google_calendar_operacoes_lease','idx_google_calendar_candidatos_pendentes','idx_google_calendar_candidatos_evento');")" = "5"
           test "$(psql -v ON_ERROR_STOP=1 -Atc "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('pix_calendar_outbox','pix_cobrancas','pix_reservas');")" = "0"
+      - name: Integrar fila e vinculos reais no PostgreSQL 17 de CI com Google ficticio
+        env:
+          GOOGLE_CALENDAR_CUTOVER_PG_TEST: ci
+        run: node --test infra/backend/test/googleCalendarCutoverPostgres.integration.js
