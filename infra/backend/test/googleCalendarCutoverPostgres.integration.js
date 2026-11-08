@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import pg from "pg";
 import { randomUUID } from "node:crypto";
 import { criarRepositorioCalendarCutover } from "../src/googleCalendarCutoverStore.js";
-import { gerarIdEventoGoogle } from "../src/googleCalendarEvents.js";
+import { gerarIdEventoGoogle, criarAdaptadorGoogleCalendar } from "../src/googleCalendarEvents.js";
 
 const ENVS = {
   GOOGLE_CALENDAR_OAUTH_ENABLED: "true",
@@ -148,6 +148,62 @@ test("cutover PG17: idempotencia, lease, vinculo atomico, timeout e bloqueio de 
     assert.deepEqual(incerta, {
       estado: "aguardando_confirmacao", lease_token: null, ultimo_codigo_erro: "LEASE_EXPIRADO",
     });
+
+    // Jornada ponta a ponta SEM rede real: insert na API Google MOCK,
+    // leitura do evento ficticio e confirmacao atomica no PostgreSQL 17.
+    const r4 = request("agendamento-cutover-d");
+    await cutover.prepararIntencao(r4);
+    const claim4 = await cutover.reivindicarProxima();
+    assert.equal(claim4.operation_id, r4.operationId);
+    const googleMock = new Map();
+    const httpMock = [];
+    const adaptador = criarAdaptadorGoogleCalendar({
+      calendarId: CAL, env: ENVS,
+      obterAccessToken: async () => "access-token-ficticio",
+      fetcher: async (url, options) => {
+        const endpoint = new URL(url);
+        assert.equal(endpoint.origin, "https://www.googleapis.com");
+        const metodo = options.method;
+        httpMock.push(metodo);
+        if (metodo === "POST") {
+          const payload = JSON.parse(options.body);
+          assert.equal(payload.id, gerarIdEventoGoogle(r4.agendamentoId));
+          assert.equal(payload.extendedProperties.private.isabeleAgendamentoId, r4.agendamentoId);
+          const documento = { ...payload, etag: '"etag-mock-v1"', status: "confirmed" };
+          googleMock.set(payload.id, documento);
+          return { status: 201, ok: true, json: async () => documento };
+        }
+        if (metodo === "GET") {
+          const id = decodeURIComponent(endpoint.pathname.split("/").at(-1));
+          const doc = googleMock.get(id);
+          return { status: doc ? 200 : 404, ok: Boolean(doc), json: async () => doc };
+        }
+        throw new Error("Nao deve atualizar ou cancelar na jornada de criacao.");
+      },
+    });
+    const resultadoGoogle = await adaptador.criarEvento({
+      agendamentoId: r4.agendamentoId,
+      nomeCliente: "Cliente Ficticia",
+      servico: "Manicure",
+      inicio: "2026-12-01T09:00:00-03:00",
+      fim: "2026-12-01T10:00:00-03:00",
+    });
+    assert.equal(resultadoGoogle.criado, true);
+    const retornoVerificado = await adaptador.consultarEvento({
+      eventId: resultadoGoogle.eventId,
+    });
+    const persistido = await cutover.confirmarCriacao({
+      operationId: r4.operationId,
+      leaseToken: claim4.lease_token,
+      evento: retornoVerificado,
+    });
+    assert.equal(persistido.googleEventId, resultadoGoogle.eventId);
+    assert.deepEqual(httpMock, ["POST", "GET"]);
+    const verificacao = await pool.query(
+      "SELECT estado FROM public.google_calendar_sync_operations WHERE operation_id = $1",
+      [r4.operationId],
+    );
+    assert.equal(verificacao.rows[0].estado, "concluida");
 
     // Flags desligadas: nao altera estado algum, nem tenta reivindicar.
     const paused = criarRepositorioCalendarCutover(pool, { env: {}, calendarId: CAL });
