@@ -72,6 +72,12 @@ export async function concluirOperacaoGoogleConfirmada({
     if (op.calendar_id !== calendarId || String(op.fingerprint_pedido).trim() !== fingerprint) {
       throw erro("OPERACAO_DIVERGENTE");
     }
+    // CANCELAR: exclui-se um evento do Calendar; nunca confirmar a exclusao
+    // apenas por receber um objeto remoto 'confirmed'. Implementar fluxo
+    // de cancelamento separado com verificação de ausência e auditoria.
+    if (!["criar", "reagendar", "alterar_servico"].includes(op.tipo)) {
+      throw erro("TIPO_NAO_IMPLEMENTADO");
+    }
     const googleEventId = checkEvento(op.agendamento_id, evento, op.tipo);
     if (op.google_event_id && op.google_event_id !== googleEventId) {
       throw erro("EVENTO_DIVERGENTE");
@@ -93,6 +99,23 @@ export async function concluirOperacaoGoogleConfirmada({
     }
     if (!["processando", "aguardando_confirmacao"].includes(op.estado)) {
       throw erro("OPERACAO_ESTADO_INCOMPATIVEL");
+    }
+
+    // Uma alteracao so pode concluir sobre vinculo da VPS PREEXISTENTE.
+    // Nunca vincular automaticamente evento legado a partir do PATCH.
+    if (op.tipo !== "criar") {
+      const anterior = await con.query(
+        `SELECT google_event_id, calendar_id, origem, situacao
+         FROM public.google_calendar_event_links
+         WHERE agendamento_id = $1 FOR UPDATE`,
+        [op.agendamento_id],
+      );
+      const vinculo = anterior.rows?.[0];
+      if (!vinculo || vinculo.google_event_id !== googleEventId ||
+          vinculo.calendar_id !== calendarId || vinculo.origem !== "vps" ||
+          vinculo.situacao !== "ativo") {
+        throw erro("VINCULO_PREEXISTENTE_AUSENTE");
+      }
     }
 
     // A ordem INSERT -> SELECT garante que uma colisao de UNIQUE tanto por
