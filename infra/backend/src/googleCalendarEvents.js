@@ -267,6 +267,9 @@ export function criarAdaptadorGoogleCalendar({
     async consultarEvento({ eventId }) {
       return buscar(eventId); // Somente leitura, nenhum write flag.
     },
+    async consultarEventoLegado({ eventId }) {
+      return buscarLegado(eventId); // Somente leitura, ID Google real.
+    },
 
     /**
      * Eventos do Apps Script previamente vinculados pelo revisor:
