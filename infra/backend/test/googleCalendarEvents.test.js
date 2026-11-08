@@ -147,3 +147,15 @@ test("resposta inesperada do POST nao confirma a criacao", async () => {
   await assert.rejects(t.adaptador.criarEvento(DADOS), { codigo: "EVENTO_NAO_CONFIRMADO" });
   assert.equal(t.chamadas.length, 1);
 });
+
+test("evento cancelado nao pode ser reativado por PATCH; DELETE nao repete", async () => {
+  const cancelado = setup(() => resposta(200, { ...evento(), status: "cancelled" }));
+  await assert.rejects(cancelado.adaptador.atualizarEvento({ ...DADOS, eventId: ID }),
+    { codigo: "EVENTO_GOOGLE_CANCELADO" });
+  assert.deepEqual(cancelado.chamadas.map(x => x.method), ["GET"]);
+  assert.deepEqual(
+    await cancelado.adaptador.excluirEvento({ agendamentoId: DADOS.agendamentoId, eventId: ID }),
+    { eventId: ID, excluido: false, jaAusente: true },
+  );
+  assert.deepEqual(cancelado.chamadas.map(x => x.method), ["GET", "GET"]);
+});
