@@ -268,6 +268,100 @@ try {
       }
     }
   }
+  // Terceira etapa da conciliacao: ASSOCIACAO POR MARCADOR LEGADO,
+  // nao por coincidencia de horario, nome ou duracao. Nao grava links.
+  // A verificacao usa fronteiras do identificador para evitar que
+  // "evt_abc" encontre acidentalmente "evt_abcdef".
+  function marcadorExato(descricao, idLegado) {
+    if (typeof descricao !== "string" ||
+        typeof idLegado !== "string" ||
+        !/^evt_[A-Za-z0-9_-]{1,128}$/.test(idLegado)) return false;
+    const re = new RegExp("(^|[^A-Za-z0-9_-])" + idLegado +
+      "(?=$|[^A-Za-z0-9_-])");
+    return re.test(descricao);
+  }
+  function textoInclui(titulo, valor, minimo) {
+    const normalizado = normalizar(valor);
+    return normalizado.length >= minimo &&
+      (" " + normalizar(titulo) + " ").includes(" " + normalizado + " ");
+  }
+  const porDoc = new Map(docs.map(d => [d.id, d.data() || {}]));
+  const associacoesPorRegistro = outbox.map(r => ({
+    row: r,
+    matches: eventos.filter(ev => marcadorExato(ev.description, r.event_id)),
+    substring: eventos.filter(ev =>
+      typeof ev.description === "string" &&
+      ev.description.includes(String(r.event_id))).length,
+  }));
+  const reivindicantes = new Map();
+  for (const a of associacoesPorRegistro) {
+    for (const ev of a.matches) {
+      if (!reivindicantes.has(ev.id)) reivindicantes.set(ev.id, new Set());
+      reivindicantes.get(ev.id).add(a.row.agendamento_id);
+    }
+  }
+  const marcadorLegado = {
+    totalOutbox: outbox.length,
+    ausente: 0,
+    somenteSubstring: 0,
+    unico: 0,
+    multiplo: 0,
+    eventoReivindicadoPorVariosAgendamentos: 0,
+    candidatoForteParaRevisao: 0,
+    exigeRevisao: {
+      cancelado: 0, dispensadoOuNaoEnviado: 0,
+      semDocumentoFirestore: 0, horarioDivergente: 0,
+      duracaoDivergente: 0, nomeOuServicoDivergente: 0,
+      firestoreDivergente: 0, recorrencia: 0,
+    },
+  };
+  for (const a of associacoesPorRegistro) {
+    if (a.matches.length === 0) {
+      marcadorLegado.ausente++;
+      if (a.substring > 0) marcadorLegado.somenteSubstring++;
+      continue;
+    }
+    if (a.matches.length > 1) {
+      marcadorLegado.multiplo++;
+      continue;
+    }
+    marcadorLegado.unico++;
+    const ev = a.matches[0], r = a.row;
+    if (reivindicantes.get(ev.id).size > 1) {
+      marcadorLegado.eventoReivindicadoPorVariosAgendamentos++;
+      continue;
+    }
+    const canceladoRegistro = cancelado.has(r.agendamento_id);
+    const enviado = r.status === "enviado";
+    const fs = porDoc.get(r.agendamento_id);
+    const eventoHorario = chaveHorario(ev.start?.dateTime);
+    const duracaoEvento = typeof ev.start?.dateTime === "string" &&
+      typeof ev.end?.dateTime === "string"
+      ? (Date.parse(ev.end.dateTime) - Date.parse(ev.start.dateTime)) / 60000
+      : null;
+    const horarioLegado = r.data_iso + "T" + r.hora_iso;
+    const duracaoLegado = Number(r.duracao_minutos);
+    const tituloValido = textoInclui(ev.summary, r.nome_cliente, 5) &&
+      textoInclui(ev.summary, r.servico, 4);
+    const fsHorario = fs ? String(fs.data || "") + "T" +
+      String(fs.horario || "").slice(0, 5) : "";
+    const fsDuracao = Number(fs?.duracaoSnapshot ?? fs?.duracao ?? fs?.duracaoMinutos);
+    const fsValido = fs && fsHorario === eventoHorario &&
+      Number.isFinite(fsDuracao) && fsDuracao > 0 && fsDuracao === duracaoEvento;
+    const motivo = marcadorLegado.exigeRevisao;
+    // Registrar APENAS o primeiro motivo prioritario, para totais
+    // mutuamente exclusivos. Nenhum caso e liberado automaticamente.
+    if (canceladoRegistro) motivo.cancelado++;
+    else if (!enviado) motivo.dispensadoOuNaoEnviado++;
+    else if (!fs) motivo.semDocumentoFirestore++;
+    else if (ev.recurringEventId) motivo.recorrencia++;
+    else if (horarioLegado !== eventoHorario) motivo.horarioDivergente++;
+    else if (duracaoLegado !== duracaoEvento) motivo.duracaoDivergente++;
+    else if (!tituloValido) motivo.nomeOuServicoDivergente++;
+    else if (!fsValido) motivo.firestoreDivergente++;
+    else marcadorLegado.candidatoForteParaRevisao++;
+  }
+  const vinculacoesCriadas = 0;
   console.log(JSON.stringify({
     resultado: "DIAGNOSTICO_TEMPORAL_SOMENTE_LEITURA",
     periodo: { inicio, fimExclusivo: fim },
@@ -293,7 +387,11 @@ try {
     },
     comparacaoFirestoreDataAtual: contarComparacoes(validosFS, calendarComData),
     referenciasIdentificadoresGoogle: evidenciaIdentificadores,
-    aviso: "Correspondencia temporal e nome sao apenas indicios, nunca aprovacao automatica.",
+    conciliacaoPorMarcadorLegado: {
+      ...marcadorLegado,
+      registrosInseridos: vinculacoesCriadas,
+    },
+    aviso: "Candidatos fortes ainda exigem verificacao por ID, status atual e revisao humana; nenhum vinculo foi inserido.",
   }, null, 2));
 } catch (e) {
   console.error("DIAGNOSTICO_FALHOU: " + (e.codigo || "ERRO_AMBIENTE"));
