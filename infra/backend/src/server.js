@@ -42,6 +42,8 @@ const transportePixCalendar = {
 };
 const transporteReagendamentoPix = ponteCalendar.habilitado("reagendar_pago")
   ? { enviarCalendar: (payload) => ponteCalendar.reagendarPago(payload) } : {};
+const transporteReagendamentoIsento = ponteCalendar.habilitado("reagendar_isento")
+  ? { enviarCalendarSemPix: (payload) => ponteCalendar.reagendarIsento(payload) } : {};
 const transporteAlteracaoServico = ponteCalendar.habilitado("alterar_servico")
   ? { enviarCalendar: (row) => ponteCalendar.alterarServico(row) } : {};
 const PORT = Number(process.env.PORT || 3001);
@@ -118,7 +120,7 @@ const server = http.createServer(async (req, res) => {
       "/admin/clientes/isencao-sinal-pix",
     ].includes(new URL(req.url, "http://localhost").pathname)
   ) {
-    await atenderAgendamentoIsencao(req, res, pool);
+    await atenderAgendamentoIsencao(req, res, pool, transporteReagendamentoIsento);
     return;
   }
 
