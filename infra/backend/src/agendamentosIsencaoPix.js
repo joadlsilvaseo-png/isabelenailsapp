@@ -547,6 +547,8 @@ export async function reagendarComBloqueio({ pool, db, uid, dados, dependencies 
             nomeCliente: String(dadosAtuais.nomeCliente || ""),
             servico: String(servico.nome || "Serviço"),
             data, horario, duracao,
+            origemData: dataAnterior,
+            origemHorario: String(dadosAtuais.horario || "").slice(0,5),
           });
           sincronizacaoCalendar = "confirmada";
         } catch (e) {
