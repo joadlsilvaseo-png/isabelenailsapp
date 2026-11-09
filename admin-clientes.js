@@ -6,6 +6,7 @@ import {
 import {
   doc,
   getDoc,
+  updateDoc,
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
 import { salvarIsencaoComReversao } from "./admin-clientes-state.js";
 import { organizarClientes } from "./admin-clientes-listagem.mjs?v=1.0.0";
@@ -264,7 +265,9 @@ function clientCard(client) {
   side.className = "client-card-side";
   const label = document.createElement("span");
   label.className = "client-tag";
-  label.textContent = isencoesAtivas.has(client.id) ? "Isenta de PIX" : "Perfil";
+  label.textContent = isencoesAtivas.has(client.id)
+    ? "Isenta de PIX"
+    : "Perfil";
   if (isencoesAtivas.has(client.id)) label.classList.add("client-tag--pix");
   button.dataset.clientId = client.id;
   side.append(label);
@@ -285,7 +288,9 @@ function renderizarClientes({ recriar = false } = {}) {
   }
 
   const organizadas = organizarClientes(
-    clientesCarregadas, isencoesAtivas, filtroPix === "isentas",
+    clientesCarregadas,
+    isencoesAtivas,
+    filtroPix === "isentas",
   );
   const quantidade = Math.min(limiteExibicao, organizadas.length);
 
@@ -293,18 +298,24 @@ function renderizarClientes({ recriar = false } = {}) {
     list.append(clientCard(organizadas[indice]));
   }
 
-  const rotulo = filtroPix === "isentas"
-    ? "clientes isentas" : query ? "resultados" : "clientes";
-  count.textContent = quantidade === organizadas.length
-    ? `${organizadas.length} ${rotulo}`
-    : `${quantidade} de ${organizadas.length} ${rotulo}`;
+  const rotulo =
+    filtroPix === "isentas"
+      ? "clientes isentas"
+      : query
+        ? "resultados"
+        : "clientes";
+  count.textContent =
+    quantidade === organizadas.length
+      ? `${organizadas.length} ${rotulo}`
+      : `${quantidade} de ${organizadas.length} ${rotulo}`;
 
   empty.hidden = organizadas.length > 0;
-  $("empty-state-message").textContent = filtroPix === "isentas"
-    ? query
-      ? "Nenhuma cliente isenta corresponde à pesquisa."
-      : "Nenhuma cliente com isenção de sinal PIX encontrada."
-    : "Tente outro termo de busca.";
+  $("empty-state-message").textContent =
+    filtroPix === "isentas"
+      ? query
+        ? "Nenhuma cliente isenta corresponde à pesquisa."
+        : "Nenhuma cliente com isenção de sinal PIX encontrada."
+      : "Tente outro termo de busca.";
 
   moreButton.hidden = quantidade >= organizadas.length;
 }
@@ -359,9 +370,14 @@ async function loadClients({ reset = true } = {}) {
       if (!resultado.hasMore) break;
 
       const proximoCursor = resultado.nextCursor;
-      if (!proximoCursor || proximoCursor === cursorPagina ||
-          cursoresVisitados.has(proximoCursor)) {
-        throw new Error("A paginação de clientes não avançou. Tente novamente.");
+      if (
+        !proximoCursor ||
+        proximoCursor === cursorPagina ||
+        cursoresVisitados.has(proximoCursor)
+      ) {
+        throw new Error(
+          "A paginação de clientes não avançou. Tente novamente.",
+        );
       }
       cursoresVisitados.add(proximoCursor);
       cursorPagina = proximoCursor;
@@ -373,7 +389,9 @@ async function loadClients({ reset = true } = {}) {
     renderizarClientes({ recriar: true });
   } catch (error) {
     if (version !== queryVersion || controlador.signal.aborted) return;
-    showError(error.message || "Não foi possível carregar a lista de clientes.");
+    showError(
+      error.message || "Não foi possível carregar a lista de clientes.",
+    );
     count.textContent = "Não foi possível carregar";
     empty.hidden = true;
   } finally {
@@ -411,6 +429,23 @@ function setExemptionStatus(message, state = "") {
   status.dataset.state = state;
 }
 
+function statusCelular(message = "", state = "") {
+  const elemento = $("client-phone-status");
+  elemento.textContent = message;
+  elemento.dataset.state = state;
+}
+
+function normalizarCelularBrasileiro(valor) {
+  let digitos = String(valor || "").replace(/\D/g, "");
+  // Aceita celular nacional e número colado do WhatsApp com DDI +55.
+  if (digitos.length === 13 && digitos.startsWith("55")) {
+    digitos = digitos.slice(2);
+  }
+  // DDD + 9 dígitos de celular, iniciados pelo 9.
+  if (!/^[1-9]{2}9\d{8}$/.test(digitos)) return "";
+  return `(${digitos.slice(0, 2)}) ${digitos.slice(2, 7)}-${digitos.slice(7)}`;
+}
+
 async function openProfile(uid, opener) {
   activeUid = uid;
   modalReturnFocus = opener;
@@ -425,6 +460,10 @@ async function openProfile(uid, opener) {
   $("profile-content").hidden = true;
   $("profile-error").hidden = true;
   $("note-status").textContent = "";
+  $("client-phone-input").value = "";
+  $("client-phone-input").disabled = true;
+  $("save-client-phone").disabled = true;
+  statusCelular();
   setExemptionStatus("Carregando autorização…");
   exemption.checked = false;
   exemption.disabled = true;
@@ -442,7 +481,10 @@ async function openProfile(uid, opener) {
       imagemGoogle(
         client.googlePhotoUrl,
         $("modal-avatar"),
-        () => version === profileVersion && activeUid === uid && !modal.hidden &&
+        () =>
+          version === profileVersion &&
+          activeUid === uid &&
+          !modal.hidden &&
           !$("modal-avatar").querySelector('img[src^="blob:"]'),
       );
     }
@@ -450,6 +492,9 @@ async function openProfile(uid, opener) {
     $("modal-client-name").textContent = client.name;
     $("modal-client-phone").textContent =
       client.phone || "Telefone não informado";
+    $("client-phone-input").value = client.phone || "";
+    $("client-phone-input").disabled = false;
+    $("save-client-phone").disabled = false;
     $("modal-client-email").textContent =
       client.email || "E-mail não informado";
     $("modal-visits").textContent = profile.historyComplete
@@ -582,6 +627,74 @@ $("logout-button").addEventListener("click", async () => {
   location.replace("login.html");
 });
 
+$("client-phone-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!activeUid) return;
+
+  const uid = activeUid;
+  const version = profileVersion;
+  const input = $("client-phone-input");
+  const button = $("save-client-phone");
+  const telefone = normalizarCelularBrasileiro(input.value);
+  if (!telefone) {
+    statusCelular("Digite um celular válido com DDD e 9 dígitos.", "error");
+    input.focus();
+    return;
+  }
+
+  const telefoneAnterior = $("modal-client-phone").textContent;
+  if (normalizarCelularBrasileiro(telefoneAnterior) === telefone) {
+    statusCelular("Nenhuma alteração no celular.");
+    return;
+  }
+
+  input.disabled = true;
+  button.disabled = true;
+  statusCelular("Salvando celular…");
+  try {
+    const usuario = auth.currentUser;
+    if (!usuario) throw new Error("Sessão encerrada. Entre novamente.");
+
+    // Atualiza APENAS o telefone da cliente no Firestore (sem sobrescrever perfil).
+    await updateDoc(doc(db, "clientes", uid), { telefone });
+
+    // Mantém a listagem coerente mesmo se o modal já foi fechado/trocado.
+    const clienteNaLista = clientesCarregadas.find(
+      (cliente) => cliente.id === uid,
+    );
+    if (clienteNaLista) {
+      clienteNaLista.phone = telefone;
+      renderizarClientes({ recriar: true });
+      if (activeUid === uid && version === profileVersion && !modal.hidden) {
+        modalReturnFocus =
+          Array.from(list.children).find(
+            (card) => card.dataset.clientId === uid,
+          ) || search;
+      }
+    }
+
+    if (activeUid === uid && version === profileVersion && !modal.hidden) {
+      input.value = telefone;
+      $("modal-client-phone").textContent = telefone;
+      statusCelular("Celular salvo no Firebase.", "success");
+    }
+  } catch (erro) {
+    if (activeUid === uid && version === profileVersion && !modal.hidden) {
+      statusCelular(
+        erro.message || "Não foi possível salvar o celular.",
+        "error",
+      );
+    }
+  } finally {
+    if (activeUid === uid && version === profileVersion && !modal.hidden) {
+      input.disabled = false;
+      button.disabled = false;
+    }
+  }
+});
+
+$("client-phone-input").addEventListener("input", () => statusCelular());
+
 $("note-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!activeUid) return;
@@ -630,9 +743,10 @@ exemption.addEventListener("change", async () => {
     else isencoesAtivas.delete(uid);
     renderizarClientes({ recriar: true });
     if (activeUid === uid) {
-      modalReturnFocus = Array.from(list.children)
-        .find((card) => card.dataset.clientId === uid)
-        || document.querySelector('[data-pix-filter="isentas"]');
+      modalReturnFocus =
+        Array.from(list.children).find(
+          (card) => card.dataset.clientId === uid,
+        ) || document.querySelector('[data-pix-filter="isentas"]');
     }
   }
   if (activeUid === uid) exemption.disabled = false;
