@@ -31,6 +31,14 @@ function equalEvent(a,b){
     .every(k=>a[k]===b[k])&&
     a.start?.dateTime===b.start?.dateTime&&a.end?.dateTime===b.end?.dateTime;
 }
+function normalizar(v){
+  return typeof v==="string" ? v.normalize("NFD").replace(/[\\u0300-\\u036f]/g,"")
+    .toLowerCase().replace(/[^a-z0-9]+/g," ").trim().replace(/\\s+/g," ") : "";
+}
+function contem(titulo,valor,min){
+  const v=normalizar(valor), t=normalizar(titulo);
+  return v.length>=min && (" "+t+" ").includes(" "+v+" ");
+}
 if((process.argv.length!==2&&!aplicar)||
   (aplicar&&env.GOOGLE_CALENDAR_CINCO_RECENTES_APROVADO!=="true")||
   env.GOOGLE_CALENDAR_OAUTH_ENABLED!=="true"||
@@ -102,6 +110,11 @@ try{
   }
   const indexed=new Map(eventos.map(e=>[e.id,e]));
   const fsMap=new Map(firestore.map(x=>[x.id,x]));
+  for(const cand of review.candidatos){
+    const ev=indexed.get(cand.googleEventId), fs=fsMap.get(cand.agendamentoId);
+    if(!contem(ev?.summary,fs?.nomeCliente,5)||!contem(ev?.summary,fs?.servico,4))
+      bloquear("IDENTIDADE_FIRESTORE_GOOGLE_DIVERGENTE");
+  }
   const sig=createHash("sha256").update(review.candidatos
     .map(x=>x.fingerprintEvidencia).sort().join("\n")).digest("hex");
   console.log(JSON.stringify({resultado:aplicar?"VERIFICACAO_APLICACAO":"PREVIA_CONFERIDA",
