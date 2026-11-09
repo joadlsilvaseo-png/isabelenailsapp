@@ -19,7 +19,7 @@ test("home exibe sinalizacao admin e abre modal sem nova tela", () => {
   assert.match(html, /data-ig-lembretes-sinal/);
   assert.match(html, /data-ig-lembretes-lista/);
   assert.match(html, /assistenteGestao\.css\?v=4/);
-  assert.match(assistente, /import\("\.\/assistenteLembretesWhatsappUI\.js\?v=1"\)/);
+  assert.match(assistente, /import\("\.\/assistenteLembretesWhatsappUI\.js\?v=2"\)/);
 });
 
 test("UI exige envio manual no WhatsApp e nao possui endpoint de disparo", () => {
@@ -36,4 +36,17 @@ test("rota separada so para admin, Firestore atual e PostgreSQL para marcacoes",
   assert.match(api, /item\.assinatura !== dados\.assinatura/);
   assert.match(api, /ON CONFLICT \(agendamento_id, assinatura\) DO NOTHING/);
   assert.doesNotMatch(api, /whatsapp\.com\/send|graph\.facebook\.com|sendNotification/);
+});
+
+test("mensagem de lembrete tem voz pessoal da Isabele e nao usa emojis no link", () => {
+  const inicio = ui.indexOf("function mensagem(item)");
+  const fim = ui.indexOf("\nfunction autorizado", inicio);
+  assert.ok(inicio >= 0 && fim > inicio);
+  const trecho = ui.slice(inicio, fim);
+  assert.match(trecho, /Oii, /);
+  assert.match(trecho, /nosso hor[aá]rio de amanh[aã]/);
+  assert.match(trecho, /Te espero, viu\? Um beijo!/);
+  assert.match(trecho, /pra gente fazer/);
+  assert.doesNotMatch(trecho, /\p{Extended_Pictographic}|\uFFFD/u);
+  assert.doesNotMatch(trecho, /Esperamos voc[eê]|seu atendimento na Isabele Mariana Nails/);
 });

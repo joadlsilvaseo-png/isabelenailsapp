@@ -18,12 +18,16 @@ function mensagem(item) {
   const primeiroNome = String(item.nome || "Cliente").trim().split(/\s+/)[0] || "Cliente";
   const dia = String(item.data || "").slice(8, 10) + "/" +
     String(item.data || "").slice(5, 7);
-  // Sem emojis no texto do link: alguns fluxos do WhatsApp Web exibem caracteres corrompidos.
-  return "Oi, " + primeiroNome + "! Tudo bem?\n\n" +
-    "Passando para lembrar que seu atendimento na Isabele Mariana Nails " +
-    "é amanhã (" + dia + "), às " + item.horario +
-    ", para o serviço de " + item.servico + ".\n\n" +
-    "Esperamos você!\nIsabele Mariana Nails";
+  const horario = String(item.horario || "");
+  const horaAmigavel = horario.endsWith(":00")
+    ? String(Number(horario.slice(0, 2))) + "h" : horario.replace(":", "h");
+  const servico = String(item.servico || "seu atendimento").trim().toLocaleLowerCase("pt-BR");
+  // Mensagem em primeira pessoa, como se a Isabele estivesse conversando.
+  // Sem emojis no link: alguns clientes WhatsApp Web exibem caracteres corrompidos.
+  return "Oii, " + primeiroNome + "! Tudo bem?\n\n" +
+    "Passando aqui pra te lembrar do nosso horário de amanhã (" + dia +
+    "), às " + horaAmigavel + ", pra gente fazer " + servico + ".\n\n" +
+    "Te espero, viu? Um beijo!\nIsabele";
 }
 function autorizado(state) {
   return auth.currentUser?.uid === state.user.uid &&
