@@ -229,6 +229,9 @@ jobs:
       - name: Validar transacoes Node e recuperacao de timeout no PG17
         working-directory: infra/backend
         run: node --test test/googleCalendarSafeStore.postgres.test.js
+      - name: Simular cutover direto com estado real no PostgreSQL 17
+        working-directory: infra/backend
+        run: node --test test/googleCalendarDirectBridge.postgres.test.js
       - name: Confirmar indices de seguranca e ausencia de dependencias legadas
         run: |
           test "$(psql -v ON_ERROR_STOP=1 -Atc "SELECT COUNT(*) FROM pg_indexes WHERE schemaname='public' AND indexname IN ('ux_google_calendar_operacao_ativa','idx_google_calendar_operacoes_pendentes','idx_google_calendar_operacoes_lease','idx_google_calendar_candidatos_pendentes','idx_google_calendar_candidatos_evento');")" = "5"
