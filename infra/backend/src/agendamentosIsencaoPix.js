@@ -428,7 +428,16 @@ export async function reagendarComBloqueio({ pool, db, uid, dados, dependencies 
   let documentoAlterado = false;
   let documentoAnterior = null;
   const eventId = String(dadosAtuais.calendarEventId || `evt_${agendamentoId}`);
-  const operacaoId = randomUUID();
+  // UUID do PWA permanece o mesmo em tentativas repetidas. Se a escrita
+  // direta estiver ativa, o UUID e obrigatorio para recuperar um timeout.
+  const operacaoId = dados?.operationId == null
+    ? randomUUID() : String(dados.operationId);
+  if (!UUID.test(operacaoId) ||
+      (dependencies.enviarCalendarSemPix && !UUID.test(dados?.operationId))) {
+    throw new ErroIsencaoPix(409,
+      "Atualize o aplicativo antes de reagendar.",
+      "PWA_CALENDAR_OPERACAO_INVALIDA");
+  }
   const timestamp = dependencies.serverTimestamp || await timestampPadrao();
 
   try {
@@ -438,6 +447,31 @@ export async function reagendarComBloqueio({ pool, db, uid, dados, dependencies 
         "SELECT pg_advisory_xact_lock(hashtext('isabele_pix_agenda'), hashtext($1::text))",
         [dataBloqueada],
       );
+    }
+    if (dependencies.enviarCalendarSemPix) {
+      // Preflight ANTES de alterar Firestore e reserva PIX.
+      const vinculo = await conexao.query(
+        "SELECT google_event_id FROM public.google_calendar_event_links " +
+        "WHERE agendamento_id=$1 AND situacao='ativo' FOR SHARE",
+        [agendamentoId],
+      );
+      if (vinculo.rowCount !== 1) {
+        throw new ErroIsencaoPix(409,
+          "Agendamento ainda não vinculado ao Google Calendar. Consulte a profissional.",
+          "CALENDAR_VINCULO_NAO_VALIDADO");
+      }
+      const aguardando = await conexao.query(
+        "SELECT chave_idempotencia FROM public.google_calendar_sync_operations " +
+        "WHERE agendamento_id=$1 AND estado IN " +
+        "('pendente','processando','aguardando_confirmacao','conflito') LIMIT 1",
+        [agendamentoId],
+      );
+      if (aguardando.rows.some(op =>
+        op.chave_idempotencia !== "imn-reagendar-isento-" + operacaoId)) {
+        throw new ErroIsencaoPix(409,
+          "Já existe sincronização do Google Calendar em andamento.",
+          "CALENDAR_OPERACAO_PENDENTE");
+      }
     }
 
     if (await possuiBloqueio(conexao, data, periodo.inicioMinuto, periodo.fimMinuto)) {
@@ -540,6 +574,8 @@ export async function reagendarComBloqueio({ pool, db, uid, dados, dependencies 
         reagendadoEm: timestamp,
         reagendadoPor: uid,
         reagendamentoOperacao: operacaoId,
+        reagendamentoOrigemData: dataAnterior,
+        reagendamentoOrigemHorario: String(dadosAtuais.horario || "").slice(0,5),
       });
       documentoAlterado = true;
     });
@@ -550,15 +586,21 @@ export async function reagendarComBloqueio({ pool, db, uid, dados, dependencies 
     // A operacao e idempotente pela chave persistente no Firestore.
     let sincronizacaoCalendar = null;
     if (dependencies.enviarCalendarSemPix) {
-      if (documentoAlterado) {
+      // Repetir o mesmo UUID depois de timeout reconsulta a operacao do
+      // Google, mesmo quando o Firestore ja esta no novo horario.
+      const mesmaOperacao = dadosAtuais.reagendamentoOperacao === operacaoId;
+      if (documentoAlterado || mesmaOperacao) {
         try {
           await dependencies.enviarCalendarSemPix({
             agendamentoId, operationId: operacaoId,
             nomeCliente: String(dadosAtuais.nomeCliente || ""),
             servico: String(servico.nome || "Serviço"),
             data, horario, duracao,
-            origemData: dataAnterior,
-            origemHorario: String(dadosAtuais.horario || "").slice(0,5),
+            origemData: documentoAlterado
+              ? dataAnterior : dadosAtuais.reagendamentoOrigemData,
+            origemHorario: documentoAlterado
+              ? String(dadosAtuais.horario || "").slice(0,5)
+              : dadosAtuais.reagendamentoOrigemHorario,
           });
           sincronizacaoCalendar = "confirmada";
         } catch (e) {
