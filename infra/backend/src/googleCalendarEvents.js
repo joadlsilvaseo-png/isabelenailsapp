@@ -283,6 +283,7 @@ export function criarAdaptadorGoogleCalendar({
      */
     async atualizarEventoLegado({
       agendamentoId, legacyEventId, eventId, nomeCliente, servico, inicio, fim,
+      inicioAnterior,
     }) {
       escrever();
       const idEvento = exigirIdEventoLegado(eventId);
@@ -296,6 +297,15 @@ export function criarAdaptadorGoogleCalendar({
           Date.parse(atual.end?.dateTime) === Date.parse(fim) &&
           atual.summary === desejado.summary) {
         return { eventId: idEvento, atualizado: false, jaEstavaAtualizado: true };
+      }
+      // Evita sobrescrever um evento deslocado manualmente no Calendar,
+      // em divergencia com o horario que o sistema considera atual.
+      if (inicioAnterior) {
+        const esperado = dataComFuso(inicioAnterior);
+        if (Date.parse(atual.start?.dateTime) !== esperado) {
+          throw erro("GOOGLE_LEGADO_HORARIO_ALTERADO",
+            "Evento Google foi movido fora do sistema; conciliacao obrigatoria.");
+        }
       }
       const { extendedProperties: _semAlterarPropriedades, ...mudancas } =
         montarDados({ agendamentoId, nomeCliente, servico, inicio, fim });
