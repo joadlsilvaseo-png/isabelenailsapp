@@ -14,6 +14,15 @@ const BASE={
  GOOGLE_CALENDAR_ID:CAL,
  GOOGLE_CALENDAR_CUTOVER_STARTED_AT:"2026-11-08T20:00:00-03:00",
 };
+const CORTE_COMPLETO = {
+  ...BASE,
+  GOOGLE_CALENDAR_DIRECT_CRIAR_PIX_ENABLED:"true",
+  GOOGLE_CALENDAR_DIRECT_CANCELAR_ENABLED:"true",
+  GOOGLE_CALENDAR_DIRECT_REAGENDAR_PAGO_ENABLED:"true",
+  GOOGLE_CALENDAR_DIRECT_REAGENDAR_ISENTO_ENABLED:"true",
+  GOOGLE_CALENDAR_DIRECT_ALTERAR_SERVICO_ENABLED:"true",
+  GOOGLE_CALENDAR_FRONTEND_PWA_READY:"true",
+};
 const row={
   agendamento_id:ID, data_servico_iso:"2026-12-20",horario:"09:00:00",
   duracao_minutos:60,nome_cliente:"Cliente ficticia",servico:"Gel",
@@ -42,12 +51,30 @@ test("flag isolada sem todas as travas bloqueia o modo direto",()=>{
 test("criacao direta exige horario de corte explicito no inicio do processo",()=>{
   for(const value of ["", "2026-11-08","2031-01-01T00:00:00Z"]){
     const bridge=criarPonteCalendarDireto(pool,{
-      env:{...BASE,GOOGLE_CALENDAR_DIRECT_CRIAR_PIX_ENABLED:"true",
+      env:{...CORTE_COMPLETO,
         GOOGLE_CALENDAR_CUTOVER_STARTED_AT:value},
     });
     assert.throws(()=>bridge.habilitado("criar_pix"),
       {codigo:"CUTOVER_START_INVALIDO"});
   }
+});
+
+test("criacao direta exige backend integral e PWA preparado para suprimir GAS",()=>{
+  const incompletos=[
+    {...CORTE_COMPLETO,GOOGLE_CALENDAR_DIRECT_REAGENDAR_ISENTO_ENABLED:"false"},
+    {...CORTE_COMPLETO,GOOGLE_CALENDAR_DIRECT_CANCELAR_ENABLED:"false"},
+    {...CORTE_COMPLETO,GOOGLE_CALENDAR_DIRECT_REAGENDAR_PAGO_ENABLED:"false"},
+    {...CORTE_COMPLETO,GOOGLE_CALENDAR_DIRECT_ALTERAR_SERVICO_ENABLED:"false"},
+    {...CORTE_COMPLETO,GOOGLE_CALENDAR_FRONTEND_PWA_READY:"false"},
+  ];
+  for(const env of incompletos){
+    const b=criarPonteCalendarDireto(pool,{env});
+    assert.throws(()=>b.habilitado("criar_pix"),
+      {codigo:"CUTOVER_CRIACAO_EXIGE_FLUXOS_E_FRONTEND"});
+  }
+  assert.equal(criarPonteCalendarDireto(pool,{
+    env:CORTE_COMPLETO,
+  }).habilitado("criar_pix"),true);
 });
 
 test("cada fluxo pode ser selecionado independentemente",()=>{
