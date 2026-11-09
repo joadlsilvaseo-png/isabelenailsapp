@@ -263,7 +263,8 @@ try{
     hashEvidencia:evidencia,alteracaoPendente:aplicar},null,2));
   if(aplicar){
     const patch=pares[2],start=desejadoUTC(patch.inicioFirestore);
-    const expectedEnd=new Date(start+patch.duracaoFirestore*60000).toISOString();
+    // Formato ISO sem milissegundos tambem compativel com a imagem staging anterior.
+    const expectedEnd=new Date(start+patch.duracaoFirestore*60000).toISOString().replace(/\.\d{3}Z$/, "Z");
     const payload={
       agendamentoId:patch.row.agendamento_id,eventId:patch.event.id,
       legacyEventId:patch.row.event_id,
