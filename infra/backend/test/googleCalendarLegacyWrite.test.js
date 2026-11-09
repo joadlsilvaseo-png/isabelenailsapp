@@ -78,6 +78,13 @@ test("marcador ausente nao pode excluir evento de outra cliente",async()=>{
     {codigo:"GOOGLE_LEGADO_SEM_MARCADOR"});
   assert.deepEqual(t.reqs.map(x=>x.ops.method),["GET"]);
 });
+test("evento movido manualmente nao pode ser sobrescrito por UPDATE direto",async()=>{
+  const t=setup(()=>res(200,antigo()));
+  await assert.rejects(t.adapter.atualizarEventoLegado({
+    ...payload,inicioAnterior:"2026-12-19T07:00:00-03:00",
+  }),{codigo:"GOOGLE_LEGADO_HORARIO_ALTERADO"});
+  assert.deepEqual(t.reqs.map(x=>x.ops.method),["GET"]);
+});
 test("conflito ETag nao e ignorado",async()=>{
   const t=setup((url,ops)=>ops.method==="GET"?res(200,antigo()):res(412));
   await assert.rejects(t.adapter.atualizarEventoLegado(payload),
