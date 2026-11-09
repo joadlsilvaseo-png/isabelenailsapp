@@ -173,6 +173,7 @@ jobs:
           python3 -c 'import ast,pathlib; ast.parse(pathlib.Path("infra/scripts/calendar-deploy-stage-safe.py").read_text())'
           python3 -c 'import ast,pathlib; ast.parse(pathlib.Path("infra/scripts/calendar-deploy-upgrade-3b5e9b.py").read_text())'
           python3 -c 'import ast,pathlib; ast.parse(pathlib.Path("infra/scripts/calendar-deploy-next-safe.py").read_text())'
+          python3 -c 'import ast,pathlib; ast.parse(pathlib.Path("infra/scripts/calendar-cutover-direct-safe.py").read_text())'
 
   validar-migracao-020-postgresql:
     name: Migração 020 — PostgreSQL 17 temporário
