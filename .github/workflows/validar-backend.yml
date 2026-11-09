@@ -129,6 +129,7 @@ jobs:
           node --check scripts/calendarCanaryStatusStdin.mjs
           node --check scripts/calendarThreeExceptionsAuditStdin.mjs
           node --check scripts/calendarThreeExceptionsFixStdin.mjs
+          node --check scripts/calendarFiveNewBookingsLinkStdin.mjs
           node --check src/googleCalendarDirectBridge.js
           node --check src/googleCalendarNewBookingAuth.js
           node --check src/googleCalendarLegacyCandidates.js
