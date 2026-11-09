@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { runInNewContext } from "node:vm";
 
 const root = new URL("../", import.meta.url);
 const [principal, html] = await Promise.all([
@@ -65,4 +66,54 @@ test("catálogo e busca carregam apenas no caminho de cliente e em paralelo às 
   assert.match(carga, /Promise\.all\(\[[\s\S]*import\("\.\/categoriasCatalogo\.mjs"\)[\s\S]*import\("\.\/catalogoBusca\.mjs"\)[\s\S]*getDocs\(collection\(db, "categorias"\)\)[\s\S]*getDocs\(collection\(db, "servicos"\)\)/);
   assert.match(principal, /configureClientInterface\(user, accessProfile, elements\)/);
   assert.match(principal, /void carregarCatalogoCliente\(\)/);
+});
+
+test("busca não mostra resultado vazio durante a carga e reaplica a consulta atual ao concluir", () => {
+  const inicio = principal.indexOf("function setupPrincipalSearch()");
+  const fim = principal.indexOf("/* ============================================================\n   ELEMENTOS DA PÁGINA", inicio);
+  const busca = principal.slice(inicio, fim);
+  const guarda = busca.indexOf("if (!gateBuscaCatalogo.estaPronto())");
+  const resultados = busca.indexOf("montarResultadosBuscaCliente(catalogoServicosCliente, query)");
+
+  assert.ok(guarda >= 0 && resultados > guarda);
+  assert.match(busca, /gateBuscaCatalogo\.agendar\(\(\) => renderResults\(searchInput\.value\)\)/);
+  assert.match(principal, /gateBuscaCatalogo\.finalizar\(\)/);
+  assert.doesNotMatch(principal, /montarResultadosBuscaCliente = \(\) => \[\]/);
+});
+
+test("fila da busca preserva consultas durante o carregamento e atualiza a consulta mais recente", () => {
+  const inicio = principal.indexOf("function criarGateBuscaProgressiva()");
+  const fim = principal.indexOf("\n\nconst gateBuscaCatalogo", inicio);
+  assert.ok(inicio >= 0 && fim > inicio);
+  const gate = runInNewContext(`${principal.slice(inicio, fim)}\ncriarGateBuscaProgressiva()`);
+  const renderizados = [];
+  let textoAtual = "fibra";
+
+  gate.agendar(() => renderizados.push(textoAtual));
+  assert.deepEqual(renderizados, []); // antes e durante: não produz falso “nenhum serviço”.
+
+  textoAtual = "banho de gel";
+  gate.agendar(() => renderizados.push(textoAtual));
+  assert.deepEqual(renderizados, []);
+
+  gate.finalizar();
+  assert.deepEqual(renderizados, ["banho de gel"]); // ao concluir, usa o texto atual.
+
+  textoAtual = "manicure";
+  gate.agendar(() => renderizados.push(textoAtual));
+  assert.deepEqual(renderizados, ["banho de gel", "manicure"]); // depois: executa na hora.
+});
+
+test("botão Editar foto só habilita após a importação instalar seus handlers", () => {
+  const inicio = principal.indexOf('const botaoEditarFoto = document.getElementById("editar-foto-perfil")');
+  const fim = principal.indexOf('if (accessProfile.role === "admin")', inicio);
+  const fluxo = principal.slice(inicio, fim);
+  const desabilitar = fluxo.indexOf("botaoEditarFoto.disabled = true");
+  const importar = fluxo.indexOf('import("./foto-perfil-preview.js?v=2")');
+  const habilitar = fluxo.indexOf("botaoEditarFoto.disabled = false");
+
+  assert.ok(desabilitar >= 0 && importar > desabilitar && habilitar > importar);
+  assert.match(fluxo.slice(importar), /\.then\(\(\) => \{[\s\S]*?botaoEditarFoto\.disabled = false/);
+  assert.match(fluxo, /botaoEditarFoto\.setAttribute\("aria-disabled", "true"\)/);
+  assert.match(fluxo, /botaoEditarFoto\.setAttribute\("aria-disabled", "false"\)/);
 });
