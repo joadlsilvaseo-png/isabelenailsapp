@@ -90,7 +90,24 @@ test("entradas inválidas e horários sem expediente são tratados como sem iní
 
 test("service worker permite somente deep link estrito do calendário com data e atualiza cache", async () => {
   const worker = await readFile(new URL("../service-worker.js", import.meta.url), "utf8");
-  assert.match(worker, /const CACHE_VERSION = "v31"/);
+  assert.match(worker, /const CACHE_VERSION = "v\d+"/);
   assert.ok(worker.includes(String.raw`/^\.\/admin-calendario\.html\?data=\d{4}-\d{2}-\d{2}$/`));
   assert.match(worker, /destinoAgendaAdministrativa \|\| destinoPaginaExistente/);
+});
+
+
+test("PWA atualizado negocia cutover no backend e nao duplica GAS em reagendamento direto", async()=>{
+  const front=await readFile(new URL("../agendamento.js",import.meta.url),"utf8");
+  const html=await readFile(new URL("../agendamento.html",import.meta.url),"utf8");
+  const worker=await readFile(new URL("../service-worker.js",import.meta.url),"utf8");
+  assert.match(front,/calendarClientSupportsBackend:\s*true/);
+  assert.match(front,/let operationId = sessionStorage\.getItem\(operacaoKey\)/);
+  assert.match(front,/sessionStorage\.removeItem\(operacaoKey\)/);
+  const verificarDireto=front.indexOf("resultadoReagendamento.calendarDiretoHabilitado === true");
+  const enviarLegado=front.indexOf("const googleScriptUrl =");
+  assert.ok(verificarDireto>0 && enviarLegado>verificarDireto,
+    "O PWA deve verificar o backend ANTES de oferecer o fallback GAS");
+  assert.match(front,/resultadoReagendamento\.sincronizacaoCalendar === "pendente"/);
+  assert.match(html,/agendamento\.js\?v=2\.4\.1/);
+  assert.match(worker,/const CACHE_VERSION = "v32"/);
 });
