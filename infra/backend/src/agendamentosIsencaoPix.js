@@ -405,6 +405,16 @@ export async function reagendarComBloqueio({ pool, db, uid, dados, dependencies 
       dependencies,
     });
   }
+  // Clientes PWA antigos enviam REAGENDAR diretamente ao Apps Script
+  // depois desta API. Durante o cutover, impedir que tais clientes
+  // alterem Firestore/PIX e disparem duas operações no mesmo evento.
+  // PIX pago já usa saga de calendário exclusivamente no backend.
+  if (dependencies.enviarCalendarSemPix &&
+      dados?.calendarClientSupportsBackend !== true) {
+    throw new ErroIsencaoPix(409,
+      "Atualize o aplicativo antes de reagendar. Feche e abra o aplicativo novamente.",
+      "PWA_CALENDAR_DESATUALIZADO");
+  }
   if (!["agendado", "reagendado", "confirmado"].includes(dadosAtuais.status)) {
     throw new ErroIsencaoPix(409, "Este agendamento não pode ser reagendado", "AGENDAMENTO_INATIVO");
   }
