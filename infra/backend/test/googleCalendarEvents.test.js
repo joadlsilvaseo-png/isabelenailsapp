@@ -159,3 +159,26 @@ test("evento cancelado nao pode ser reativado por PATCH; DELETE nao repete", asy
   );
   assert.deepEqual(cancelado.chamadas.map(x => x.method), ["GET", "GET"]);
 });
+
+test("ISO com milissegundos UTC e aceito na criacao sem alterar instante", async () => {
+  const data = { ...DADOS,
+    inicio: "2026-12-22T07:00:00-03:00",
+    fim: "2026-12-22T11:30:00.000Z",
+  };
+  const t = setup(() => resposta(201, evento()));
+  await t.adaptador.criarEvento(data);
+  assert.deepEqual(t.chamadas.map(x => x.method), ["POST"]);
+  const body = JSON.parse(t.chamadas[0].body);
+  assert.equal(Date.parse(body.end.dateTime) - Date.parse(body.start.dateTime), 90 * 60000);
+  assert.equal(body.end.dateTime, data.fim);
+});
+test("ISO com fracao invalida continua bloqueado antes de acessar Google", async () => {
+  for (const fim of ["2026-12-22T11:30:00.0000Z", "2026-12-22T11:30:00.abcZ",
+    "2026-12-22T11:30:00.000", "2026-12-22T11:30:00.000+25:00"]) {
+    const t = setup(() => { throw Error("nao chamar"); });
+    await assert.rejects(t.adaptador.criarEvento({ ...DADOS, fim }), {
+      codigo: "DATA_CALENDAR_INVALIDA",
+    });
+    assert.equal(t.chamadas.length, 0);
+  }
+});
