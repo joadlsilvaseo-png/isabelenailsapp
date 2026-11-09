@@ -89,7 +89,7 @@ export function criarPonteCalendarDireto(pool,{
       ? adaptador().consultarEventoLegado({eventId:id})
       : adaptador().consultarEvento({eventId:id});
   }
-  async function enviar({fluxo,tipo,agendamentoId,chave,nomeCliente,servico,inicio,fim}){
+  async function enviar({fluxo,tipo,agendamentoId,chave,nomeCliente,servico,inicio,fim,inicioAnterior=null}){
     if(!habilitado(fluxo))falhar("FLUXO_DESATIVADO");
     const id=validarAg(agendamentoId);
     if(typeof chave!=="string"||!/^[A-Za-z0-9_-]{16,160}$/.test(chave)){
@@ -100,7 +100,7 @@ export function criarPonteCalendarDireto(pool,{
     const dados={agendamentoId:id,nomeCliente,servico,inicio,fim};
     const intencao=await registrarIntencaoCalendar(pool,{
       chaveIdempotencia:chave,agendamentoId:id,calendarId,tipo,
-      googleEventId:eventId,pedido:{nomeCliente,servico,inicio,fim},
+      googleEventId:eventId,pedido:{nomeCliente,servico,inicio,fim,inicioAnterior},
     },{env});
     if(intencao.estado==="concluida"){
       return {eventId,operationId:intencao.operationId,jaConcluida:true};
@@ -136,7 +136,7 @@ export function criarPonteCalendarDireto(pool,{
         } else await adaptador().excluirEvento({eventId,agendamentoId:id});
       } else if(link.origem==="legado_validado") {
         await adaptador().atualizarEventoLegado({
-          ...dados,eventId,legacyEventId:"evt_"+id,
+          ...dados,eventId,legacyEventId:"evt_"+id,inicioAnterior,
         });
       } else await adaptador().atualizarEvento({...dados,eventId});
       const evento=await getRemoto(link,eventId);
@@ -172,17 +172,20 @@ export function criarPonteCalendarDireto(pool,{
       const str=String(payload.dataInicio||"");
       if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:00$/.test(str))falhar("DATA_INVALIDA");
       const p=periodo(str.slice(0,10),str.slice(11,16),payload.duracaoMinutos);
+      if(!payload.origemData || !payload.origemHorario)falhar("ORIGEM_AUSENTE");
+      const inicioAnterior=periodo(payload.origemData,payload.origemHorario,1).inicio;
       return enviar({fluxo:"reagendar_pago",tipo:"reagendar",
         agendamentoId:legacy.slice(4),
         chave:"imn-reagendar-"+String(payload.operationId||""),
-        nomeCliente:payload.nomeCliente,servico:payload.servico,...p});
+        nomeCliente:payload.nomeCliente,servico:payload.servico,...p,inicioAnterior});
     },
-    reagendarIsento({agendamentoId,operationId,nomeCliente,servico,data,horario,duracao}) {
+    reagendarIsento({agendamentoId,operationId,nomeCliente,servico,data,horario,duracao,origemData,origemHorario}) {
       const id=validarAg(agendamentoId);
       const p=periodo(data,horario,duracao);
+      const inicioAnterior=periodo(origemData,origemHorario,1).inicio;
       return enviar({fluxo:"reagendar_isento",tipo:"reagendar",
         agendamentoId:id,chave:"imn-reagendar-isento-"+String(operationId||""),
-        nomeCliente,servico,...p});
+        nomeCliente,servico,...p,inicioAnterior});
     },
     alterarServico(row) {
       const legacy=String(row.calendar_event_id||"");
@@ -193,7 +196,7 @@ export function criarPonteCalendarDireto(pool,{
       return enviar({fluxo:"alterar_servico",tipo:"alterar_servico",
         agendamentoId:legacy.slice(4),
         chave:"imn-servico-"+String(row.operation_id||""),
-        nomeCliente:row.nome_cliente,servico:row.novo_servico_nome,...p});
+        nomeCliente:row.nome_cliente,servico:row.novo_servico_nome,...p,inicioAnterior:p.inicio});
     },
   };
 }
