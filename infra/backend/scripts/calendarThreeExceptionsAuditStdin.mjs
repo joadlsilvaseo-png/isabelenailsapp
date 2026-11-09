@@ -155,6 +155,8 @@ try {
   });
   if(typeof token.access_token!=="string" || !token.access_token)
     falhar("TOKEN_GOOGLE_INDISPONIVEL");
+  if(token.refresh_token && token.refresh_token !== refresh)
+    falhar("TOKEN_GOOGLE_ROTACIONADO_CONFERIR_OAUTH");
   const user=await pedir("https://openidconnect.googleapis.com/v1/userinfo",{
     headers:{Authorization:"Bearer "+token.access_token},
   });
