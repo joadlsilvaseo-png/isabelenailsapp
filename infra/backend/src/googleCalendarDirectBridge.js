@@ -63,6 +63,14 @@ export function criarPonteCalendarDireto(pool,{
       falhar("CUTOVER_FLAGS_INCOMPLETAS");
     }
     if(fluxo==="criar_pix"){
+      // Evento novo da API usa marcador privado, nao a descricao legada
+      // usada pelo GAS. Todas as operacoes subsequentes tambem precisam
+      // usar API direta, e o frontend deve suprimir o POST legado no-cors.
+      const dependentes=["cancelar","reagendar_pago","reagendar_isento","alterar_servico"];
+      if(dependentes.some(nome=>env[FLUXOS[nome]]!=="true") ||
+         env.GOOGLE_CALENDAR_FRONTEND_PWA_READY!=="true"){
+        falhar("CUTOVER_CRIACAO_EXIGE_FLUXOS_E_FRONTEND");
+      }
       const cutoff=String(env.GOOGLE_CALENDAR_CUTOVER_STARTED_AT||"");
       if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2})$/.test(cutoff)||
          !Number.isFinite(Date.parse(cutoff))||
