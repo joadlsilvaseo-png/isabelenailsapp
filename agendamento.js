@@ -1111,11 +1111,17 @@ async function inicializarAgendamento() {
             // A API ja assumiu a sincronizacao; duplicar pelo antigo
             // Apps Script criaria operacoes concorrentes no mesmo evento.
             if (resultadoReagendamento.sincronizacaoCalendar === "pendente") {
-              window.alert("O reagendamento foi salvo no sistema, mas a sincronização com o Google Calendar está pendente. Confira o atendimento antes de tentar novamente.");
-            } else if (resultadoReagendamento.sincronizacaoCalendar === "confirmada" ||
-                       resultadoReagendamento.sincronizacaoCalendar === "sem_alteracao") {
-              sessionStorage.removeItem(operacaoKey);
+              window.alert("Seu reagendamento foi salvo, mas o Google Calendar ainda não confirmou. Você pode verificar novamente usando este botão, sem criar outra reserva.");
+              botaoAgendar.textContent = "Verificar sincronização";
+              botaoAgendar.disabled = false;
+              botaoAgendar.classList.remove("agendamento-button--disabled");
+              return;
             }
+            if (resultadoReagendamento.sincronizacaoCalendar !== "confirmada" &&
+                resultadoReagendamento.sincronizacaoCalendar !== "sem_alteracao") {
+              throw new Error("Sincronização pendente de confirmação. Não tente criar outra reserva.");
+            }
+            sessionStorage.removeItem(operacaoKey);
             localStorage.setItem("dataAgendamento", data);
             localStorage.setItem("horaAgendamento", horario);
             localStorage.setItem("nomeCliente", payloadWebhook.nomeCliente);
@@ -1158,9 +1164,14 @@ async function inicializarAgendamento() {
           : "confirmacao.html";
       } catch (error) {
         console.error(error);
-        window.alert("Erro ao salvar agendamento.");
+        window.alert(reagendarId
+          ? (error?.message || "Não foi possível confirmar o reagendamento.")
+          : "Erro ao salvar agendamento.");
         botaoAgendar.disabled = false;
-        botaoAgendar.textContent = "Confirmar Agendamento";
+        botaoAgendar.classList.remove("agendamento-button--disabled");
+        botaoAgendar.textContent = reagendarId
+          ? "Verificar reagendamento"
+          : "Confirmar Agendamento";
       }
     });
   });
