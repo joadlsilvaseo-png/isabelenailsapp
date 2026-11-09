@@ -494,6 +494,9 @@ test("cutover: sem vinculo aprovado bloqueia antes de alterar dados",async()=>{
     dados:pedidoCalendar(),dependencies:f.dependencies,
   }),{codigo:"CALENDAR_VINCULO_NAO_VALIDADO"});
   assert.equal(f.state.documentos.get("agendamentos/original").data,"2026-11-03");
+  assert.ok(f.state.sqlStatements.some(sql =>
+    sql.includes("calendar_id=$2") &&
+    sql.includes("metodo_verificacao='revisao_manual_confirmada'")));
 });
 
 test("cutover: rejeita outra operacao Google ainda pendente",async()=>{
