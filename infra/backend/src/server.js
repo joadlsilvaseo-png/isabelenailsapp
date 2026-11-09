@@ -22,6 +22,7 @@ import { pixPagoReagendamentoHabilitado } from "./pixReagendamentoPago.js";
 import { consultarDisponibilidadePix } from "./pixDisponibilidadeApi.js";
 import { atenderGerenciarCalendario } from "./agendaBloqueios.js";
 import { atenderGestaoClientes } from "./gestaoClientes.js";
+import { atenderLembretesWhatsappAmanha } from "./lembretesWhatsappAmanha.js";
 import { atenderFotosPerfil } from "./fotosPerfil.js";
 import { atenderAlteracaoServico, iniciarWorkerAlteracaoServico } from "./agendamentoAlteracaoServico.js";
 import { atenderAssistenteEncaixes } from "./assistenteEncaixes.js";
@@ -99,6 +100,12 @@ const server = http.createServer(async (req, res) => {
     new URL(req.url, "http://localhost").pathname.startsWith("/notificacoes")
   ) {
     await atenderCentralNotificacoes(req, res, pool);
+    return;
+  }
+
+  // Lembretes manuais exclusivos da profissional; nenhum envio automatico.
+  if (/^\/admin\/lembretes-amanha(?:\/marcacao)?$/.test(new URL(req.url, "http://localhost").pathname)) {
+    await atenderLembretesWhatsappAmanha(req, res, pool);
     return;
   }
 

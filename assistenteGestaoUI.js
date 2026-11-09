@@ -170,7 +170,17 @@ export async function iniciarAssistenteGestao({ user, contexto = "home" }) {
     (contexto === "home" ? document.body.dataset.userRole === "admin"
       : document.body.dataset.accessState === "allowed");
   if (!autorizado()) return;
-  if (contexto === "home") prepararExpansaoHome(root);
+  if (contexto === "home") {
+    prepararExpansaoHome(root);
+    // A lista de amanha carrega em paralelo e nao atrasa o resumo do dia.
+    void import("./assistenteLembretesWhatsappUI.js?v=2")
+      .then(({ iniciarLembretesAmanha }) => {
+        if (autorizado()) iniciarLembretesAmanha({ root, user });
+      })
+      .catch((erro) => {
+        console.warn("[Assistente Gestão] Lembretes WhatsApp indisponíveis:", erro.message);
+      });
+  }
   const estado = $(root, "[data-ig-estado]"), dados = $(root, "[data-ig-dados]");
   estado.hidden = false;
   estado.textContent = "Preparando recomendações com seus dados...";
