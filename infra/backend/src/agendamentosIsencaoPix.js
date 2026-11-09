@@ -452,8 +452,11 @@ export async function reagendarComBloqueio({ pool, db, uid, dados, dependencies 
       // Preflight ANTES de alterar Firestore e reserva PIX.
       const vinculo = await conexao.query(
         "SELECT google_event_id FROM public.google_calendar_event_links " +
-        "WHERE agendamento_id=$1 AND situacao='ativo' FOR SHARE",
-        [agendamentoId],
+        "WHERE agendamento_id=$1 AND calendar_id=$2 AND situacao='ativo' " +
+        "AND (origem='vps' OR " +
+        "(origem='legado_validado' AND metodo_verificacao='revisao_manual_confirmada')) " +
+        "FOR SHARE",
+        [agendamentoId, dependencies.calendarId || process.env.GOOGLE_CALENDAR_ID],
       );
       if (vinculo.rowCount !== 1) {
         throw new ErroIsencaoPix(409,
