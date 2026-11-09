@@ -402,8 +402,17 @@ async function processarOperacao(op, pool, dependencies = {}) {
       data: op.destino_data_iso, horario: hora(Number(op.destino_inicio)),
       duracao: Number(op.destino_fim) - Number(op.destino_inicio),
     });
-    await (dependencies.enviarCalendar ||
-      ((dados) => enviarReagendamentoPix(dados, fetch, URL_APPS_SCRIPT)))(payload);
+    if (dependencies.enviarCalendar) {
+      // O backend direto precisa da origem para nao sobrescrever
+      // silenciosamente um evento movido manualmente no Google.
+      await dependencies.enviarCalendar({
+        ...payload,
+        origemData: op.origem_data_iso,
+        origemHorario: hora(Number(op.origem_inicio)),
+      });
+    } else {
+      await enviarReagendamentoPix(payload, fetch, URL_APPS_SCRIPT);
+    }
     await pool.query(`
       UPDATE public.pix_reagendamentos_pagos
       SET estado = 'calendar_enviado', atualizado_em = NOW()

@@ -33,6 +33,22 @@ on:
       - "infra/scripts/**"
       - ".github/workflows/validar-backend.yml"
 jobs:
+  validar-imagem-calendar:
+    name: Build imagem Calendar sem publicar
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Construir Docker da API na branch exata
+        run: |
+          docker build --build-arg APP_REVISION="${{ github.sha }}" \
+            -t isabele-nails-api:calendar-ci \
+            -f infra/backend/Dockerfile infra/backend
+      - name: Verificar scripts operacionais e entrada sem executar API
+        run: |
+          docker run --rm --entrypoint node isabele-nails-api:calendar-ci \
+            --check /app/src/server.js
+          docker run --rm --entrypoint node isabele-nails-api:calendar-ci \
+            --check /app/scripts/calendarLegacyReview.mjs
   migracao-021:
     name: Migração 021 e reagendamento pago — PostgreSQL 17 temporário
     runs-on: ubuntu-latest
@@ -108,6 +124,16 @@ jobs:
           node --check src/pixCalendarWorker.js
           node --check scripts/calendarAuditOAuthStageStdin.mjs
           node --check scripts/calendarAuditTemporalStdin.mjs
+          node --check scripts/calendarLegacyReview.mjs
+          node --check scripts/calendarCanaryStdin.mjs
+          node --check scripts/calendarCanaryStatusStdin.mjs
+          node --check scripts/calendarThreeExceptionsAuditStdin.mjs
+          node --check scripts/calendarThreeExceptionsFixStdin.mjs
+          node --check scripts/calendarFiveNewBookingsLinkStdin.mjs
+          node --check src/googleCalendarDirectBridge.js
+          node --check src/googleCalendarNewBookingAuth.js
+          node --check src/googleCalendarLegacyCandidates.js
+          node --check ../../agendamento.js
           node --check src/pixReagendamentoPago.js
           node --check src/pixReagendamentoPagoOperacao.js
           node --check src/agendamentosIsencaoPix.js
@@ -144,6 +170,12 @@ jobs:
         run: |
           bash -n infra/scripts/atualizar-vps-pix.sh
           bash -n infra/scripts/backup-pre-grade-15.sh
+          bash -n infra/scripts/calendar-stage-image.sh
+          python3 -c 'import ast,pathlib; ast.parse(pathlib.Path("infra/scripts/calendar-deploy-stage-safe.py").read_text())'
+          python3 -c 'import ast,pathlib; ast.parse(pathlib.Path("infra/scripts/calendar-deploy-upgrade-3b5e9b.py").read_text())'
+          python3 -c 'import ast,pathlib; ast.parse(pathlib.Path("infra/scripts/calendar-deploy-next-safe.py").read_text())'
+          python3 -c 'import ast,pathlib; ast.parse(pathlib.Path("infra/scripts/calendar-cutover-direct-safe.py").read_text())'
+          python3 -c 'import ast,pathlib; ast.parse(pathlib.Path("infra/scripts/calendar-deploy-final-safe.py").read_text())'
 
   validar-migracao-020-postgresql:
     name: Migração 020 — PostgreSQL 17 temporário
@@ -224,6 +256,9 @@ jobs:
       - name: Validar transacoes Node e recuperacao de timeout no PG17
         working-directory: infra/backend
         run: node --test test/googleCalendarSafeStore.postgres.test.js
+      - name: Simular cutover direto com estado real no PostgreSQL 17
+        working-directory: infra/backend
+        run: node --test test/googleCalendarDirectBridge.postgres.test.js
       - name: Confirmar indices de seguranca e ausencia de dependencias legadas
         run: |
           test "$(psql -v ON_ERROR_STOP=1 -Atc "SELECT COUNT(*) FROM pg_indexes WHERE schemaname='public' AND indexname IN ('ux_google_calendar_operacao_ativa','idx_google_calendar_operacoes_pendentes','idx_google_calendar_operacoes_lease','idx_google_calendar_candidatos_pendentes','idx_google_calendar_candidatos_evento');")" = "5"

@@ -20,7 +20,7 @@ const FMT = new Intl.DateTimeFormat("en-US", {
 const ESTADOS_PERMITIDOS = new Set([
   "confirmado", "reagendado", "agendado",
   "concluido", "concluida", "finalizado", "finalizada",
-  "realizado", "realizada",
+  "realizado", "realizada", "atendido", "atendida",
 ]);
 
 function falhar(codigo) {
@@ -191,7 +191,7 @@ export function prepararCandidatosLegados({
     if (!p.tituloCorresponde) { revisar(row,"TITULO_DIVERGENTE",event); continue; }
     const fingerprintEvidencia=createHash("sha256").update(JSON.stringify({
       agendamentoId:row.agendamento_id, calendarId, legacyEventId:row.event_id,
-      googleEventId:event.id,horario:p.eventoInicio,duracao:p.eventoDuracao,
+      googleEventId:event.id,etag:event.etag||null,horario:p.eventoInicio,duracao:p.eventoDuracao,
       status:String(doc.status).toLowerCase(),
     })).digest("hex");
     candidatos.push({

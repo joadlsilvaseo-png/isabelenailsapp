@@ -25,6 +25,8 @@ function criarFixture({ isenta = true, reservas = [], documentos = {}, falharCom
     falharCommit,
     falharFirestore,
     sqlStatements: [],
+    calendarVinculo: true,
+    calendarPendente: null,
   };
   let firestoreQueue = Promise.resolve();
   let postgresQueue = Promise.resolve();
@@ -145,6 +147,14 @@ function criarFixture({ isenta = true, reservas = [], documentos = {}, falharCom
           }
           if (sql === "ROLLBACK") { pendingReservations = null; release?.(); release = null; return { rows: [], rowCount: 0 }; }
           if (sql.includes("pg_advisory_xact_lock")) return { rows: [], rowCount: 0 };
+          if (sql.includes("FROM public.google_calendar_event_links")) {
+            return { rows: state.calendarVinculo ? [{google_event_id:"evento-valido-ci"}] : [],
+              rowCount: state.calendarVinculo ? 1 : 0 };
+          }
+          if (sql.includes("FROM public.google_calendar_sync_operations")) {
+            return { rows: state.calendarPendente ? [{chave_idempotencia:state.calendarPendente}] : [],
+              rowCount: state.calendarPendente ? 1 : 0 };
+          }
           if (sql.includes("FROM public.agenda_bloqueios")) {
              return { rows: [], rowCount: 0 };
            }
@@ -446,4 +456,92 @@ test("reserva sem vínculo não bloqueia o horário iniciado no término exato",
     dependencies: f.dependencies,
   });
   assert.equal(resultado.agendamentoConfirmado, true);
+});
+
+
+const OPERACAO_CALENDAR="aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
+const DOC_REAGENDAMENTO = {
+  clienteId:UID,nomeCliente:"Cliente Um",data:"2026-11-03",horario:"13:00",
+  duracao:60,status:"confirmado",calendarEventId:"evt_original",
+};
+function pedidoCalendar(operationId=OPERACAO_CALENDAR, clientSupport=true){
+  return {agendamentoId:"original",servicoId:"s1",data:DATA,horario:"14:00",
+    operationId,calendarClientSupportsBackend:clientSupport};
+}
+
+test("cutover: PWA antigo nao modifica Firestore nem reserva PIX",async()=>{
+  const f=criarFixture({isenta:false,documentos:{
+    "agendamentos/original":DOC_REAGENDAMENTO,
+  }});
+  f.dependencies.enviarCalendarSemPix=async()=>{throw Error("nao pode chamar");};
+  await assert.rejects(reagendarComBloqueio({
+    pool:f.pool,db:f.firestore,uid:UID,
+    dados:pedidoCalendar(OPERACAO_CALENDAR,false),
+    dependencies:f.dependencies,
+  }),{codigo:"PWA_CALENDAR_DESATUALIZADO"});
+  assert.equal(f.state.documentos.get("agendamentos/original").data,"2026-11-03");
+  assert.equal(f.state.reservas.length,0);
+});
+
+test("cutover: sem vinculo aprovado bloqueia antes de alterar dados",async()=>{
+  const f=criarFixture({isenta:false,documentos:{
+    "agendamentos/original":DOC_REAGENDAMENTO,
+  }});
+  f.state.calendarVinculo=false;
+  f.dependencies.enviarCalendarSemPix=async()=>{throw Error("nao pode chamar");};
+  await assert.rejects(reagendarComBloqueio({
+    pool:f.pool,db:f.firestore,uid:UID,
+    dados:pedidoCalendar(),dependencies:f.dependencies,
+  }),{codigo:"CALENDAR_VINCULO_NAO_VALIDADO"});
+  assert.equal(f.state.documentos.get("agendamentos/original").data,"2026-11-03");
+  assert.ok(f.state.sqlStatements.some(sql =>
+    sql.includes("calendar_id=$2") &&
+    sql.includes("metodo_verificacao='revisao_manual_confirmada'")));
+});
+
+test("cutover: rejeita outra operacao Google ainda pendente",async()=>{
+  const f=criarFixture({isenta:false,documentos:{
+    "agendamentos/original":DOC_REAGENDAMENTO,
+  }});
+  f.state.calendarPendente="imn-reagendar-isento-00000000-0000-4000-8000-000000000000";
+  f.dependencies.enviarCalendarSemPix=async()=>{throw Error("nao pode chamar");};
+  await assert.rejects(reagendarComBloqueio({
+    pool:f.pool,db:f.firestore,uid:UID,
+    dados:pedidoCalendar(),dependencies:f.dependencies,
+  }),{codigo:"CALENDAR_OPERACAO_PENDENTE"});
+  assert.equal(f.state.documentos.get("agendamentos/original").data,"2026-11-03");
+});
+
+test("cutover: timeout sem PIX recupera com mesmo UUID e horario original",async()=>{
+  const f=criarFixture({isenta:false,documentos:{
+    "agendamentos/original":DOC_REAGENDAMENTO,
+  }});
+  let chamadas=0;
+  const enviados=[];
+  f.dependencies.enviarCalendarSemPix=async dados=>{
+    chamadas++;enviados.push(dados);
+    if(chamadas===1)throw Error("timeout simulado");
+    return {confirmado:true};
+  };
+  const primeiro=await reagendarComBloqueio({
+    pool:f.pool,db:f.firestore,uid:UID,
+    dados:pedidoCalendar(),dependencies:f.dependencies,
+  });
+  assert.equal(primeiro.calendarDiretoHabilitado,true);
+  assert.equal(primeiro.sincronizacaoCalendar,"pendente");
+  assert.equal(primeiro.reagendado,true);
+  const segundo=await reagendarComBloqueio({
+    pool:f.pool,db:f.firestore,uid:UID,
+    dados:pedidoCalendar(),dependencies:f.dependencies,
+  });
+  assert.equal(segundo.sincronizacaoCalendar,"confirmada");
+  assert.equal(segundo.reagendado,false);
+  assert.equal(chamadas,2);
+  assert.equal(enviados[0].operationId,OPERACAO_CALENDAR);
+  assert.equal(enviados[1].operationId,OPERACAO_CALENDAR);
+  assert.equal(enviados[0].origemData,"2026-11-03");
+  assert.equal(enviados[1].origemData,"2026-11-03");
+  assert.equal(enviados[0].origemHorario,"13:00");
+  assert.equal(enviados[1].origemHorario,"13:00");
+  assert.equal(f.state.documentos.get("agendamentos/original").horario,"14:00");
 });

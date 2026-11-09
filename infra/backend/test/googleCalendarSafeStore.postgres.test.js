@@ -209,8 +209,8 @@ test("PostgreSQL 17: idempotencia, timeout, vinculo atomico e legado bloqueado",
       chaveIdempotencia: "calendario-intent-teste-legacy",
     }, OPCOES), { codigo: "LEGADO_AGUARDANDO_RECONCILIACAO" });
 
-    // Vinculo legado validado so pode ser lido/auditado; nunca PATCH via
-    // adaptador direto que exige propriedade privada da VPS.
+    // Vinculo legado revisado pode usar API direta com referencia exata na
+    // descricao do evento, sem exigir marcador privado inexistente do GAS.
     await pool.query(
       `INSERT INTO public.google_calendar_event_links
        (agendamento_id, calendar_id, google_event_id, origem,
@@ -218,10 +218,30 @@ test("PostgreSQL 17: idempotencia, timeout, vinculo atomico e legado bloqueado",
        VALUES ('legacy-02',$1,'evento-legado-02','legado_validado',
                'revisao_manual_confirmada',NOW(),'administradora')`, [CALENDAR],
     );
-    await assert.rejects(registrarIntencaoCalendar(pool, {
+    const legacy = await registrarIntencaoCalendar(pool, {
       ...BASE, agendamentoId: "legacy-02", tipo: "alterar_servico",
       googleEventId: "evento-legado-02", chaveIdempotencia: "calendario-intent-legacy-02",
-    }, OPCOES), { codigo: "EVENTO_LEGADO_NAO_MIGRADO" });
+    }, OPCOES);
+    assert.equal(legacy.estado, "pendente");
+    const revendicado = await reivindicarIntencaoCalendar(pool, {
+      calendarId: CALENDAR, operationId: legacy.operationId,
+    }, WORKER_OPCOES);
+    assert.equal(revendicado.operation_id, legacy.operationId);
+    await assert.rejects(confirmarIntencaoCalendar(pool, {
+      operationId: legacy.operationId, leaseToken: revendicado.lease_token,
+      googleEvent: { id: "evento-legado-02", status: "confirmed", description: "outra reserva" },
+    }, WORKER_OPCOES), { codigo: "MARCADOR_LEGADO_DIVERGENTE" });
+    await confirmarIntencaoCalendar(pool, {
+      operationId: legacy.operationId, leaseToken: revendicado.lease_token,
+      googleEvent: {
+        id: "evento-legado-02", status: "confirmed",
+        description: "Referencia: evt_legacy-02",
+      },
+    }, WORKER_OPCOES);
+    const legacyLink = await pool.query(
+      "SELECT origem,situacao FROM public.google_calendar_event_links WHERE agendamento_id='legacy-02'",
+    );
+    assert.deepEqual(legacyLink.rows[0], { origem:"legado_validado", situacao:"ativo" });
   } finally {
     await pool.end();
   }

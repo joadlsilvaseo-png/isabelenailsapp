@@ -25,6 +25,39 @@ function exigirIdAgendamento(id) {
   return id;
 }
 
+// O ID retornado por events.get para um evento legado pode diferir das
+// regras para IDs customizados aceitos por events.insert. Sempre usar o ID
+// REAL obtido do Google e previamente validado no PostgreSQL.
+function exigirIdEventoLegado(id) {
+  if (typeof id !== "string" || !/^[A-Za-z0-9_-]{5,1024}$/.test(id)) {
+    throw erro("GOOGLE_EVENT_ID_INVALIDO", "ID de evento legado nao confirmado.");
+  }
+  return id;
+}
+function validarMarcadorLegado(evento, agendamentoId, legacyEventId) {
+  const id = exigirIdAgendamento(agendamentoId);
+  if (legacyEventId !== "evt_" + id) {
+    throw erro("GOOGLE_LEGADO_REFERENCIA_DIVERGENTE", "Referencia da reserva legada nao corresponde.");
+  }
+  const desc = evento?.description;
+  if (typeof desc !== "string") {
+    throw erro("GOOGLE_LEGADO_SEM_MARCADOR", "Evento nao tem referencia legada verificavel.");
+  }
+  const pattern = new RegExp("(^|[^A-Za-z0-9_-])" + legacyEventId + "(?=$|[^A-Za-z0-9_-])");
+  if (!pattern.test(desc)) {
+    throw erro("GOOGLE_LEGADO_SEM_MARCADOR", "Referencia legada nao encontrada no evento.");
+  }
+  const priv = evento.extendedProperties?.private;
+  if (priv?.isabeleOrigem === ORIGEM && priv.isabeleAgendamentoId !== id) {
+    throw erro("GOOGLE_LEGADO_OUTRO_AGENDAMENTO", "Marcador privado conflita com reserva.");
+  }
+  if (evento.recurringEventId || evento.status === "cancelled") {
+    throw erro("GOOGLE_LEGADO_STATUS_INVALIDO", "Evento nao permite alteracao legada.");
+  }
+  if (typeof evento.etag !== "string" || !evento.etag) {
+    throw erro("ETAG_GOOGLE_AUSENTE", "Versao do evento nao confirmada.");
+  }
+}
 function exigirIdEvento(id) {
   if (typeof id !== "string" || !/^[a-v0-9]{5,1024}$/.test(id)) {
     throw erro("GOOGLE_EVENT_ID_INVALIDO", "Identificador Google Calendar invalido.");
@@ -44,7 +77,8 @@ export function gerarIdEventoGoogle(agendamentoId) {
 
 function dataComFuso(valor) {
   if (typeof valor !== "string") throw erro("DATA_CALENDAR_INVALIDA", "Data sem fuso horario.");
-  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(Z|[+-]\d{2}:\d{2})$/.exec(valor);
+  // Aceita milissegundos ISO emitidos por Date#toISOString (ex.: .000Z).
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,3})?(Z|[+-]\d{2}:\d{2})$/.exec(valor);
   if (!m) throw erro("DATA_CALENDAR_INVALIDA", "Informe data ISO 8601 com fuso horario.");
   const [, yy, mm, dd, hh, mi, ss, tz] = m;
   const ano = Number(yy), mes = Number(mm), dia = Number(dd);
@@ -175,13 +209,26 @@ export function criarAdaptadorGoogleCalendar({
     return body;
   }
 
+  async function buscarLegado(eventId) {
+    const id = exigirIdEventoLegado(eventId);
+    const retorno = await requisitar("GET", urlBase + "/" + encodeURIComponent(id));
+    if (retorno.status === 404) return null;
+    if (retorno.body?.id !== id) {
+      throw erro("GOOGLE_LEGADO_ID_DIVERGENTE", "A API retornou evento diferente do vinculado.");
+    }
+    return retorno.body;
+  }
+
   return {
     /**
      * Inventario SOMENTE LEITURA e com limite fechado. Nunca retorna resultado
      * incompleto: o reconciliador precisa avaliar TODAS as paginas.
      * Nao solicita titulo, descricao, convidados ou nomes de clientes.
      */
-    async listarEventos({ inicio, fim }) {
+    async listarEventos({ inicio, fim, incluirDescricao = false }) {
+      if (incluirDescricao && env.GOOGLE_CALENDAR_AUDIT_ENABLED !== "true") {
+        throw erro("AUDITORIA_NAO_AUTORIZADA", "Consulta detalhada somente em auditoria isolada.");
+      }
       const de = dataComFuso(inicio);
       const ate = dataComFuso(fim);
       if (ate <= de || ate - de > 31 * 24 * 60 * 60 * 1000) {
@@ -198,7 +245,9 @@ export function criarAdaptadorGoogleCalendar({
         url.searchParams.set("showDeleted", "false");
         url.searchParams.set("orderBy", "startTime");
         url.searchParams.set("maxResults", "250");
-        url.searchParams.set("fields", "kind,nextPageToken,items(id,iCalUID,status,start(date,dateTime),end(date,dateTime),recurringEventId,extendedProperties(private))");
+        url.searchParams.set("fields", incluirDescricao
+          ? "kind,nextPageToken,items(id,iCalUID,status,summary,description,etag,start(date,dateTime),end(date,dateTime),recurringEventId,extendedProperties(private))"
+          : "kind,nextPageToken,items(id,iCalUID,status,start(date,dateTime),end(date,dateTime),recurringEventId,extendedProperties(private))");
         if (paginaToken) url.searchParams.set("pageToken", paginaToken);
         const retorno = await requisitar("GET", url.toString());
         if (retorno.status !== 200 || retorno.body?.kind !== "calendar#events" ||
@@ -223,6 +272,76 @@ export function criarAdaptadorGoogleCalendar({
 
     async consultarEvento({ eventId }) {
       return buscar(eventId); // Somente leitura, nenhum write flag.
+    },
+    async consultarEventoLegado({ eventId }) {
+      return buscarLegado(eventId); // Somente leitura, ID Google real.
+    },
+
+    /**
+     * Eventos do Apps Script previamente vinculados pelo revisor:
+     * exige events.id REAL + marcacao 'evt_<agendamentoId>' na descricao.
+     * Nunca insere evento ou altera metadados usados para conciliacao.
+     */
+    async atualizarEventoLegado({
+      agendamentoId, legacyEventId, eventId, nomeCliente, servico, inicio, fim,
+      inicioAnterior,
+    }) {
+      escrever();
+      const idEvento = exigirIdEventoLegado(eventId);
+      const atual = await buscarLegado(idEvento);
+      if (!atual) throw erro("GOOGLE_LEGADO_NAO_ENCONTRADO", "Evento legado ausente.");
+      validarMarcadorLegado(atual, agendamentoId, legacyEventId);
+      // Requisicoes repetidas apos timeout nao podem sobrescrever o evento
+      // novamente. Se ja esta no estado desejado, somente confirmar.
+      const desejado = montarDados({ agendamentoId, nomeCliente, servico, inicio, fim });
+      if (Date.parse(atual.start?.dateTime) === Date.parse(inicio) &&
+          Date.parse(atual.end?.dateTime) === Date.parse(fim) &&
+          atual.summary === desejado.summary) {
+        return { eventId: idEvento, atualizado: false, jaEstavaAtualizado: true };
+      }
+      // Evita sobrescrever um evento deslocado manualmente no Calendar,
+      // em divergencia com o horario que o sistema considera atual.
+      if (inicioAnterior) {
+        const esperado = dataComFuso(inicioAnterior);
+        if (Date.parse(atual.start?.dateTime) !== esperado) {
+          throw erro("GOOGLE_LEGADO_HORARIO_ALTERADO",
+            "Evento Google foi movido fora do sistema; conciliacao obrigatoria.");
+        }
+      }
+      const { extendedProperties: _semAlterarPropriedades, ...mudancas } =
+        montarDados({ agendamentoId, nomeCliente, servico, inicio, fim });
+      const resposta = await requisitar(
+        "PATCH", urlBase + "/" + encodeURIComponent(idEvento) + "?sendUpdates=none",
+        mudancas, atual.etag,
+      );
+      if (resposta.body?.id !== idEvento || resposta.body.status === "cancelled") {
+        throw erro("GOOGLE_LEGADO_SEM_CONFIRMACAO", "Atualizacao nao confirmada.");
+      }
+      validarMarcadorLegado(resposta.body, agendamentoId, legacyEventId);
+      if (Date.parse(resposta.body.start?.dateTime) !== Date.parse(inicio) ||
+          Date.parse(resposta.body.end?.dateTime) !== Date.parse(fim)) {
+        throw erro("GOOGLE_LEGADO_DADOS_DIVERGENTES", "Evento atualizado em horario diferente.");
+      }
+      return { eventId: idEvento, atualizado: true };
+    },
+
+    async excluirEventoLegado({ agendamentoId, legacyEventId, eventId }) {
+      escrever();
+      const idEvento = exigirIdEventoLegado(eventId);
+      const atual = await buscarLegado(idEvento);
+      if (!atual || atual.status === "cancelled") {
+        return { eventId: idEvento, jaAusente: true, excluido: false };
+      }
+      validarMarcadorLegado(atual, agendamentoId, legacyEventId);
+      const resposta = await requisitar(
+        "DELETE", urlBase + "/" + encodeURIComponent(idEvento) + "?sendUpdates=none",
+        null, atual.etag,
+      );
+      if (resposta.status !== 204 && resposta.status !== 404) {
+        throw erro("GOOGLE_LEGADO_SEM_CONFIRMACAO", "Cancelamento nao confirmado.");
+      }
+      return { eventId: idEvento, excluido: resposta.status === 204,
+        jaAusente: resposta.status === 404 };
     },
 
     async criarEvento(dados) {

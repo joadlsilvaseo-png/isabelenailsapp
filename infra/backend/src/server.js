@@ -27,10 +27,28 @@ import { atenderAlteracaoServico, iniciarWorkerAlteracaoServico } from "./agenda
 import { atenderAssistenteEncaixes } from "./assistenteEncaixes.js";
 import { iniciarMonitorOportunidades } from "./assistenteEncaixesMonitor.js";
 import { atenderGoogleCalendarOAuth } from "./googleCalendarOAuth.js";
+import { criarPonteCalendarDireto } from "./googleCalendarDirectBridge.js";
 
 const { Pool } = pg;
 
 const pool = new Pool();
+// Sem flags de cutover, o roteador nao acessa Google nem cria jobs.
+const ponteCalendar = criarPonteCalendarDireto(pool);
+const transportePixCalendar = {
+  ...(ponteCalendar.habilitado("criar_pix")
+    ? { enviarCriacao: (row) => ponteCalendar.criarPix(row) } : {}),
+  ...(ponteCalendar.habilitado("cancelar")
+    ? { enviarCancelamento: (row) => ponteCalendar.cancelar(row) } : {}),
+};
+const transporteReagendamentoPix = ponteCalendar.habilitado("reagendar_pago")
+  ? { enviarCalendar: (payload) => ponteCalendar.reagendarPago(payload) } : {};
+const transporteReagendamentoIsento = ponteCalendar.habilitado("reagendar_isento")
+  ? {
+      enviarCalendarSemPix: (payload) => ponteCalendar.reagendarIsento(payload),
+      calendarId: process.env.GOOGLE_CALENDAR_ID,
+    } : {};
+const transporteAlteracaoServico = ponteCalendar.habilitado("alterar_servico")
+  ? { enviarCalendar: (row) => ponteCalendar.alterarServico(row) } : {};
 const PORT = Number(process.env.PORT || 3001);
 
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
@@ -91,7 +109,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (new URL(req.url, "http://localhost").pathname === "/admin/agendamentos/servico") {
-    await atenderAlteracaoServico(req, res, pool);
+    await atenderAlteracaoServico(req, res, pool, transporteAlteracaoServico);
     return;
   }
 
@@ -105,7 +123,7 @@ const server = http.createServer(async (req, res) => {
       "/admin/clientes/isencao-sinal-pix",
     ].includes(new URL(req.url, "http://localhost").pathname)
   ) {
-    await atenderAgendamentoIsencao(req, res, pool);
+    await atenderAgendamentoIsencao(req, res, pool, transporteReagendamentoIsento);
     return;
   }
 
@@ -233,12 +251,12 @@ server.listen(PORT, "0.0.0.0", () => {
   iniciarWorkerPixPolling(pool);
 
   if (process.env.PIX_CALENDAR_WORKER_ENABLED === "true") {
-    iniciarWorkerPixCalendar(pool);
+    iniciarWorkerPixCalendar(pool, transportePixCalendar);
   }
   if (pixPagoReagendamentoHabilitado()) {
-    iniciarWorkerReagendamentoPixPago(pool);
+    iniciarWorkerReagendamentoPixPago(pool, transporteReagendamentoPix);
   }
-  iniciarWorkerAlteracaoServico(pool);
+  iniciarWorkerAlteracaoServico(pool, transporteAlteracaoServico);
   iniciarMonitorOportunidades(pool);
 
   iniciarMonitorAgendamentos(pool).catch((erro) => {

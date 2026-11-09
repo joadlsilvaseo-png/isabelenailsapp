@@ -142,7 +142,7 @@ export async function registrarIntencaoCalendar(pool, {
         estado: depoisDoLock.rows[0].estado, jaRegistrada: true };
     }
     const antigo = await conexao.query(
-      `SELECT google_event_id, calendar_id, origem, situacao
+      `SELECT google_event_id, calendar_id, origem, situacao, metodo_verificacao
        FROM public.google_calendar_event_links
        WHERE agendamento_id = $1 FOR UPDATE`, [id],
     );
@@ -178,10 +178,10 @@ export async function registrarIntencaoCalendar(pool, {
     } else if (!vinculo || vinculo.google_event_id !== eventId ||
                vinculo.calendar_id !== calendar || vinculo.situacao !== "ativo") {
       throw erro("EVENTO_SEM_VINCULO_CONFIRMADO");
-    } else if (vinculo.origem !== "vps") {
-      // O adaptador Google atualmente exige extendedProperties da VPS.
-      // Eventos do Apps Script precisam de estrategia de legado propria.
-      throw erro("EVENTO_LEGADO_NAO_MIGRADO");
+    } else if (vinculo.origem !== "vps" &&
+               !(vinculo.origem === "legado_validado" &&
+                 vinculo.metodo_verificacao === "revisao_manual_confirmada")) {
+      throw erro("EVENTO_LEGADO_NAO_VALIDADO");
     }
 
     const operationId = randomUUID();
@@ -213,15 +213,17 @@ export async function registrarIntencaoCalendar(pool, {
  * O leaseToken e fencing token entre diferentes containers.
  */
 export async function reivindicarIntencaoCalendar(pool, {
-  calendarId,
+  calendarId, operationId = null,
 }, { env = process.env } = {}) {
   somenteWorker(env);
   const calendar = validar(calendarId, /^\S{1,300}$/, "CALENDARIO_INVALIDO");
   const leaseToken = randomUUID();
+  if (operationId !== null) validar(operationId, /^[0-9a-f-]{36}$/i, "OPERACAO_INVALIDA");
   const r = await pool.query(
     `WITH proxima AS (
        SELECT operation_id FROM public.google_calendar_sync_operations
        WHERE calendar_id = $1 AND estado = 'pendente'
+         AND ($3::uuid IS NULL OR operation_id = $3::uuid)
          AND proxima_tentativa_em <= NOW()
        ORDER BY criado_em, operation_id
        LIMIT 1 FOR UPDATE SKIP LOCKED
@@ -235,7 +237,7 @@ export async function reivindicarIntencaoCalendar(pool, {
      WHERE op.operation_id = proxima.operation_id
      RETURNING op.operation_id, op.agendamento_id, op.calendar_id,
                op.google_event_id, op.tipo, op.lease_token`,
-    [calendar, leaseToken],
+    [calendar, leaseToken, operationId],
   );
   return r.rows[0] || null;
 }
@@ -266,9 +268,30 @@ export async function confirmarIntencaoCalendar(pool, {
     }
     if (op.lease_token !== lease) throw erro("LEASE_OBSOLETO");
     if (googleEvent.id !== op.google_event_id) throw erro("EVENTO_NAO_CONFIRMADO");
+    const linkResult = op.tipo === "criar" ? { rows: [] } : await con.query(
+      `SELECT origem, metodo_verificacao, situacao
+       FROM public.google_calendar_event_links
+       WHERE agendamento_id=$1 AND calendar_id=$2 AND google_event_id=$3 FOR UPDATE`,
+      [op.agendamento_id, op.calendar_id, op.google_event_id],
+    );
+    const link = linkResult.rows[0];
+    if (op.tipo !== "criar" && (!link || link.situacao !== "ativo" ||
+        (link.origem !== "vps" &&
+         !(link.origem === "legado_validado" &&
+           link.metodo_verificacao === "revisao_manual_confirmada")))) {
+      throw erro("VINCULO_EM_CONFLITO");
+    }
     if (op.tipo === "cancelar") {
       if (googleEvent.status !== "cancelled" && googleEvent.ausenteConfirmado !== true) {
         throw erro("CANCELAMENTO_NAO_CONFIRMADO");
+      }
+    } else if (link?.origem === "legado_validado") {
+      const desc = googleEvent.description;
+      const legacyId = "evt_" + op.agendamento_id;
+      if (googleEvent.status === "cancelled" || typeof desc !== "string" ||
+          !(new RegExp("(^|[^A-Za-z0-9_-])" + legacyId +
+            "(?=$|[^A-Za-z0-9_-])")).test(desc)) {
+        throw erro("MARCADOR_LEGADO_DIVERGENTE");
       }
     } else {
       if (googleEvent.status === "cancelled" ||
@@ -304,7 +327,7 @@ export async function confirmarIntencaoCalendar(pool, {
         `UPDATE public.google_calendar_event_links
          SET situacao = $4, atualizado_em = NOW()
          WHERE agendamento_id = $1 AND calendar_id = $2
-           AND google_event_id = $3 AND origem = 'vps'
+           AND google_event_id = $3 AND origem IN ('vps','legado_validado')
            AND situacao = 'ativo'
          RETURNING agendamento_id`,
         [op.agendamento_id, op.calendar_id, op.google_event_id,
