@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Corte controlado do Google Calendar GAS -> Events API. Nao mexe no banco.
 
-Requer PWA v32 publicado, tres excecoes conciliadas (114 vinculos),
+Requer PWA v32 publicado, tres excecoes conciliadas e cinco novos vinculados (119+),
 ZERO filas pendentes e imagem nova validada pelo SHA do build.
 Nao reinicia postgres, nao roda migrations nem modifica Google.
 Desfaz Compose se falhar ANTES de qualquer operacao direta nova.
@@ -76,9 +76,16 @@ def count(q):
     if not v.isdecimal():raise Block("CONSULTA_NAO_NUMERICA")
     return int(v)
 def check_db(expect_link_count=True):
-    if expect_link_count and count(
-      "SELECT COUNT(*) FROM public.google_calendar_event_links;")!=114:
-        raise Block("VINCULOS_ESPERADOS_114_NAO_CONFIRMADOS")
+    if expect_link_count:
+        total=count("SELECT COUNT(*) FROM public.google_calendar_event_links;")
+        if total<119:
+            raise Block("VINCULOS_MINIMOS_119_NAO_CONFIRMADOS")
+        if count("SELECT COUNT(*) FROM public.google_calendar_event_links "
+          "WHERE verificado_por='conciliacao-excecoes-20261109';")!=3:
+            raise Block("TRES_EXCECOES_NAO_PRESERVADAS")
+        if count("SELECT COUNT(*) FROM public.google_calendar_event_links "
+          "WHERE verificado_por='conciliacao-cinco-recentes-20261109';")!=5:
+            raise Block("CINCO_RECENTES_NAO_CONFIRMADOS")
     for name,q in [
       ("CRIACOES_PENDENTES","SELECT COUNT(*) FROM public.pix_calendar_outbox WHERE status IN ('pendente','enviando');"),
       ("CANCELAMENTOS_PENDENTES","SELECT COUNT(*) FROM public.agendamento_cancelamentos WHERE calendar_estado IN ('pendente','enviando');"),
