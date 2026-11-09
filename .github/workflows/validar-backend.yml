@@ -165,6 +165,7 @@ jobs:
         run: |
           bash -n infra/scripts/atualizar-vps-pix.sh
           bash -n infra/scripts/backup-pre-grade-15.sh
+          bash -n infra/scripts/calendar-stage-image.sh
 
   validar-migracao-020-postgresql:
     name: Migração 020 — PostgreSQL 17 temporário
