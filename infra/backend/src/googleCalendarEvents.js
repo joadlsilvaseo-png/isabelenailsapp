@@ -77,7 +77,8 @@ export function gerarIdEventoGoogle(agendamentoId) {
 
 function dataComFuso(valor) {
   if (typeof valor !== "string") throw erro("DATA_CALENDAR_INVALIDA", "Data sem fuso horario.");
-  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(Z|[+-]\d{2}:\d{2})$/.exec(valor);
+  // Aceita milissegundos ISO emitidos por Date#toISOString (ex.: .000Z).
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,3})?(Z|[+-]\d{2}:\d{2})$/.exec(valor);
   if (!m) throw erro("DATA_CALENDAR_INVALIDA", "Informe data ISO 8601 com fuso horario.");
   const [, yy, mm, dd, hh, mi, ss, tz] = m;
   const ano = Number(yy), mes = Number(mm), dia = Number(dd);
