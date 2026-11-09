@@ -20,7 +20,31 @@ const fallbackAvatar = "https://www.w3schools.com/howto/img_avatar2.png";
 let principalSearchInitialized = false;
 let catalogoServicosCliente = [];
 let catalogoCategoriasCliente = [];
-let montarResultadosBuscaCliente = () => [];
+let montarResultadosBuscaCliente;
+
+function criarGateBuscaProgressiva() {
+  let pronto = false;
+  let atualizacaoPendente = null;
+
+  return {
+    estaPronto: () => pronto,
+    agendar(atualizar) {
+      if (pronto) {
+        atualizar();
+        return;
+      }
+      atualizacaoPendente = atualizar;
+    },
+    finalizar() {
+      pronto = true;
+      const atualizar = atualizacaoPendente;
+      atualizacaoPendente = null;
+      atualizar?.();
+    },
+  };
+}
+
+const gateBuscaCatalogo = criarGateBuscaProgressiva();
 
 // Marcas locais para separar sessão, perfil, liberação visual e recursos secundários.
 // Os nomes são genéricos e nunca incluem UID, nome ou qualquer dado da conta.
@@ -107,6 +131,8 @@ async function carregarCatalogoCliente() {
       const chevron = document.createElement("span"); chevron.className = "service-chevron"; chevron.setAttribute("aria-hidden", "true"); chevron.textContent = "›";
       link.append(icon, content, chevron); li.append(link); lista.append(li);
     });
+
+    gateBuscaCatalogo.finalizar();
   } catch (error) {
     console.error("Não foi possível carregar as categorias e serviços:", error);
   }
@@ -128,6 +154,11 @@ function setupPrincipalSearch() {
       resultList.hidden = true;
       resultList.replaceChildren();
       list.hidden = false;
+      return [];
+    }
+    // Enquanto os dados chegam, preserve o estado visual e não anuncie falso vazio.
+    if (!gateBuscaCatalogo.estaPronto()) {
+      gateBuscaCatalogo.agendar(() => renderResults(searchInput.value));
       return [];
     }
     const results = montarResultadosBuscaCliente(catalogoServicosCliente, query);
@@ -767,11 +798,20 @@ async function handleAuthenticatedUser(user, elements) {
       return;
     }
 
-    // O editor de foto só é necessário depois da autorização e da liberação da tela.
-    // O download começa antes da renderização para reduzir a janela até os cliques funcionarem.
+    // O editor só é necessário após a autorização. Mantenha seu botão desabilitado
+    // até que o módulo tenha registrado os handlers, para que o primeiro clique útil funcione.
+    const botaoEditarFoto = document.getElementById("editar-foto-perfil");
+    if (botaoEditarFoto) {
+      botaoEditarFoto.disabled = true;
+      botaoEditarFoto.setAttribute("aria-disabled", "true");
+    }
     marcarEtapaPrincipal("photo-editor-module-start");
     void import("./foto-perfil-preview.js?v=2")
       .then(() => {
+        if (botaoEditarFoto) {
+          botaoEditarFoto.disabled = false;
+          botaoEditarFoto.setAttribute("aria-disabled", "false");
+        }
         marcarEtapaPrincipal("photo-editor-module-ready");
         medirEtapaPrincipal(
           "photo-editor-module-load",
@@ -780,6 +820,10 @@ async function handleAuthenticatedUser(user, elements) {
         );
       })
       .catch((error) => {
+        if (botaoEditarFoto) {
+          botaoEditarFoto.disabled = true;
+          botaoEditarFoto.setAttribute("aria-disabled", "true");
+        }
         console.warn("Não foi possível preparar o editor de foto:", error);
       });
 
