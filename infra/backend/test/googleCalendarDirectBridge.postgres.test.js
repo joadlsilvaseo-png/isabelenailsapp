@@ -19,6 +19,7 @@ const payload={
  operationId:"11111111-2222-4333-8444-555555555555",
  nomeCliente:"Cliente Ficticia",servico:"Manicure Gel",
  dataInicio:"2026-12-20T10:00:00",duracaoMinutos:90,
+ origemData:"2026-12-20",origemHorario:"09:00",
 };
 function eventoLegado(){
  return {id:"evento-legado-bridge-1",status:"confirmed",etag:'"v1"',
