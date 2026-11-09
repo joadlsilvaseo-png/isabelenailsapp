@@ -240,7 +240,7 @@ if(env.GOOGLE_CALENDAR_OAUTH_ENABLED!=="true"||
    env.GOOGLE_CALENDAR_AUDIT_ENABLED!=="true"||
    env.GOOGLE_CALENDAR_LEGACY_LINKS_APPLY_ENABLED==="true"||
    (aplicar&&(env[flag]!=="true"||env.GOOGLE_CALENDAR_DIRECT_WRITE_ENABLED!=="true"))||
-   (!aplicar&&env.GOOGLE_CALENDAR_DIRECT_WRITE_ENABLED==="true"))){
+   (!aplicar&&env.GOOGLE_CALENDAR_DIRECT_WRITE_ENABLED==="true")){
   erro("MODO_ESCRITA_INCORRETO");
 }
 let pool;
