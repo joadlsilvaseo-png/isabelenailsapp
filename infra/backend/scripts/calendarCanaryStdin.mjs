@@ -36,6 +36,11 @@ function confirmarCanario(e) {
     e.extendedProperties?.private?.isabeleOrigem === "isabele-vps" &&
     !e.attendees?.length;
 }
+function excluido(evento) {
+  // Google Calendar events.get preserva temporariamente um tombstone
+  // status=cancelled após DELETE. Isso e exclusao, nao evento ativo.
+  return evento === null || evento?.status === "cancelled";
+}
 const env = process.env;
 if (env.GOOGLE_CALENDAR_OAUTH_ENABLED !== "true" ||
     env.GOOGLE_CALENDAR_DIRECT_WRITE_ENABLED !== "true" ||
@@ -60,17 +65,20 @@ try {
   client = criarAdaptadorGoogleCalendarComOAuth(pool, { env });
 
   let existent = await client.consultarEvento({ eventId: EVENTO_ID });
-  if (existent) {
+  if (existent && !excluido(existent)) {
     if (!confirmarCanario(existent)) fail("EVENTO_ID_OCUPADO_POR_OUTRO_EVENTO");
     await client.excluirEvento({ agendamentoId: ID, eventId: EVENTO_ID });
     existent = await client.consultarEvento({ eventId: EVENTO_ID });
-    if (existent !== null) fail("CANARIO_ANTERIOR_NAO_REMOVIDO");
+    if (!excluido(existent)) fail("CANARIO_ANTERIOR_NAO_REMOVIDO");
     steps.push("RESIDUO_ANTERIOR_REMOVIDO");
   }
   if (process.argv[2] === "--cleanup") {
-    clean = true;
+    clean = excluido(existent);
     steps.push("LIMPEZA_CONCLUIDA");
   } else {
+    if (existent?.status === "cancelled") {
+      fail("ID_TESTE_EXCLUIDO_NAO_RECRIAR");
+    }
     const create = await client.criarEvento({
       agendamentoId: ID, nomeCliente: NOME, servico: SERVICO,
       inicio: INICIO, fim: FIM,
@@ -100,7 +108,7 @@ try {
 
     await client.excluirEvento({ agendamentoId: ID, eventId: EVENTO_ID });
     const deleted = await client.consultarEvento({ eventId: EVENTO_ID });
-    if (deleted !== null) fail("EXCLUSAO_NAO_CONFIRMADA");
+    if (!excluido(deleted)) fail("EXCLUSAO_NAO_CONFIRMADA");
     clean = true;
     steps.push("DELETE_GET_OK");
   }
@@ -112,11 +120,11 @@ try {
   if (!clean && client) {
     try {
       const check = await client.consultarEvento({ eventId: EVENTO_ID });
-      if (check === null) {
+      if (excluido(check)) {
         clean = true;
       } else if (confirmarCanario(check)) {
         await client.excluirEvento({ agendamentoId: ID, eventId: EVENTO_ID });
-        clean = (await client.consultarEvento({ eventId: EVENTO_ID })) === null;
+        clean = excluido(await client.consultarEvento({ eventId: EVENTO_ID }));
       } else {
         problem = "CANARIO_COLLISION";
       }
