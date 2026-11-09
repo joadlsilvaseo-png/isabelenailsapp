@@ -551,7 +551,7 @@ function mostrarErroLista() {
   elements.listError.hidden = false;
 }
 
-async function carregarAgendamentos() {
+async function carregarAgendamentos(aguardarLiberacaoAlterarServico = null) {
   if (carregamentoEmAndamento) {
     return;
   }
@@ -572,6 +572,12 @@ async function carregarAgendamentos() {
 
       getDocs(collection(db, "clientes")),
     ]);
+
+    // As consultas da agenda e a flag são independentes, mas a lista só pode
+    // ser renderizada depois da flag para manter Alterar Serviço fail-closed.
+    if (aguardarLiberacaoAlterarServico) {
+      alterarServicoDisponivel = await aguardarLiberacaoAlterarServico;
+    }
 
     const clientesPorId = new Map(
       clientesSnapshot.docs.map((documentoCliente) => [
@@ -2411,8 +2417,11 @@ function iniciarPagina() {
       liberarConteudoAdmin();
 
       // Fail-closed: sem resposta autenticada da API, a ação experimental fica oculta.
-      alterarServicoDisponivel = await consultarLiberacaoAlterarServicoApi(auth);
-      await carregarAgendamentos();
+      const liberacaoAlterarServico = consultarLiberacaoAlterarServicoApi(auth).then((habilitado) => {
+        alterarServicoDisponivel = habilitado === true;
+        return alterarServicoDisponivel;
+      });
+      await carregarAgendamentos(liberacaoAlterarServico);
     } catch (error) {
       console.error("Erro ao verificar acesso administrativo:", error);
 
