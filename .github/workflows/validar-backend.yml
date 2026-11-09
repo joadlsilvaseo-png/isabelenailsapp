@@ -163,6 +163,8 @@ jobs:
           node --check ../../assistenteGestaoUI.js
           node --check ../../principal.js
           node --test ../../scripts/assistente-gestao-core.test.mjs ../../scripts/assistente-gestao-ui.test.mjs
+      - name: Validar carregamento progressivo da Principal
+        run: node --test ../../scripts/principal-carregamento.test.mjs
       - name: Testar card de manutenção e CTA do Meu Perfil
         run: node --test ../../scripts/perfil-manutencao.test.mjs
       - name: Validar sintaxe dos scripts operacionais (sem executar)
