@@ -1057,13 +1057,13 @@ async function inicializarAgendamento() {
       try {
         if (reagendarId) {
           const operacaoKey = `pix-reagendamento:${reagendarId}:${data}:${horario}`;
-          let operationId = null;
-          if (origemPixPaga) {
-            operationId = sessionStorage.getItem(operacaoKey);
-            if (!operationId) {
-              operationId = crypto.randomUUID();
-              sessionStorage.setItem(operacaoKey, operationId);
-            }
+          // Mesmo identificador em retentativas com ou sem PIX.
+          // O backend consegue reconciliar uma sincronizacao Google
+          // incerta sem criar outra operacao de calendario.
+          let operationId = sessionStorage.getItem(operacaoKey);
+          if (!operationId) {
+            operationId = crypto.randomUUID();
+            sessionStorage.setItem(operacaoKey, operationId);
           }
           const resultadoReagendamento = await reagendarAgendamentoApi(auth, {
             agendamentoId: reagendarId,
@@ -1112,6 +1112,9 @@ async function inicializarAgendamento() {
             // Apps Script criaria operacoes concorrentes no mesmo evento.
             if (resultadoReagendamento.sincronizacaoCalendar === "pendente") {
               window.alert("O reagendamento foi salvo no sistema, mas a sincronização com o Google Calendar está pendente. Confira o atendimento antes de tentar novamente.");
+            } else if (resultadoReagendamento.sincronizacaoCalendar === "confirmada" ||
+                       resultadoReagendamento.sincronizacaoCalendar === "sem_alteracao") {
+              sessionStorage.removeItem(operacaoKey);
             }
             localStorage.setItem("dataAgendamento", data);
             localStorage.setItem("horaAgendamento", horario);
