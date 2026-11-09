@@ -32,8 +32,8 @@ function equalEvent(a,b){
     a.start?.dateTime===b.start?.dateTime&&a.end?.dateTime===b.end?.dateTime;
 }
 function normalizar(v){
-  return typeof v==="string" ? v.normalize("NFD").replace(/[\\u0300-\\u036f]/g,"")
-    .toLowerCase().replace(/[^a-z0-9]+/g," ").trim().replace(/\\s+/g," ") : "";
+  return typeof v==="string" ? v.normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+    .toLowerCase().replace(/[^a-z0-9]+/g," ").trim().replace(/\s+/g," ") : "";
 }
 function contem(titulo,valor,min){
   const v=normalizar(valor), t=normalizar(titulo);
