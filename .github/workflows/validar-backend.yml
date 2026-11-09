@@ -169,6 +169,7 @@ jobs:
           bash -n infra/scripts/backup-pre-grade-15.sh
           bash -n infra/scripts/calendar-stage-image.sh
           python3 -c 'import ast,pathlib; ast.parse(pathlib.Path("infra/scripts/calendar-deploy-stage-safe.py").read_text())'
+          python3 -c 'import ast,pathlib; ast.parse(pathlib.Path("infra/scripts/calendar-deploy-upgrade-3b5e9b.py").read_text())'
 
   validar-migracao-020-postgresql:
     name: Migração 020 — PostgreSQL 17 temporário
