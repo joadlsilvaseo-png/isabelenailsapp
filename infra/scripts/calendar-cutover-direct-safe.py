@@ -2,7 +2,7 @@
 """Corte controlado do Google Calendar GAS -> Events API. Nao mexe no banco.
 
 Requer PWA v32 publicado, tres excecoes conciliadas (114 vinculos),
-ZERO filas pendentes e imagem exata dfd5e0f2bf53.
+ZERO filas pendentes e imagem nova validada pelo SHA do build.
 Nao reinicia postgres, nao roda migrations nem modifica Google.
 Desfaz Compose se falhar ANTES de qualquer operacao direta nova.
 Nao devolve para GAS se houver operacao direta real no PostgreSQL.
@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -19,7 +20,8 @@ import time
 from urllib.request import urlopen
 
 API="isabele-infra-api-1"
-IMAGE="isabele-nails-api:calendar-stage-dfd5e0f2bf53"
+NEW_SHA=sys.argv[2] if len(sys.argv)==3 else ""
+IMAGE="isabele-nails-api:calendar-stage-"+NEW_SHA[:12]
 PROJECT="isabele-infra"
 ROOT="/opt/isabele-nails-backups/pix-update-20261107T205713Z-2709330"
 FILES=[
@@ -30,6 +32,7 @@ FILES=[
     "/root/.config/isabele-google-oauth/calendar-stage-deploy-ac45382d3717.yaml",
     "/root/.config/isabele-google-oauth/calendar-stage-deploy-3b5e9b72c4eb.yaml",
     "/root/.config/isabele-google-oauth/calendar-stage-deploy-dfd5e0f2bf53.yaml",
+    "/root/.config/isabele-google-oauth/calendar-stage-deploy-"+NEW_SHA[:12]+".yaml",
 ]
 OVERLAY=Path("/root/.config/isabele-google-oauth/calendar-cutover-direct-20261109.yaml")
 BASE=["docker","compose","-p",PROJECT,"--project-directory",ROOT]
@@ -155,7 +158,7 @@ def capture_backup(cutoff):
         "composeOn":FILES+[str(OVERLAY)],
         "backup":str(b),
         "override_sha256":hashlib.sha256(OVERLAY.read_bytes()).hexdigest(),
-        "rollback":"Remover oitavo Compose SOMENTE se nenhuma operacao nova registrada; verificar antes."
+        "rollback":"Remover nono Compose SOMENTE se nenhuma operacao nova registrada; verificar antes."
     }
     r=directory/"registro.json"
     with r.open("x") as h:json.dump(meta,h,indent=2)
@@ -166,14 +169,18 @@ def safe_rollback_possible():
     return count("SELECT COUNT(*) FROM public.google_calendar_sync_operations;")==0 and \
       count("SELECT COUNT(*) FROM public.google_calendar_creation_authorizations;")==0
 def main():
-    if len(sys.argv)!=2 or sys.argv[1] not in ("--preflight","--activate"):
-        raise Block("USO_--preflight_OU_--activate")
+    if len(sys.argv)!=3 or sys.argv[1] not in ("--preflight","--activate") or not re.fullmatch(r"[a-f0-9]{40}",NEW_SHA):
+        raise Block("USO_--preflight_OU_--activate_SHA40")
     if os.geteuid()!=0:raise Block("ROOT_OBRIGATORIO")
     for path in FILES:
         if not Path(path).is_file():raise Block("COMPOSE_AUSENTE")
     c=inspect()
     if c["Config"]["Image"]!=IMAGE or not c["State"]["Running"]:
         raise Block("IMAGEM_DA_API_INESPERADA")
+    img=readjson(["docker","image","inspect",IMAGE])
+    if not isinstance(img,list) or len(img)!=1 or img[0].get("Id")!=c.get("Image") or \
+       img[0].get("Config",{}).get("Labels",{}).get("org.opencontainers.image.revision")!=NEW_SHA:
+        raise Block("IMAGEM_DIGEST_OU_REVISAO_INVALIDOS")
     labels=c["Config"].get("Labels") or {}
     if labels.get("com.docker.compose.project")!=PROJECT or \
        labels.get("com.docker.compose.project.working_dir")!=ROOT or \
