@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import pg from "pg";
 import { criarPonteCalendarDireto } from "../src/googleCalendarDirectBridge.js";
 import { gerarIdEventoGoogle } from "../src/googleCalendarEvents.js";
+import { autorizarCriacaoNovoCalendar } from "../src/googleCalendarNewBookingAuth.js";
 
 const { Pool }=pg;
 const CAL="ponte-teste@example.com";
@@ -176,4 +177,79 @@ test("PG17 gateway: nova reserva so cria com autorizacao previamente consumivel"
   assert.equal((await ponte.criarPix(pedido)).jaConcluida,true);
   assert.equal(posts,1);
  }finally{await pool.end();}
+});
+
+test("PG17 autorizacao de criacao: so nova outbox apos corte; tudo reverte no ROLLBACK", async()=>{
+  const pool=new Pool({max:2});
+  const con=await pool.connect();
+  try{
+    await con.query("BEGIN");
+    // Isola o teste: essa tabela e criada dentro de uma transacao
+    // revertida no final. O PG17 do CI nao tem outbox PIX real.
+    await con.query(
+      "CREATE TABLE public.pix_calendar_outbox ("+
+      "id BIGSERIAL PRIMARY KEY,agendamento_id TEXT NOT NULL UNIQUE,"+
+      "criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),"+
+      "status TEXT NOT NULL DEFAULT 'pendente',tentativas INT NOT NULL DEFAULT 0)"
+    );
+    const recente=await con.query(
+      "INSERT INTO public.pix_calendar_outbox (agendamento_id) "+
+      "VALUES ('nova-autorizada-ci') RETURNING id"
+    );
+    const antiga=await con.query(
+      "INSERT INTO public.pix_calendar_outbox (agendamento_id,criado_em) "+
+      "VALUES ('antiga-bloqueada-ci','2026-01-01T00:00:00Z') RETURNING id"
+    );
+    const env={...ENV,
+      GOOGLE_CALENDAR_DIRECT_CRIAR_PIX_ENABLED:"true",
+      GOOGLE_CALENDAR_CUTOVER_STARTED_AT:"2026-11-08T20:00:00-03:00",
+    };
+    const ok=await autorizarCriacaoNovoCalendar(con,{
+      outboxId:recente.rows[0].id,agendamentoId:"nova-autorizada-ci",env,
+    });
+    assert.equal(ok.autorizada,true);
+    const dupla=await autorizarCriacaoNovoCalendar(con,{
+      outboxId:recente.rows[0].id,agendamentoId:"nova-autorizada-ci",env,
+    });
+    assert.equal(dupla.autorizada,false);
+    const old=await autorizarCriacaoNovoCalendar(con,{
+      outboxId:antiga.rows[0].id,agendamentoId:"antiga-bloqueada-ci",env,
+    });
+    assert.equal(old.autorizada,false);
+    const rows=await con.query(
+      "SELECT agendamento_id FROM public.google_calendar_creation_authorizations "+
+      "WHERE agendamento_id IN ('nova-autorizada-ci','antiga-bloqueada-ci')"
+    );
+    assert.deepEqual(rows.rows.map(x=>x.agendamento_id),["nova-autorizada-ci"]);
+  }finally{
+    await con.query("ROLLBACK").catch(()=>{});
+    con.release();
+    await pool.end();
+  }
+});
+
+test("PG17 DELETE legado: tombstone cancelled confirma exclusao sem outra chamada",async()=>{
+  const pool=new Pool({max:2});
+  try{
+    const id="legado-bridge-tombstone",evId="evento-legado-bridge-tombstone";
+    await pool.query(
+      "INSERT INTO public.google_calendar_event_links "+
+      "(agendamento_id,calendar_id,google_event_id,origem,metodo_verificacao,verificado_em,verificado_por) "+
+      "VALUES ($1,$2,$3,'legado_validado','revisao_manual_confirmada',NOW(),'testes-ci')",
+      [id,CAL,evId],
+    );
+    let apagado=false, n=0;
+    const fake={
+      excluirEventoLegado:async()=>{apagado=true;n++;},
+      consultarEventoLegado:async()=>apagado
+        ? {id:evId,status:"cancelled"} : {id:evId,status:"confirmed"},
+    };
+    const bridge=criarPonteCalendarDireto(pool,{env:ENV,adapterFactory:()=>fake});
+    const result=await bridge.cancelar({agendamento_id:id});
+    assert.equal(result.confirmado,true);
+    assert.equal(n,1);
+    assert.equal((await pool.query(
+      "SELECT situacao FROM public.google_calendar_event_links WHERE agendamento_id=$1",[id]
+    )).rows[0].situacao,"cancelado");
+  }finally{await pool.end();}
 });
