@@ -1071,6 +1071,10 @@ async function inicializarAgendamento() {
             data,
             horario,
             observacoes,
+            // Handshake: versões antigas do PWA não enviam este campo.
+            // No cutover, o backend pode bloquear clientes desatualizados
+            // ANTES de escrever no Firestore ou movimentar horários.
+            calendarClientSupportsBackend: true,
             ...(operationId ? { operationId } : {}),
           });
           idEvento = resultadoReagendamento.calendarEventId || idEvento;
