@@ -33,6 +33,22 @@ on:
       - "infra/scripts/**"
       - ".github/workflows/validar-backend.yml"
 jobs:
+  validar-imagem-calendar:
+    name: Build imagem Calendar sem publicar
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Construir Docker da API na branch exata
+        run: |
+          docker build --build-arg APP_REVISION="${{ github.sha }}" \
+            -t isabele-nails-api:calendar-ci \
+            -f infra/backend/Dockerfile infra/backend
+      - name: Verificar scripts operacionais e entrada sem executar API
+        run: |
+          docker run --rm --entrypoint node isabele-nails-api:calendar-ci \
+            --check /app/src/server.js
+          docker run --rm --entrypoint node isabele-nails-api:calendar-ci \
+            --check /app/scripts/calendarLegacyReview.mjs
   migracao-021:
     name: Migração 021 e reagendamento pago — PostgreSQL 17 temporário
     runs-on: ubuntu-latest
