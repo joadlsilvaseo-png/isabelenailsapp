@@ -43,7 +43,10 @@ const transportePixCalendar = {
 const transporteReagendamentoPix = ponteCalendar.habilitado("reagendar_pago")
   ? { enviarCalendar: (payload) => ponteCalendar.reagendarPago(payload) } : {};
 const transporteReagendamentoIsento = ponteCalendar.habilitado("reagendar_isento")
-  ? { enviarCalendarSemPix: (payload) => ponteCalendar.reagendarIsento(payload) } : {};
+  ? {
+      enviarCalendarSemPix: (payload) => ponteCalendar.reagendarIsento(payload),
+      calendarId: process.env.GOOGLE_CALENDAR_ID,
+    } : {};
 const transporteAlteracaoServico = ponteCalendar.habilitado("alterar_servico")
   ? { enviarCalendar: (row) => ponteCalendar.alterarServico(row) } : {};
 const PORT = Number(process.env.PORT || 3001);
