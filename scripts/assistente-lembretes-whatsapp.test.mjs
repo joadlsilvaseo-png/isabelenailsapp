@@ -2,6 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { runInNewContext } from "node:vm";
 
 const ler = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
 const html = ler("../principal.html");
@@ -19,7 +20,7 @@ test("home exibe sinalizacao admin e abre modal sem nova tela", () => {
   assert.match(html, /data-ig-lembretes-sinal/);
   assert.match(html, /data-ig-lembretes-lista/);
   assert.match(html, /assistenteGestao\.css\?v=4/);
-  assert.match(assistente, /import\("\.\/assistenteLembretesWhatsappUI\.js\?v=2"\)/);
+  assert.match(assistente, /import\("\.\/assistenteLembretesWhatsappUI\.js\?v=3"\)/);
 });
 
 test("UI exige envio manual no WhatsApp e nao possui endpoint de disparo", () => {
@@ -38,15 +39,31 @@ test("rota separada so para admin, Firestore atual e PostgreSQL para marcacoes",
   assert.doesNotMatch(api, /whatsapp\.com\/send|graph\.facebook\.com|sendNotification/);
 });
 
-test("mensagem de lembrete tem voz pessoal da Isabele e nao usa emojis no link", () => {
+test("mensagem usa o texto aprovado com nome, horario e servico dinamicos", () => {
   const inicio = ui.indexOf("function mensagem(item)");
   const fim = ui.indexOf("\nfunction autorizado", inicio);
   assert.ok(inicio >= 0 && fim > inicio);
   const trecho = ui.slice(inicio, fim);
-  assert.match(trecho, /Oii, /);
-  assert.match(trecho, /nosso hor[aá]rio de amanh[aã]/);
-  assert.match(trecho, /Te espero, viu\? Um beijo!/);
-  assert.match(trecho, /pra gente fazer/);
-  assert.doesNotMatch(trecho, /\p{Extended_Pictographic}|\uFFFD/u);
-  assert.doesNotMatch(trecho, /Esperamos voc[eê]|seu atendimento na Isabele Mariana Nails/);
+  const gerarMensagem = runInNewContext(trecho + "\nmensagem");
+
+  const exemplo = gerarMensagem({
+    nome: "Mariana Souza", horario: "14:00", servico: "Banho de Gel",
+  });
+  assert.equal(exemplo, [
+    "Oi, Mariana! 💅✨",
+    "",
+    "Passando para lembrar que você tem um horário agendado para amanhã, às *14h*, para o serviço de Banho de Gel.",
+    "",
+    "Esperamos você! ❤️",
+    "",
+    "_Isabele Mariana Nails_",
+  ].join("\n"));
+
+  const outroHorario = gerarMensagem({
+    nome: "Carla Lima", horario: "17:30", servico: "Manicure",
+  });
+  assert.match(outroHorario, /Carla!/);
+  assert.match(outroHorario, /às \*17h30\*/);
+  assert.match(outroHorario, /serviço de Manicure/);
+  assert.match(ler("../assistenteGestaoCore.mjs"), /encodeURIComponent\(mensagem\)/);
 });

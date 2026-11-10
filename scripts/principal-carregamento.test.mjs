@@ -30,7 +30,7 @@ test("acesso administrativo continua bloqueado até validação do perfil no Fir
   const validar = fluxo.indexOf("const accessProfile = await loadUserAccessProfile(user)");
   const negar = fluxo.indexOf("if (!accessProfile.allowed)");
   const liberar = fluxo.indexOf("configureAdminInterface(user, accessProfile, elements)");
-  const carregarAssistente = fluxo.indexOf('import("./assistenteGestaoUI.js?v=3")');
+  const carregarAssistente = fluxo.indexOf('import("./assistenteGestaoUI.js?v=4")');
 
   assert.ok(validar >= 0 && negar > validar);
   assert.ok(liberar > negar);
