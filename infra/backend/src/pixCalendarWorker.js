@@ -285,17 +285,20 @@ export async function processarProximoCancelamentoCalendar(pool, enviar = enviar
   }
 }
 
-export function iniciarWorkerPixCalendar(pool) {
+export function iniciarWorkerPixCalendar(pool, dependencies = {}) {
+  // Injeção é feita apenas pelo backend, nunca pelo request do cliente.
+  const enviarCriacao = dependencies.enviarCriacao || enviarEventoCalendar;
+  const enviarCancelamento = dependencies.enviarCancelamento || enviarCancelamentoCalendar;
   let ocupado = false;
   const executar = async () => {
     if (ocupado) return;
     ocupado = true;
     try {
-      const resultado = await processarProximaSincronizacaoCalendar(pool);
+      const resultado = await processarProximaSincronizacaoCalendar(pool, enviarCriacao);
       if (resultado.processado && !resultado.enviado) {
         console.warn("[PIX Calendar] Sincronizacao falhou; nova tentativa agendada.");
       }
-      const cancelamento = await processarProximoCancelamentoCalendar(pool);
+      const cancelamento = await processarProximoCancelamentoCalendar(pool, enviarCancelamento);
       if (cancelamento.processado && !cancelamento.enviado) {
         console.warn("[PIX Calendar] Cancelamento falhou; nova tentativa agendada.");
       }

@@ -11,6 +11,7 @@ RUN npm install --omit=dev --no-audit --no-fund \
     && chown -R node:node /app
 
 COPY --chown=node:node src/ ./src/
+COPY --chown=node:node scripts/ ./scripts/
 
 USER node
 

@@ -1,0 +1,408 @@
+/**
+ * Adaptador isolado para Google Calendar Events API v3.
+ *
+ * NAO registra rotas, NAO inicia workers e NAO substitui Apps Script.
+ * Gravacoes exigem GOOGLE_CALENDAR_DIRECT_WRITE_ENABLED=true,
+ * separado do flag de OAuth (que ja esta ativo em producao).
+ *
+ * A integracao que renovar o access token e persistir o googleEventId
+ * sera adicionada somente apos reconciliar os eventos legados.
+ */
+import { createHash } from "node:crypto";
+
+const GOOGLE_API = "https://www.googleapis.com/calendar/v3/calendars/";
+const ORIGEM = "isabele-vps";
+const FUSO = "America/Sao_Paulo";
+
+function erro(codigo, mensagem) {
+  return Object.assign(new Error(mensagem), { codigo });
+}
+
+function exigirIdAgendamento(id) {
+  if (typeof id !== "string" || !/^[a-zA-Z0-9_-]{1,128}$/.test(id)) {
+    throw erro("AGENDAMENTO_ID_INVALIDO", "Identificador de agendamento invalido.");
+  }
+  return id;
+}
+
+// O ID retornado por events.get para um evento legado pode diferir das
+// regras para IDs customizados aceitos por events.insert. Sempre usar o ID
+// REAL obtido do Google e previamente validado no PostgreSQL.
+function exigirIdEventoLegado(id) {
+  if (typeof id !== "string" || !/^[A-Za-z0-9_-]{5,1024}$/.test(id)) {
+    throw erro("GOOGLE_EVENT_ID_INVALIDO", "ID de evento legado nao confirmado.");
+  }
+  return id;
+}
+function validarMarcadorLegado(evento, agendamentoId, legacyEventId) {
+  const id = exigirIdAgendamento(agendamentoId);
+  if (legacyEventId !== "evt_" + id) {
+    throw erro("GOOGLE_LEGADO_REFERENCIA_DIVERGENTE", "Referencia da reserva legada nao corresponde.");
+  }
+  const desc = evento?.description;
+  if (typeof desc !== "string") {
+    throw erro("GOOGLE_LEGADO_SEM_MARCADOR", "Evento nao tem referencia legada verificavel.");
+  }
+  const pattern = new RegExp("(^|[^A-Za-z0-9_-])" + legacyEventId + "(?=$|[^A-Za-z0-9_-])");
+  if (!pattern.test(desc)) {
+    throw erro("GOOGLE_LEGADO_SEM_MARCADOR", "Referencia legada nao encontrada no evento.");
+  }
+  const priv = evento.extendedProperties?.private;
+  if (priv?.isabeleOrigem === ORIGEM && priv.isabeleAgendamentoId !== id) {
+    throw erro("GOOGLE_LEGADO_OUTRO_AGENDAMENTO", "Marcador privado conflita com reserva.");
+  }
+  if (evento.recurringEventId || evento.status === "cancelled") {
+    throw erro("GOOGLE_LEGADO_STATUS_INVALIDO", "Evento nao permite alteracao legada.");
+  }
+  if (typeof evento.etag !== "string" || !evento.etag) {
+    throw erro("ETAG_GOOGLE_AUSENTE", "Versao do evento nao confirmada.");
+  }
+}
+function exigirIdEvento(id) {
+  if (typeof id !== "string" || !/^[a-v0-9]{5,1024}$/.test(id)) {
+    throw erro("GOOGLE_EVENT_ID_INVALIDO", "Identificador Google Calendar invalido.");
+  }
+  return id;
+}
+
+/**
+ * O ID nao e o 'event_id' legado da outbox do Apps Script nem um iCalUID.
+ * Usa somente caracteres permitidos para ID da API Google (base32hex).
+ * Mantem o mesmo resultado em todas as tentativas da mesma reserva.
+ */
+export function gerarIdEventoGoogle(agendamentoId) {
+  const id = exigirIdAgendamento(agendamentoId);
+  return "imn" + createHash("sha256").update("isabele-calendar-v1:" + id).digest("hex");
+}
+
+function dataComFuso(valor) {
+  if (typeof valor !== "string") throw erro("DATA_CALENDAR_INVALIDA", "Data sem fuso horario.");
+  // Aceita milissegundos ISO emitidos por Date#toISOString (ex.: .000Z).
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,3})?(Z|[+-]\d{2}:\d{2})$/.exec(valor);
+  if (!m) throw erro("DATA_CALENDAR_INVALIDA", "Informe data ISO 8601 com fuso horario.");
+  const [, yy, mm, dd, hh, mi, ss, tz] = m;
+  const ano = Number(yy), mes = Number(mm), dia = Number(dd);
+  const maxDia = new Date(Date.UTC(ano, mes, 0)).getUTCDate();
+  if (ano < 2020 || ano > 2100 || mes < 1 || mes > 12 || dia < 1 || dia > maxDia ||
+      Number(hh) > 23 || Number(mi) > 59 || Number(ss) > 59 ||
+      (tz !== "Z" && (Number(tz.slice(1, 3)) > 23 || Number(tz.slice(4, 6)) > 59))) {
+    throw erro("DATA_CALENDAR_INVALIDA", "Data ou horario invalido.");
+  }
+  const ms = Date.parse(valor);
+  if (!Number.isFinite(ms)) throw erro("DATA_CALENDAR_INVALIDA", "Data invalida.");
+  return ms;
+}
+
+function textoObrigatorio(valor, campo) {
+  if (typeof valor !== "string") throw erro("EVENTO_INCOMPLETO", "Campo obrigatorio: " + campo);
+  const normalizado = valor.trim().replace(/\s+/g, " ");
+  if (!normalizado || normalizado.length > 160) {
+    throw erro("EVENTO_INCOMPLETO", "Campo invalido: " + campo);
+  }
+  return normalizado;
+}
+
+function montarDados({ agendamentoId, nomeCliente, servico, inicio, fim }) {
+  const id = exigirIdAgendamento(agendamentoId);
+  const nome = textoObrigatorio(nomeCliente, "nomeCliente");
+  const procedimento = textoObrigatorio(servico, "servico");
+  const ini = dataComFuso(inicio);
+  const termin = dataComFuso(fim);
+  if (termin <= ini || termin - ini > 24 * 60 * 60 * 1000) {
+    throw erro("INTERVALO_CALENDAR_INVALIDO", "Intervalo do atendimento invalido.");
+  }
+  return {
+    summary: procedimento + " - " + nome,
+    start: { dateTime: inicio, timeZone: FUSO },
+    end: { dateTime: fim, timeZone: FUSO },
+    extendedProperties: {
+      private: { isabeleAgendamentoId: id, isabeleOrigem: ORIGEM },
+    },
+  };
+}
+
+function exigirPropriedade(evento, idAgendamento) {
+  const privateData = evento?.extendedProperties?.private;
+  if (privateData?.isabeleAgendamentoId !== idAgendamento ||
+      privateData?.isabeleOrigem !== ORIGEM) {
+    throw erro("EVENTO_SEM_VINCULO", "Evento nao pertence a este agendamento na integracao direta.");
+  }
+}
+
+function validarRetorno(evento, eventId, agendamentoId) {
+  if (!evento || evento.id !== eventId || evento.status === "cancelled") {
+    throw erro("EVENTO_NAO_CONFIRMADO", "Google Calendar nao confirmou o evento esperado.");
+  }
+  exigirPropriedade(evento, agendamentoId);
+  return evento;
+}
+
+export function criarAdaptadorGoogleCalendar({
+  calendarId, obterAccessToken, fetcher = fetch, env = process.env,
+} = {}) {
+  if (typeof calendarId !== "string" || !calendarId.trim() ||
+      calendarId.length > 300 || /\s/.test(calendarId)) {
+    throw erro("CALENDARIO_NAO_CONFIGURADO", "ID do calendario nao configurado.");
+  }
+  if (typeof obterAccessToken !== "function" || typeof fetcher !== "function") {
+    throw erro("CALENDAR_DEPENDENCIA_AUSENTE", "Credenciais ou cliente HTTP indisponiveis.");
+  }
+  const urlBase = GOOGLE_API + encodeURIComponent(calendarId) + "/events";
+  const escrever = () => {
+    if (env.GOOGLE_CALENDAR_OAUTH_ENABLED !== "true" ||
+        env.GOOGLE_CALENDAR_DIRECT_WRITE_ENABLED !== "true") {
+      throw erro("CALENDAR_ESCRITA_DESATIVADA", "Escrita direta no Calendar desativada.");
+    }
+  };
+
+  async function requisitar(method, url, body, etag) {
+    const token = await obterAccessToken();
+    if (typeof token !== "string" || !token) {
+      throw erro("TOKEN_CALENDAR_AUSENTE", "Conta Google nao conectada.");
+    }
+    let resposta;
+    try {
+      resposta = await fetcher(url, {
+        method,
+        headers: {
+          Authorization: "Bearer " + token,
+          Accept: "application/json",
+          ...(body ? { "Content-Type": "application/json" } : {}),
+          ...(etag ? { "If-Match": etag } : {}),
+        },
+        ...(body ? { body: JSON.stringify(body) } : {}),
+        signal: AbortSignal.timeout(15000),
+      });
+    } catch {
+      // Em caso de timeout de escrita, nunca gerar outro ID nem repetir automaticamente.
+      throw erro("GOOGLE_CALENDAR_SEM_CONFIRMACAO", "Resposta da API Google indisponivel.");
+    }
+    if (resposta.status === 404) return { status: 404, body: null };
+    if (resposta.status === 409) return { status: 409, body: null };
+    if (resposta.status === 412) {
+      throw erro("GOOGLE_CALENDAR_CONFLITO_VERSAO", "Evento alterado desde a ultima leitura.");
+    }
+    if (!resposta.ok) {
+      throw erro("GOOGLE_CALENDAR_HTTP_" + String(resposta.status),
+        "Google Calendar nao confirmou a operacao.");
+    }
+    if (resposta.status === 204) return { status: 204, body: null };
+    let dados;
+    try {
+      dados = await resposta.json();
+    } catch {
+      throw erro("GOOGLE_CALENDAR_RESPOSTA_INVALIDA", "Google Calendar retornou dados invalidos.");
+    }
+    if (!dados || typeof dados !== "object") {
+      throw erro("GOOGLE_CALENDAR_RESPOSTA_INVALIDA", "Google Calendar retornou dados invalidos.");
+    }
+    return { status: resposta.status, body: dados };
+  }
+
+  async function buscar(eventId) {
+    const id = exigirIdEvento(eventId);
+    const { status, body } = await requisitar("GET", urlBase + "/" + encodeURIComponent(id));
+    if (status === 404) return null;
+    if (body?.id !== id) {
+      throw erro("EVENTO_NAO_CONFIRMADO", "Google Calendar retornou identificador inesperado.");
+    }
+    return body;
+  }
+
+  async function buscarLegado(eventId) {
+    const id = exigirIdEventoLegado(eventId);
+    const retorno = await requisitar("GET", urlBase + "/" + encodeURIComponent(id));
+    if (retorno.status === 404) return null;
+    if (retorno.body?.id !== id) {
+      throw erro("GOOGLE_LEGADO_ID_DIVERGENTE", "A API retornou evento diferente do vinculado.");
+    }
+    return retorno.body;
+  }
+
+  return {
+    /**
+     * Inventario SOMENTE LEITURA e com limite fechado. Nunca retorna resultado
+     * incompleto: o reconciliador precisa avaliar TODAS as paginas.
+     * Nao solicita titulo, descricao, convidados ou nomes de clientes.
+     */
+    async listarEventos({ inicio, fim, incluirDescricao = false }) {
+      if (incluirDescricao && env.GOOGLE_CALENDAR_AUDIT_ENABLED !== "true") {
+        throw erro("AUDITORIA_NAO_AUTORIZADA", "Consulta detalhada somente em auditoria isolada.");
+      }
+      const de = dataComFuso(inicio);
+      const ate = dataComFuso(fim);
+      if (ate <= de || ate - de > 31 * 24 * 60 * 60 * 1000) {
+        throw erro("JANELA_CALENDAR_INVALIDA", "Inventario exige janela de ate 31 dias.");
+      }
+      const encontrados = [];
+      const paginasVistas = new Set();
+      let paginaToken = "";
+      for (let pagina = 1; pagina <= 10; pagina++) {
+        const url = new URL(urlBase);
+        url.searchParams.set("timeMin", inicio);
+        url.searchParams.set("timeMax", fim);
+        url.searchParams.set("singleEvents", "true");
+        url.searchParams.set("showDeleted", "false");
+        url.searchParams.set("orderBy", "startTime");
+        url.searchParams.set("maxResults", "250");
+        url.searchParams.set("fields", incluirDescricao
+          ? "kind,nextPageToken,items(id,iCalUID,status,summary,description,etag,start(date,dateTime),end(date,dateTime),recurringEventId,extendedProperties(private))"
+          : "kind,nextPageToken,items(id,iCalUID,status,start(date,dateTime),end(date,dateTime),recurringEventId,extendedProperties(private))");
+        if (paginaToken) url.searchParams.set("pageToken", paginaToken);
+        const retorno = await requisitar("GET", url.toString());
+        if (retorno.status !== 200 || retorno.body?.kind !== "calendar#events" ||
+            !Array.isArray(retorno.body.items || [])) {
+          throw erro("LISTAGEM_GOOGLE_INVALIDA", "Google Calendar retornou pagina inesperada.");
+        }
+        const itens = retorno.body.items || [];
+        if (encontrados.length + itens.length > 1500) {
+          throw erro("INVENTARIO_CALENDAR_EXCEDE_LIMITE", "Inventario excedeu limite de eventos.");
+        }
+        encontrados.push(...itens);
+        const proxima = retorno.body.nextPageToken;
+        if (!proxima) return { eventos: encontrados, paginas: pagina, completo: true };
+        if (typeof proxima !== "string" || proxima.length > 2048 || paginasVistas.has(proxima)) {
+          throw erro("PAGINACAO_GOOGLE_INVALIDA", "Google Calendar retornou paginacao invalida.");
+        }
+        paginasVistas.add(proxima);
+        paginaToken = proxima;
+      }
+      throw erro("INVENTARIO_CALENDAR_INCOMPLETO", "Mais de dez paginas; dividir a janela.");
+    },
+
+    async consultarEvento({ eventId }) {
+      return buscar(eventId); // Somente leitura, nenhum write flag.
+    },
+    async consultarEventoLegado({ eventId }) {
+      return buscarLegado(eventId); // Somente leitura, ID Google real.
+    },
+
+    /**
+     * Eventos do Apps Script previamente vinculados pelo revisor:
+     * exige events.id REAL + marcacao 'evt_<agendamentoId>' na descricao.
+     * Nunca insere evento ou altera metadados usados para conciliacao.
+     */
+    async atualizarEventoLegado({
+      agendamentoId, legacyEventId, eventId, nomeCliente, servico, inicio, fim,
+      inicioAnterior,
+    }) {
+      escrever();
+      const idEvento = exigirIdEventoLegado(eventId);
+      const atual = await buscarLegado(idEvento);
+      if (!atual) throw erro("GOOGLE_LEGADO_NAO_ENCONTRADO", "Evento legado ausente.");
+      validarMarcadorLegado(atual, agendamentoId, legacyEventId);
+      // Requisicoes repetidas apos timeout nao podem sobrescrever o evento
+      // novamente. Se ja esta no estado desejado, somente confirmar.
+      const desejado = montarDados({ agendamentoId, nomeCliente, servico, inicio, fim });
+      if (Date.parse(atual.start?.dateTime) === Date.parse(inicio) &&
+          Date.parse(atual.end?.dateTime) === Date.parse(fim) &&
+          atual.summary === desejado.summary) {
+        return { eventId: idEvento, atualizado: false, jaEstavaAtualizado: true };
+      }
+      // Evita sobrescrever um evento deslocado manualmente no Calendar,
+      // em divergencia com o horario que o sistema considera atual.
+      if (inicioAnterior) {
+        const esperado = dataComFuso(inicioAnterior);
+        if (Date.parse(atual.start?.dateTime) !== esperado) {
+          throw erro("GOOGLE_LEGADO_HORARIO_ALTERADO",
+            "Evento Google foi movido fora do sistema; conciliacao obrigatoria.");
+        }
+      }
+      const { extendedProperties: _semAlterarPropriedades, ...mudancas } =
+        montarDados({ agendamentoId, nomeCliente, servico, inicio, fim });
+      const resposta = await requisitar(
+        "PATCH", urlBase + "/" + encodeURIComponent(idEvento) + "?sendUpdates=none",
+        mudancas, atual.etag,
+      );
+      if (resposta.body?.id !== idEvento || resposta.body.status === "cancelled") {
+        throw erro("GOOGLE_LEGADO_SEM_CONFIRMACAO", "Atualizacao nao confirmada.");
+      }
+      validarMarcadorLegado(resposta.body, agendamentoId, legacyEventId);
+      if (Date.parse(resposta.body.start?.dateTime) !== Date.parse(inicio) ||
+          Date.parse(resposta.body.end?.dateTime) !== Date.parse(fim)) {
+        throw erro("GOOGLE_LEGADO_DADOS_DIVERGENTES", "Evento atualizado em horario diferente.");
+      }
+      return { eventId: idEvento, atualizado: true };
+    },
+
+    async excluirEventoLegado({ agendamentoId, legacyEventId, eventId }) {
+      escrever();
+      const idEvento = exigirIdEventoLegado(eventId);
+      const atual = await buscarLegado(idEvento);
+      if (!atual || atual.status === "cancelled") {
+        return { eventId: idEvento, jaAusente: true, excluido: false };
+      }
+      validarMarcadorLegado(atual, agendamentoId, legacyEventId);
+      const resposta = await requisitar(
+        "DELETE", urlBase + "/" + encodeURIComponent(idEvento) + "?sendUpdates=none",
+        null, atual.etag,
+      );
+      if (resposta.status !== 204 && resposta.status !== 404) {
+        throw erro("GOOGLE_LEGADO_SEM_CONFIRMACAO", "Cancelamento nao confirmado.");
+      }
+      return { eventId: idEvento, excluido: resposta.status === 204,
+        jaAusente: resposta.status === 404 };
+    },
+
+    async criarEvento(dados) {
+      escrever();
+      const idAgendamento = exigirIdAgendamento(dados?.agendamentoId);
+      const eventId = gerarIdEventoGoogle(idAgendamento);
+      const corpo = { ...montarDados(dados), id: eventId };
+      const retorno = await requisitar("POST", urlBase + "?sendUpdates=none", corpo);
+      if (retorno.status === 409) {
+        const existente = await buscar(eventId);
+        if (!existente) {
+          throw erro("GOOGLE_CALENDAR_CONFLITO_INDEFINIDO", "Evento em conflito ainda nao esta visivel.");
+        }
+        validarRetorno(existente, eventId, idAgendamento);
+        return { eventId, criado: false, etag: existente.etag || null };
+      }
+      const criado = validarRetorno(retorno.body, eventId, idAgendamento);
+      return { eventId, criado: true, etag: criado.etag || null };
+    },
+
+    async atualizarEvento({ agendamentoId, eventId, nomeCliente, servico, inicio, fim }) {
+      escrever();
+      const idAgendamento = exigirIdAgendamento(agendamentoId);
+      const id = exigirIdEvento(eventId);
+      const atual = await buscar(id);
+      if (!atual) throw erro("EVENTO_GOOGLE_AUSENTE", "Evento para atualizacao nao encontrado.");
+      exigirPropriedade(atual, idAgendamento);
+      if (atual.status === "cancelled") {
+        throw erro("EVENTO_GOOGLE_CANCELADO", "Evento cancelado nao pode ser atualizado.");
+      }
+      if (typeof atual.etag !== "string" || !atual.etag) {
+        throw erro("ETAG_GOOGLE_AUSENTE", "Versao do evento nao confirmada.");
+      }
+      const { extendedProperties: _somenteNaCriacao, ...mudancas } =
+        montarDados({ agendamentoId, nomeCliente, servico, inicio, fim });
+      const retorno = await requisitar(
+        "PATCH", urlBase + "/" + encodeURIComponent(id) + "?sendUpdates=none", mudancas, atual.etag,
+      );
+      return { eventId: id, atualizado: true, etag: validarRetorno(retorno.body, id, idAgendamento).etag || null };
+    },
+
+    async excluirEvento({ agendamentoId, eventId }) {
+      escrever();
+      const idAgendamento = exigirIdAgendamento(agendamentoId);
+      const id = exigirIdEvento(eventId);
+      const atual = await buscar(id);
+      if (!atual) return { eventId: id, excluido: false, jaAusente: true };
+      exigirPropriedade(atual, idAgendamento);
+      if (atual.status === "cancelled") {
+        return { eventId: id, excluido: false, jaAusente: true };
+      }
+      if (typeof atual.etag !== "string" || !atual.etag) {
+        throw erro("ETAG_GOOGLE_AUSENTE", "Versao do evento nao confirmada.");
+      }
+      const retorno = await requisitar(
+        "DELETE", urlBase + "/" + encodeURIComponent(id) + "?sendUpdates=none", null, atual.etag,
+      );
+      if (retorno.status !== 204 && retorno.status !== 404) {
+        throw erro("GOOGLE_CALENDAR_RESPOSTA_INVALIDA", "Exclusao nao confirmada pelo Google.");
+      }
+      return { eventId: id, excluido: retorno.status === 204, jaAusente: retorno.status === 404 };
+    },
+  };
+}

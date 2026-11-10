@@ -1,4 +1,5 @@
 import { gerarIdAgendamentoPix } from "./pixRegrasConfirmacao.js";
+import { autorizarCriacaoNovoCalendar } from "./googleCalendarNewBookingAuth.js";
 
 function requerAnalise(mensagem) {
   return Object.assign(new Error(mensagem), {
@@ -173,13 +174,14 @@ export async function efetivarAgendamentoPix({
 
     // A fila só recebe o atendimento depois da confirmação no Firestore.
     // O eventId determinístico e a chave única tornam as consultas repetidas idempotentes.
-    await conexao.query(`
+    const insercaoOutbox = await conexao.query(`
       INSERT INTO public.pix_calendar_outbox (
         event_id, agendamento_id, nome_cliente, servico,
         data_servico, horario, duracao_minutos
       )
       VALUES ($1, $2, $3, $4, $5::date, $6::time, $7)
       ON CONFLICT (event_id) DO NOTHING
+      RETURNING id
     `, [
       eventId,
       confirmado.agendamentoId,
@@ -189,6 +191,13 @@ export async function efetivarAgendamentoPix({
       horarioEvento,
       duracaoMinutos
     ]);
+    if (insercaoOutbox.rows?.[0]?.id != null) {
+      await autorizarCriacaoNovoCalendar(conexao, {
+        outboxId: insercaoOutbox.rows[0].id,
+        agendamentoId: confirmado.agendamentoId,
+        env: dependencias.env || process.env,
+      });
+    }
 
     await conexao.query(`
       INSERT INTO public.pix_eventos (

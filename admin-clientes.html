@@ -22,6 +22,46 @@
   <link rel="stylesheet" href="admin-clientes-live.css?v=1.0.0">
   <link rel="stylesheet" href="admin-clientes-isabele.css?v=1.0.1">
   <link rel="stylesheet" href="admin-bottom-nav.css?v=1">
+  <style>
+    /* Edição do celular na Gestão de Clientes: escopo restrito ao modal. */
+    #client-phone-form .client-phone-input {
+      display: block;
+      box-sizing: border-box;
+      width: 100%;
+      min-height: 46px;
+      padding: 11px 13px;
+      border: 1px solid var(--border-dark, #d8cdc6);
+      border-radius: 11px;
+      background: #fff;
+      color: var(--text, #2f2930);
+      font: inherit;
+      font-size: 16px;
+    }
+
+    #client-phone-form .client-phone-input:focus-visible {
+      outline: 3px solid rgba(168, 97, 123, .35);
+      outline-offset: 2px;
+    }
+
+    #client-phone-form .client-phone-input:disabled,
+    #client-phone-form button:disabled {
+      opacity: .6;
+      cursor: not-allowed;
+    }
+
+    #client-phone-status[data-state="error"] {
+      color: #a52640;
+    }
+
+    #client-phone-status[data-state="success"] {
+      color: #227443;
+    }
+
+    #client-phone-status {
+      font-size: 13px;
+      line-height: 1.4;
+    }
+  </style>
 </head>
 
 <body data-page="admin-clientes" data-access-state="loading">
@@ -109,6 +149,12 @@
         </div>
         <div id="profile-error" class="client-load-error" role="alert" hidden><span id="profile-error-message"></span><button id="profile-retry" type="button">Tentar novamente</button></div>
         <div id="profile-content">
+          <form id="client-phone-form" class="client-note-form" autocomplete="off">
+            <label for="client-phone-input">Celular da cliente</label>
+            <p id="client-phone-help" class="client-note-help">Informe o celular com DDD (11 dígitos). Esse contato será usado nos lembretes de WhatsApp.</p>
+            <input id="client-phone-input" class="client-phone-input" name="celular" type="tel" inputmode="tel" placeholder="(11) 99999-9999" maxlength="20" aria-describedby="client-phone-help client-phone-status" required disabled>
+            <div class="note-actions"><span id="client-phone-status" role="status" aria-live="polite"></span><button id="save-client-phone" type="submit" disabled>Salvar celular</button></div>
+          </form>
           <div class="modal-metrics">
             <div><span>Atendimentos concluídos</span><strong id="modal-visits">—</strong></div>
             <div><span>Última visita</span><strong id="modal-last-visit">—</strong></div>
@@ -150,7 +196,7 @@
       <a href="admin-clientes.html" class="admin-navigation-item admin-navigation-item--active" aria-current="page"><span aria-hidden="true">♙</span><span>Clientes</span></a>
     </nav>
   </div>
-  <script type="module" src="admin-clientes.js?v=1.0.1"></script>
+  <script type="module" src="admin-clientes.js?v=1.0.2"></script>
   <script src="admin-bottom-nav.js?v=1" defer></script>
 </body>
 

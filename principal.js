@@ -1,10 +1,4 @@
-import {
-  setupPushNotifications,
-  ativarNotificacoes,
-} from "./notificationService.js";
 import { auth, db } from "./firebase-config.js";
-import { iniciarCentralNotificacoes } from "./centralNotificacoesUI.js";
-import { consultarFotoPerfil } from "./foto-perfil-api.js";
 import { montarPerfilClienteAuth, podeRecuperarPerfilCliente } from "./clientePerfilIntegridade.js";
 
 import {
@@ -20,16 +14,55 @@ import {
   runTransaction,
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
 
-import { iniciarAssistenteGestao } from "./assistenteGestaoUI.js?v=2";
-import { montarCatalogoCliente, normalizarSlugCategoria } from "./categoriasCatalogo.mjs";
-import { montarResultadosBusca } from "./catalogoBusca.mjs";
-
 const fallbackClientName = "Cliente";
 const fallbackAdminName = "Isabele";
 const fallbackAvatar = "https://www.w3schools.com/howto/img_avatar2.png";
 let principalSearchInitialized = false;
 let catalogoServicosCliente = [];
 let catalogoCategoriasCliente = [];
+let montarResultadosBuscaCliente;
+
+function criarGateBuscaProgressiva() {
+  let pronto = false;
+  let atualizacaoPendente = null;
+
+  return {
+    estaPronto: () => pronto,
+    agendar(atualizar) {
+      if (pronto) {
+        atualizar();
+        return;
+      }
+      atualizacaoPendente = atualizar;
+    },
+    finalizar() {
+      pronto = true;
+      const atualizar = atualizacaoPendente;
+      atualizacaoPendente = null;
+      atualizar?.();
+    },
+  };
+}
+
+const gateBuscaCatalogo = criarGateBuscaProgressiva();
+
+// Marcas locais para separar sessão, perfil, liberação visual e recursos secundários.
+// Os nomes são genéricos e nunca incluem UID, nome ou qualquer dado da conta.
+function marcarEtapaPrincipal(etapa) {
+  if (typeof performance !== "undefined" && performance.mark) {
+    performance.mark(`principal:${etapa}`);
+  }
+}
+
+function medirEtapaPrincipal(nome, inicio, fim) {
+  if (typeof performance !== "undefined" && performance.measure) {
+    try {
+      performance.measure(`principal:${nome}`, `principal:${inicio}`, `principal:${fim}`);
+    } catch {
+      // A medição é apenas diagnóstica e não pode afetar o fluxo da página.
+    }
+  }
+}
 
 const paginasLegadasCategoria = {
   "unhas-em-gel": "unhas-em-gel.html",
@@ -45,10 +78,15 @@ async function carregarCatalogoCliente() {
   const lista = document.getElementById("principal-services-list");
   if (!lista) return;
   try {
-    const [categoriasSnapshot, servicosSnapshot] = await Promise.all([
+    const [catalogoMod, buscaMod, categoriasSnapshot, servicosSnapshot] = await Promise.all([
+      import("./categoriasCatalogo.mjs"),
+      import("./catalogoBusca.mjs"),
       getDocs(collection(db, "categorias")),
       getDocs(collection(db, "servicos")),
     ]);
+    const { montarCatalogoCliente, normalizarSlugCategoria } = catalogoMod;
+    const { montarResultadosBusca } = buscaMod;
+    montarResultadosBuscaCliente = montarResultadosBusca;
     const categorias = categoriasSnapshot.docs.map((snapshot) => ({ id: snapshot.id, ...snapshot.data() }));
     const servicos = servicosSnapshot.docs.map((snapshot) => ({ id: snapshot.id, ...snapshot.data() }));
     const slugsLegados = ["unhas-em-gel", "manicure", "pedicure"];
@@ -93,6 +131,8 @@ async function carregarCatalogoCliente() {
       const chevron = document.createElement("span"); chevron.className = "service-chevron"; chevron.setAttribute("aria-hidden", "true"); chevron.textContent = "›";
       link.append(icon, content, chevron); li.append(link); lista.append(li);
     });
+
+    gateBuscaCatalogo.finalizar();
   } catch (error) {
     console.error("Não foi possível carregar as categorias e serviços:", error);
   }
@@ -116,7 +156,12 @@ function setupPrincipalSearch() {
       list.hidden = false;
       return [];
     }
-    const results = montarResultadosBusca(catalogoServicosCliente, query);
+    // Enquanto os dados chegam, preserve o estado visual e não anuncie falso vazio.
+    if (!gateBuscaCatalogo.estaPronto()) {
+      gateBuscaCatalogo.agendar(() => renderResults(searchInput.value));
+      return [];
+    }
+    const results = montarResultadosBuscaCliente(catalogoServicosCliente, query);
     resultList.replaceChildren();
     list.hidden = true;
     resultList.hidden = false;
@@ -204,6 +249,16 @@ function finishLoading(elements) {
   if (elements.loadingSection) {
     elements.loadingSection.hidden = true;
   }
+  marcarEtapaPrincipal("ui-released");
+}
+
+let servicoNotificacoesPromise;
+
+function carregarServicoNotificacoes() {
+  if (!servicoNotificacoesPromise) {
+    servicoNotificacoesPromise = import("./notificationService.js");
+  }
+  return servicoNotificacoesPromise;
 }
 
 function showAccessError(elements, title, message) {
@@ -566,6 +621,12 @@ async function configurarNotificacoesPrincipal(user) {
     return;
   }
 
+  marcarEtapaPrincipal("push-module-start");
+  const { setupPushNotifications, ativarNotificacoes } =
+    await carregarServicoNotificacoes();
+  marcarEtapaPrincipal("push-module-ready");
+  medirEtapaPrincipal("push-module-load", "push-module-start", "push-module-ready");
+
   painel.hidden = false;
   botao.hidden = false;
   status.textContent = "";
@@ -664,7 +725,11 @@ async function carregarFotoPersonalizada(user, elementoFoto) {
   const fotoAnterior = elementoFoto.src;
 
   try {
+    marcarEtapaPrincipal("profile-photo-start");
+    const { consultarFotoPerfil } = await import("./foto-perfil-api.js");
     const arquivo = await consultarFotoPerfil();
+    marcarEtapaPrincipal("profile-photo-ready");
+    medirEtapaPrincipal("profile-photo-load", "profile-photo-start", "profile-photo-ready");
 
     // Não existe personalização: mantém a foto do Google.
     if (!arquivo) return;
@@ -709,7 +774,10 @@ window.addEventListener("pagehide", () => {
 
 async function handleAuthenticatedUser(user, elements) {
   try {
+    marcarEtapaPrincipal("profile-read-start");
     const accessProfile = await loadUserAccessProfile(user);
+    marcarEtapaPrincipal("profile-read-ready");
+    medirEtapaPrincipal("profile-resolution", "profile-read-start", "profile-read-ready");
 
     if (!accessProfile.allowed) {
       if (accessProfile.reason === "inactive") {
@@ -730,16 +798,71 @@ async function handleAuthenticatedUser(user, elements) {
       return;
     }
 
+    // O editor só é necessário após a autorização. Mantenha seu botão desabilitado
+    // até que o módulo tenha registrado os handlers, para que o primeiro clique útil funcione.
+    const botaoEditarFoto = document.getElementById("editar-foto-perfil");
+    if (botaoEditarFoto) {
+      botaoEditarFoto.disabled = true;
+      botaoEditarFoto.setAttribute("aria-disabled", "true");
+    }
+    marcarEtapaPrincipal("photo-editor-module-start");
+    void import("./foto-perfil-preview.js?v=2")
+      .then(() => {
+        if (botaoEditarFoto) {
+          botaoEditarFoto.disabled = false;
+          botaoEditarFoto.setAttribute("aria-disabled", "false");
+        }
+        marcarEtapaPrincipal("photo-editor-module-ready");
+        medirEtapaPrincipal(
+          "photo-editor-module-load",
+          "photo-editor-module-start",
+          "photo-editor-module-ready",
+        );
+      })
+      .catch((error) => {
+        if (botaoEditarFoto) {
+          botaoEditarFoto.disabled = true;
+          botaoEditarFoto.setAttribute("aria-disabled", "true");
+        }
+        console.warn("Não foi possível preparar o editor de foto:", error);
+      });
+
     if (accessProfile.role === "admin") {
       configureAdminInterface(user, accessProfile, elements);
-      void iniciarAssistenteGestao({ user, contexto: "home" });
+      marcarEtapaPrincipal("assistant-module-start");
+      void import("./assistenteGestaoUI.js?v=4")
+        .then(({ iniciarAssistenteGestao }) => {
+          marcarEtapaPrincipal("assistant-module-ready");
+          medirEtapaPrincipal(
+            "assistant-module-load",
+            "assistant-module-start",
+            "assistant-module-ready",
+          );
+          return iniciarAssistenteGestao({ user, contexto: "home" });
+        })
+        .catch((error) => {
+          console.warn("Não foi possível iniciar o Assistente Isabele:", error);
+        });
     } else {
       configureClientInterface(user, accessProfile, elements);
     }
     // Carrega a foto personalizada sem bloquear a tela.
     void carregarFotoPersonalizada(user, elements.photo);
     // Central de notificações para cliente e administradora.
-    iniciarCentralNotificacoes(user);
+    marcarEtapaPrincipal("notifications-module-start");
+    void import("./centralNotificacoesUI.js")
+      .then(({ iniciarCentralNotificacoes }) => {
+        marcarEtapaPrincipal("notifications-module-ready");
+        medirEtapaPrincipal(
+          "notifications-module-load",
+          "notifications-module-start",
+          "notifications-module-ready",
+        );
+        iniciarCentralNotificacoes(user);
+      })
+      .catch((error) => {
+        console.warn("Não foi possível iniciar a Central de Notificações:", error);
+      });
 
     /*
      * Configura as notificações após identificar
@@ -766,7 +889,10 @@ function initPrincipalPage() {
   setupPrincipalNavigation();
   hideAllRoleSections();
 
+  marcarEtapaPrincipal("auth-wait-start");
   onAuthStateChanged(auth, async (user) => {
+    marcarEtapaPrincipal("auth-callback");
+    medirEtapaPrincipal("auth-session-resolution", "auth-wait-start", "auth-callback");
     if (!user) {
       window.location.replace("login.html");
 
