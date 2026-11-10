@@ -173,7 +173,7 @@ export async function iniciarAssistenteGestao({ user, contexto = "home" }) {
   if (contexto === "home") {
     prepararExpansaoHome(root);
     // A lista de amanha carrega em paralelo e nao atrasa o resumo do dia.
-    void import("./assistenteLembretesWhatsappUI.js?v=2")
+    void import("./assistenteLembretesWhatsappUI.js?v=3")
       .then(({ iniciarLembretesAmanha }) => {
         if (autorizado()) iniciarLembretesAmanha({ root, user });
       })
