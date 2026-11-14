@@ -1130,3 +1130,30 @@ button {
   opacity: .55;
 }
 .agendamento-comments { scroll-margin-top: 20px; }
+
+
+/* Horários convencionais: painel expansível, recolhido por padrão. */
+.agendamento-horarios-toggle {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; width: 100%; min-height: 48px; padding: 12px 15px;
+  border: 1px solid rgba(124, 51, 76, .23); border-radius: 14px;
+  color: var(--booking-dark); background: var(--booking-card-soft);
+  font: 600 13px/1.35 "Poppins", sans-serif; cursor: pointer; text-align: left;
+}
+.agendamento-horarios-toggle:hover,
+.agendamento-horarios-toggle:focus-visible {
+  background: #fce4ed; border-color: rgba(124, 51, 76, .48);
+  outline-offset: 3px;
+}
+.agendamento-horarios-toggle-icone {
+  width: 20px; height: 20px; flex: 0 0 20px;
+  transition: transform .18s ease;
+}
+.agendamento-horarios-toggle[aria-expanded="true"] .agendamento-horarios-toggle-icone {
+  transform: rotate(180deg);
+}
+.agendamento-horarios-painel { padding-top: 14px; }
+.agendamento-horarios-painel[hidden] { display: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  .agendamento-horarios-toggle-icone { transition: none; }
+}
