@@ -1,5 +1,6 @@
 import { auth, db } from "./firebase-config.js";
 import { obterMesPredominante } from "./agendamentoMes.mjs?v=1.0.0";
+import { definirBloqueioTurnos } from "./agendamentoSugestaoFluxo.mjs?v=1.0.0";
 import { consultarDisponibilidadePix, reagendarAgendamentoApi, consultarReagendamentoPixConfigApi, consultarReagendamentoPixPagoApi } from "./agendamentosApi.js";
 import { consultarIntervalosDisponibilidade, intervaloSobrepoeDisponibilidade, } from "./agendamentoDisponibilidade.js?v=2.2.0";
 import { obterJanelaAgendamento, validarDataNaJanela, validarHorarioEspecial, obterExpedienteEspecialDezembro2026, validarServicoDezembro2026, obterJanelasAtendimento, AGENDA_DEZEMBRO_2026_ABERTA } from "./infra/backend/src/agendamentoRegras.mjs?v=2.3.0";
@@ -331,7 +332,14 @@ async function carregarSugestoesHorarios({ datas, serviceDuration, serviceInfo, 
       if (!botaoData) return;
       botao.disabled = true;
       try {
-        await selecionarDataAgendamento(botaoData, botao.dataset.time);
+        const selecionado = await selecionarDataAgendamento(botaoData, botao.dataset.time);
+        if (selecionado) {
+          const destino = document.querySelector(".agendamento-comments");
+          if (destino) {
+            const movimentoReduzido = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+            destino.scrollIntoView({ behavior: movimentoReduzido ? "auto" : "smooth", block: "start" });
+          }
+        }
       } finally {
         botao.disabled = false;
       }
@@ -1003,7 +1011,20 @@ async function inicializarAgendamento() {
 
   atualizarResumoAgendamento();
 
+  // Bloqueio apenas de interface; não modifica disponibilidade ou confirmação.
+  let horarioViaSugestao = null;
+  let sequenciaSelecao = 0;
+  const horariosContainer = document.querySelector(".agendamento-times");
+  const alternarIndisponiveis = document.getElementById("agendamento-ver-indisponiveis");
+
+  function liberarHorariosManuais() {
+    horarioViaSugestao = null;
+    definirBloqueioTurnos(horariosContainer, false, alternarIndisponiveis);
+  }
+
   async function selecionarDataAgendamento(botao, horarioSugerido = null) {
+    const selecaoAtual = ++sequenciaSelecao;
+    liberarHorariosManuais();
     selecionarUnico(botao, datas, "agendamento-date--active");
     localStorage.setItem("dataAgendamento", formatarData(botao));
     const dataIso = obterDataIso(botao);
@@ -1016,18 +1037,22 @@ async function inicializarAgendamento() {
       void carregarSugestoesHorarios({ datas, serviceDuration, serviceInfo, selecionarDataAgendamento, dataReferencia: dataIso });
     }
     await renderizarHorarios(dataIso, serviceDuration, reagendarId, serviceInfo);
-    if (!horarioSugerido ||
-        obterDataIso(obterSelecionado(datas, "agendamento-date--active")) !== dataIso) return;
-    // Revalida PIX, bloqueios e regras atuais; nunca seleciona um horário inválido.
-    const opcao = [...document.querySelectorAll(".agendamento-times .agendamento-time")]
+    if (!horarioSugerido || selecaoAtual !== sequenciaSelecao ||
+        obterDataIso(obterSelecionado(datas, "agendamento-date--active")) !== dataIso) return false;
+    // A sugestão só avança após consultar PIX e bloqueios pela validação já existente.
+    const opcao = [...horariosContainer.querySelectorAll(".agendamento-time")]
       .find((item) => item.dataset.time === horarioSugerido && !item.disabled);
-    if (opcao) opcao.click();
+    if (!opcao) return false;
+    opcao.click();
+    if (!opcao.classList.contains("agendamento-time--active")) return false;
+    horarioViaSugestao = { dataIso, horario: horarioSugerido };
+    definirBloqueioTurnos(horariosContainer, true, alternarIndisponiveis);
+    atualizarResumoAgendamento();
+    return true;
   }
   datas.forEach((botao) => {
     botao.addEventListener("click", () => { void selecionarDataAgendamento(botao); });
   });
-
-  const horariosContainer = document.querySelector(".agendamento-times");
 
   if (horariosContainer) {
     horariosContainer.addEventListener("click", (event) => {
@@ -1320,7 +1345,18 @@ async function inicializarAgendamento() {
     const dataAtiva = obterDataIso(
       obterSelecionado(datas, "agendamento-date--active") || datas[0],
     );
-    if (dataAtiva) void renderizarHorarios(dataAtiva, serviceDuration, reagendarId, serviceInfo);
+    if (dataAtiva) {
+      void renderizarHorarios(dataAtiva, serviceDuration, reagendarId, serviceInfo).then(() => {
+        if (!horarioViaSugestao || horarioViaSugestao.dataIso !== dataAtiva ||
+            obterDataIso(obterSelecionado(datas, "agendamento-date--active")) !== dataAtiva) return;
+        const ativo = horariosContainer?.querySelector(".agendamento-time--active");
+        if (ativo?.dataset.time === horarioViaSugestao.horario) {
+          definirBloqueioTurnos(horariosContainer, true, alternarIndisponiveis);
+        } else {
+          liberarHorariosManuais();
+        }
+      });
+    }
   };
   window.addEventListener("pageshow", atualizarAoRetornar);
   document.addEventListener("visibilitychange", atualizarAoRetornar);

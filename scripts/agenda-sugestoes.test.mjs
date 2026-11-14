@@ -76,6 +76,7 @@ test("integração mantém o calendário e consulta PIX somente ao selecionar", 
   assert.match(page, /where\("data", "in", diasSemana\)/);
   assert.match(page, /where\("data", "==", data\)/);
   assert.match(page, /selecionarDataAgendamento\(botaoData, botao\.dataset\.time\)/);
+  assert.match(page, /definirBloqueioTurnos/);
   assert.match(page, /!horarioSugerido && !reagendarId/);
   assert.match(page, /if \(!reagendarId\)/);
   assert.doesNotMatch(page, /!reagendarId && !origemAdmin/);
