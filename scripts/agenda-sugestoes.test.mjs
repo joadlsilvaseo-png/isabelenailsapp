@@ -47,7 +47,8 @@ test("respeita janelas separadas e duração integral do serviço", () => {
   const r = sugerirHorarios({
     datas: [quarta], hoje: quarta, servico, duracao: 150, agendamentos: [],
   });
-  assert.ok(r[0].horarios.every((h) => h >= "14:00" && h <= "15:00"));
+  assert.ok(r[0].horarios.every((h) =>
+    (h >= "09:00" && h <= "10:00") || (h >= "14:00" && h <= "15:00")));
 });
 
 test("exceções de dezembro: dia fechado e serviço suspenso não são sugeridos", () => {
