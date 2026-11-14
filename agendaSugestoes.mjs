@@ -82,7 +82,7 @@ function pontuar(inicio, fim, ocupacoes) {
  * disponibilidade já existente, que incorpora reservas PIX e bloqueios.
  */
 export function sugerirHorarios({
-  datas, agendamentos, duracao, servico, hoje, minutoAtual = null,
+  datas, agendamentos, duracao, servico, hoje, inicioPeriodo = hoje, minutoAtual = null,
   clienteId = null, maxPorDia = 2,
 }) {
   const minutosServico = Number(duracao);
@@ -90,7 +90,7 @@ export function sugerirHorarios({
       minutosServico > 600 || !Array.isArray(agendamentos)) return [];
   const limite = Number.isInteger(maxPorDia) ? Math.max(1, Math.min(3, maxPorDia)) : 2;
   const resultado = [];
-  for (const dataIso of escolherDiasSemana(datas, hoje)) {
+  for (const dataIso of escolherDiasSemana(datas, inicioPeriodo)) {
     if (!validarServicoDezembro2026(dataIso, servico).valido) continue;
     const janelas = obterJanelasAtendimento(dataIso);
     if (!janelas.length) continue;

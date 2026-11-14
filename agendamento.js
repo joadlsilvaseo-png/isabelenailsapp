@@ -249,29 +249,46 @@ function minutoAtualSaoPaulo() {
  * Sugestões não atrasam a agenda: apenas uma consulta Firestore para sete dias.
  * Se ela falhar, o calendário original permanece utilizável.
  */
-async function carregarSugestoesHorarios({ datas, serviceDuration, serviceInfo, selecionarDataAgendamento }) {
+async function carregarSugestoesHorarios({ datas, serviceDuration, serviceInfo, selecionarDataAgendamento, dataReferencia = null }) {
   const secao = document.getElementById("agenda-sugestoes");
   const lista = secao?.querySelector("[data-agenda-sugestoes-lista]");
   if (!secao || !lista) return;
+  const requisicao = (carregarSugestoesHorarios.requisicao || 0) + 1;
+  carregarSugestoesHorarios.requisicao = requisicao;
+  const atual = () => requisicao === carregarSugestoesHorarios.requisicao;
   try {
-    const { escolherDiasSemana, sugerirHorarios } = await import("./agendaSugestoes.mjs?v=1.0.0");
+    const { escolherDiasSemana, sugerirHorarios } = await import("./agendaSugestoes.mjs?v=1.1.0");
     const hoje = obterHojeSaoPauloParaTela();
-    const diasSemana = escolherDiasSemana(datas.map((botao) => botao.dataset.dateIso), hoje);
-    if (!diasSemana.length) return;
-    const usuario = await aguardarUsuarioFirebase();
-    if (!usuario || auth.currentUser?.uid !== usuario.uid) return;
-    // Nada de sete chamadas PIX: a API continua obrigatória na escolha real.
-    const consulta = query(collection(db, "agendamentos"),
-      where("data", ">=", diasSemana[0]),
-      where("data", "<=", diasSemana[diasSemana.length - 1]));
-    const documentos = await getDocs(consulta);
-    if (auth.currentUser?.uid !== usuario.uid) return;
+    const inicioPeriodo = dataReferencia && dataReferencia > hoje ? dataReferencia : hoje;
+    const diasSemana = escolherDiasSemana(datas.map((botao) => botao.dataset.dateIso), inicioPeriodo);
+    if (!diasSemana.length) {
+      if (atual()) secao.hidden = true;
+      return;
+    }
+    // Uma consulta por até sete dias. Firestore é só para sugerir:
+    // a API PIX continua verificando o clique pelo fluxo original.
+    let agendamentos;
+    try {
+      const consulta = query(collection(db, "agendamentos"), where("data", "in", diasSemana));
+      const documentos = await getDocs(consulta);
+      agendamentos = documentos.docs.map((doc) => doc.data());
+    } catch (erroEmLote) {
+      console.warn("[Agenda Sugestões] Consulta semanal indisponível; tentando por dia:", erroEmLote.code || erroEmLote.message);
+      // Recuperação sem carregar a coleção inteira nem consultar a API PIX.
+      const resultados = await Promise.all(diasSemana.map((data) =>
+        getDocs(query(collection(db, "agendamentos"), where("data", "==", data)))));
+      agendamentos = resultados.flatMap((resultado) => resultado.docs.map((doc) => doc.data()));
+    }
+    if (!atual()) return;
     const sugestoes = sugerirHorarios({
-      datas: diasSemana, hoje, minutoAtual: minutoAtualSaoPaulo(),
-      agendamentos: documentos.docs.map((doc) => doc.data()),
-      duracao: serviceDuration, servico: serviceInfo, clienteId: usuario.uid,
+      datas: diasSemana, hoje, inicioPeriodo, minutoAtual: minutoAtualSaoPaulo(),
+      agendamentos,
+      duracao: serviceDuration, servico: serviceInfo, clienteId: auth.currentUser?.uid || null,
     });
-    if (!sugestoes.length) return;
+    if (!sugestoes.length) {
+      if (atual()) secao.hidden = true;
+      return;
+    }
     const frag = document.createDocumentFragment();
     for (const sugestao of sugestoes) {
       const botaoData = datas.find((botao) => botao.dataset.dateIso === sugestao.dataIso);
@@ -301,9 +318,13 @@ async function carregarSugestoesHorarios({ datas, serviceDuration, serviceInfo, 
       dia.append(rotulo, horas);
       frag.appendChild(dia);
     }
-    if (!frag.childNodes.length) return;
+    if (!atual()) return;
+    if (!frag.childNodes.length) {
+      secao.hidden = true;
+      return;
+    }
     lista.replaceChildren(frag);
-    lista.addEventListener("click", async (event) => {
+    lista.onclick = async (event) => {
       const botao = event.target.closest("button[data-agenda-sugestao]");
       if (!botao || botao.disabled) return;
       const botaoData = datas.find((dia) => dia.dataset.dateIso === botao.dataset.dateIso);
@@ -314,12 +335,12 @@ async function carregarSugestoesHorarios({ datas, serviceDuration, serviceInfo, 
       } finally {
         botao.disabled = false;
       }
-    });
+    };
     secao.hidden = false;
     atualizarResumoAgendamento();
   } catch (error) {
-    console.warn("[Agenda Sugestões] Indisponível; calendário preservado:", error.message);
-    secao.hidden = true;
+    console.warn("[Agenda Sugestões] Indisponível; calendário preservado:", error.code || error.message);
+    if (atual()) secao.hidden = true;
   }
 }
 
@@ -991,6 +1012,9 @@ async function inicializarAgendamento() {
     localStorage.removeItem("horaAgendamento");
     atualizarCabecalhoData(botao);
     atualizarResumoAgendamento();
+    if (!horarioSugerido && !reagendarId) {
+      void carregarSugestoesHorarios({ datas, serviceDuration, serviceInfo, selecionarDataAgendamento, dataReferencia: dataIso });
+    }
     await renderizarHorarios(dataIso, serviceDuration, reagendarId, serviceInfo);
     if (!horarioSugerido ||
         obterDataIso(obterSelecionado(datas, "agendamento-date--active")) !== dataIso) return;
@@ -1282,8 +1306,9 @@ async function inicializarAgendamento() {
     }
   }
 
-  if (!reagendarId && !origemAdmin) {
-    void carregarSugestoesHorarios({ datas, serviceDuration, serviceInfo, selecionarDataAgendamento });
+  if (!reagendarId) {
+    const dataInicial = obterDataIso(obterSelecionado(datas, "agendamento-date--active") || datas[0]);
+    void carregarSugestoesHorarios({ datas, serviceDuration, serviceInfo, selecionarDataAgendamento, dataReferencia: dataInicial });
   }
 
   let ultimaAtualizacaoVisibilidade = 0;
