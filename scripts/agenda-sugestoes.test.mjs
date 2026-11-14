@@ -73,9 +73,29 @@ test("integração mantém o calendário e consulta PIX somente ao selecionar", 
   const page = await readFile(new URL("../agendamento.js", import.meta.url), "utf8");
   const html = await readFile(new URL("../agendamento.html", import.meta.url), "utf8");
   assert.match(page, /agendaSugestoes\.mjs/);
-  assert.match(page, /where\("data", ">=", diasSemana\[0\]\)/);
+  assert.match(page, /where\("data", "in", diasSemana\)/);
+  assert.match(page, /where\("data", "==", data\)/);
   assert.match(page, /selecionarDataAgendamento\(botaoData, botao\.dataset\.time\)/);
+  assert.match(page, /!horarioSugerido && !reagendarId/);
+  assert.match(page, /if \(!reagendarId\)/);
+  assert.doesNotMatch(page, /!reagendarId && !origemAdmin/);
   assert.match(page, /await renderizarHorarios\(dataIso, serviceDuration, reagendarId, serviceInfo\)/);
   assert.match(html, /id="agenda-sugestoes"/);
   assert.match(html, /class="agendamento-calendar"/);
+});
+
+
+test("recalcula sugestões com base na data escolhida no calendário", () => {
+  const r = sugerirHorarios({
+    datas: ["2026-11-17", "2026-12-03", "2026-12-04"],
+    hoje: "2026-11-17", inicioPeriodo: "2026-12-03",
+    servico, duracao: 60, agendamentos: [],
+  });
+  assert.deepEqual(r.map((dia) => dia.dataIso), ["2026-12-03", "2026-12-04"]);
+});
+test("não exibe textos explicativos antigos no agendamento", async () => {
+  const html = await readFile(new URL("../agendamento.html", import.meta.url), "utf8");
+  assert.doesNotMatch(html, /Selecione a data e depois escolha/);
+  assert.doesNotMatch(html, /Mostramos primeiro apenas os horários livres/);
+  assert.match(html, /Horários sugeridos/);
 });

@@ -17,7 +17,7 @@ test("exibir livres por padrão e disponibilizar visualização opcional dos dem
   const pagina = await ler("agendamento.js"), html = await ler("agendamento.html");
   assert.match(html, /id="agendamento-ver-indisponiveis"/);
   assert.match(html, /aria-controls="horarios-agendamento" hidden/);
-  assert.match(html, /Mostramos primeiro apenas os horários livres/);
+  assert.doesNotMatch(html, /Mostramos primeiro apenas os horários livres/);
   assert.match(pagina, /botao\.hidden = true/);
   assert.match(pagina, /alternarIndisponiveis\.setAttribute\("aria-pressed", String\(mostrar\)\)/);
   assert.match(pagina, /slot\.hidden = !mostrar/);
