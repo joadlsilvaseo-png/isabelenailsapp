@@ -9,6 +9,8 @@ on:
       - "scripts/**"
       - "agendamento.js"
       - "agendamento.html"
+      - "agendamento.css"
+      - "agendaSugestoes.mjs"
       - "admin-agendamentos.js"
       - "admin-agendamentos.html"
       - "admin-agendamentos.css"
@@ -146,6 +148,10 @@ jobs:
           node --check test/agendamentoCancelamentos.test.js
       - name: Testes do backend
         run: npm test
+      - name: Testar motor de agenda inteligente (frontend)
+        run: |
+          node --check ../../agendaSugestoes.mjs
+          node --test ../../scripts/agenda-sugestoes.test.mjs
       - name: Testar modal de conclusão (front-end)
         run: node --test ../../scripts/admin-conclusao-modal.test.mjs
       - name: Testar ordenação e filtro PIX de clientes
