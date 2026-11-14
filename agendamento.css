@@ -1108,3 +1108,25 @@ button {
 @media (prefers-reduced-motion: reduce) {
   .agenda-sugestoes-lista { scroll-behavior: auto; }
 }
+
+
+/* Sugestão selecionada: horários convencionais ficam temporariamente travados.
+   O horário escolhido mantém seu destaque no resumo e no carrossel. */
+.agendamento-times--sugestao-selecionada .agendamento-time:disabled:not(.agendamento-time--active):not(.horario-ocupado) {
+  cursor: not-allowed;
+  color: #aaa1a4;
+  background: #ede9ea;
+  border-color: rgba(89, 28, 49, .04);
+  box-shadow: none;
+  opacity: .74;
+}
+.agendamento-times--sugestao-selecionada .agendamento-time--active:disabled {
+  color: var(--booking-white);
+  background: var(--booking-primary);
+  opacity: 1;
+}
+.agendamento-availability-toggle:disabled {
+  cursor: not-allowed;
+  opacity: .55;
+}
+.agendamento-comments { scroll-margin-top: 20px; }
