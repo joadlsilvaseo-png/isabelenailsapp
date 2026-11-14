@@ -1,6 +1,7 @@
 import { auth, db } from "./firebase-config.js";
 import { obterMesPredominante } from "./agendamentoMes.mjs?v=1.0.0";
 import { definirBloqueioTurnos } from "./agendamentoSugestaoFluxo.mjs?v=1.0.0";
+import { configurarPainelHorarios } from "./agendamentoPainelHorarios.mjs?v=1.0.0";
 import { consultarDisponibilidadePix, reagendarAgendamentoApi, consultarReagendamentoPixConfigApi, consultarReagendamentoPixPagoApi } from "./agendamentosApi.js";
 import { consultarIntervalosDisponibilidade, intervaloSobrepoeDisponibilidade, } from "./agendamentoDisponibilidade.js?v=2.2.0";
 import { obterJanelaAgendamento, validarDataNaJanela, validarHorarioEspecial, obterExpedienteEspecialDezembro2026, validarServicoDezembro2026, obterJanelasAtendimento, AGENDA_DEZEMBRO_2026_ABERTA } from "./infra/backend/src/agendamentoRegras.mjs?v=2.3.0";
@@ -1016,6 +1017,10 @@ async function inicializarAgendamento() {
   let sequenciaSelecao = 0;
   const horariosContainer = document.querySelector(".agendamento-times");
   const alternarIndisponiveis = document.getElementById("agendamento-ver-indisponiveis");
+  const painelHorarios = configurarPainelHorarios(
+    document.getElementById("agendamento-horarios-toggle"),
+    document.getElementById("agendamento-horarios-painel"),
+  );
 
   function liberarHorariosManuais() {
     horarioViaSugestao = null;
@@ -1047,6 +1052,7 @@ async function inicializarAgendamento() {
     if (!opcao.classList.contains("agendamento-time--active")) return false;
     horarioViaSugestao = { dataIso, horario: horarioSugerido };
     definirBloqueioTurnos(horariosContainer, true, alternarIndisponiveis);
+    painelHorarios.recolher();
     atualizarResumoAgendamento();
     return true;
   }

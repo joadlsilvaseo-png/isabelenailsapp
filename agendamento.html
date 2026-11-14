@@ -19,7 +19,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
   <link rel="stylesheet" href="base.css?v=1.0.4">
-  <link rel="stylesheet" href="agendamento.css?v=2.5.0">
+  <link rel="stylesheet" href="agendamento.css?v=2.6.0">
   <link rel="stylesheet" href="pixCheckout.css?v=1.0.3">
 </head>
 
@@ -168,7 +168,17 @@
             </span>
           </div>
 
-          <div class="agendamento-time-legend">
+          <button type="button" id="agendamento-horarios-toggle"
+                  class="agendamento-horarios-toggle" aria-expanded="false"
+                  aria-controls="agendamento-horarios-painel">
+            <span data-horarios-toggle-texto>Ver todos os horários</span>
+            <svg class="agendamento-horarios-toggle-icone" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M6 9L12 15L18 9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+
+          <div id="agendamento-horarios-painel" class="agendamento-horarios-painel" hidden>
+            <div class="agendamento-time-legend">
             <span>
               <i class="legend-dot legend-dot--available"></i>
               Disponível
@@ -185,8 +195,9 @@
             Ver horários indisponíveis
           </button>
 
-          <div id="horarios-agendamento" class="agendamento-times" role="group" aria-label="Selecionar horário" aria-live="polite">
-            <!-- Horários criados pelo JavaScript -->
+            <div id="horarios-agendamento" class="agendamento-times" role="group" aria-label="Selecionar horário" aria-live="polite">
+              <!-- Horários criados pelo JavaScript -->
+            </div>
           </div>
         </section>
 
@@ -279,7 +290,7 @@
     </main>
   </div>
 
-  <script type="module" src="agendamento.js?v=2.7.0"></script>
+  <script type="module" src="agendamento.js?v=2.8.0"></script>
   <script type="module" src="pixCheckout.js?v=1.0.2"></script>
 
   <script src="app.js?v=2.0.0" defer></script>
