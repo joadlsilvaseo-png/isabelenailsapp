@@ -222,12 +222,105 @@ function atualizarResumoAgendamento() {
     botaoAgendar.disabled = !prontoParaAgendar;
     botaoAgendar.classList.toggle("is-ready", prontoParaAgendar);
   }
+  // A sugestão só fica marcada quando a seleção real de data e horário é válida.
+  document.querySelectorAll("[data-agenda-sugestao]").forEach((botao) => {
+    const ativa = botao.dataset.dateIso === dataSelecionada?.dataset.dateIso &&
+      botao.dataset.time === horarioSelecionado?.dataset.time;
+    botao.classList.toggle("agenda-sugestoes-hora--ativa", ativa);
+    botao.setAttribute("aria-pressed", String(ativa));
+  });
 }
 
 function obterHojeSaoPauloParaTela() {
   const partes = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
   const valores = Object.fromEntries(partes.map((parte) => [parte.type, parte.value]));
   return `${valores.year}-${valores.month}-${valores.day}`;
+}
+
+function minutoAtualSaoPaulo() {
+  const partes = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+  }).formatToParts(new Date());
+  const valores = Object.fromEntries(partes.map((item) => [item.type, item.value]));
+  return Number(valores.hour) * 60 + Number(valores.minute);
+}
+
+/**
+ * Sugestões não atrasam a agenda: apenas uma consulta Firestore para sete dias.
+ * Se ela falhar, o calendário original permanece utilizável.
+ */
+async function carregarSugestoesHorarios({ datas, serviceDuration, serviceInfo, selecionarDataAgendamento }) {
+  const secao = document.getElementById("agenda-sugestoes");
+  const lista = secao?.querySelector("[data-agenda-sugestoes-lista]");
+  if (!secao || !lista) return;
+  try {
+    const { escolherDiasSemana, sugerirHorarios } = await import("./agendaSugestoes.mjs?v=1.0.0");
+    const hoje = obterHojeSaoPauloParaTela();
+    const diasSemana = escolherDiasSemana(datas.map((botao) => botao.dataset.dateIso), hoje);
+    if (!diasSemana.length) return;
+    const usuario = await aguardarUsuarioFirebase();
+    if (!usuario || auth.currentUser?.uid !== usuario.uid) return;
+    // Nada de sete chamadas PIX: a API continua obrigatória na escolha real.
+    const consulta = query(collection(db, "agendamentos"),
+      where("data", ">=", diasSemana[0]),
+      where("data", "<=", diasSemana[diasSemana.length - 1]));
+    const documentos = await getDocs(consulta);
+    if (auth.currentUser?.uid !== usuario.uid) return;
+    const sugestoes = sugerirHorarios({
+      datas: diasSemana, hoje, minutoAtual: minutoAtualSaoPaulo(),
+      agendamentos: documentos.docs.map((doc) => doc.data()),
+      duracao: serviceDuration, servico: serviceInfo, clienteId: usuario.uid,
+    });
+    if (!sugestoes.length) return;
+    const frag = document.createDocumentFragment();
+    for (const sugestao of sugestoes) {
+      const botaoData = datas.find((botao) => botao.dataset.dateIso === sugestao.dataIso);
+      if (!botaoData) continue;
+      const dia = document.createElement("article");
+      dia.className = "agenda-sugestoes-dia";
+      const rotulo = document.createElement("strong");
+      rotulo.className = "agenda-sugestoes-data";
+      const semana = botaoData.querySelector(".agendamento-date-label")?.textContent.trim() || "";
+      const numero = botaoData.querySelector(".agendamento-date-day")?.textContent.trim() || "";
+      const mes = botaoData.querySelector(".agendamento-date-month")?.textContent.trim() || "";
+      rotulo.textContent = `${semana}, ${numero} ${mes}`;
+      const horas = document.createElement("div");
+      horas.className = "agenda-sugestoes-horarios";
+      for (const horario of sugestao.horarios) {
+        const botao = document.createElement("button");
+        botao.type = "button";
+        botao.className = "agenda-sugestoes-hora";
+        botao.textContent = horario;
+        botao.dataset.agendaSugestao = "";
+        botao.dataset.dateIso = sugestao.dataIso;
+        botao.dataset.time = horario;
+        botao.setAttribute("aria-pressed", "false");
+        botao.setAttribute("aria-label", `${botaoData.dataset.dateLabel}, às ${horario}`);
+        horas.appendChild(botao);
+      }
+      dia.append(rotulo, horas);
+      frag.appendChild(dia);
+    }
+    if (!frag.childNodes.length) return;
+    lista.replaceChildren(frag);
+    lista.addEventListener("click", async (event) => {
+      const botao = event.target.closest("button[data-agenda-sugestao]");
+      if (!botao || botao.disabled) return;
+      const botaoData = datas.find((dia) => dia.dataset.dateIso === botao.dataset.dateIso);
+      if (!botaoData) return;
+      botao.disabled = true;
+      try {
+        await selecionarDataAgendamento(botaoData, botao.dataset.time);
+      } finally {
+        botao.disabled = false;
+      }
+    });
+    secao.hidden = false;
+    atualizarResumoAgendamento();
+  } catch (error) {
+    console.warn("[Agenda Sugestões] Indisponível; calendário preservado:", error.message);
+    secao.hidden = true;
+  }
 }
 
 function configurarNavegacaoMes(container, dias) {
@@ -889,27 +982,25 @@ async function inicializarAgendamento() {
 
   atualizarResumoAgendamento();
 
+  async function selecionarDataAgendamento(botao, horarioSugerido = null) {
+    selecionarUnico(botao, datas, "agendamento-date--active");
+    localStorage.setItem("dataAgendamento", formatarData(botao));
+    const dataIso = obterDataIso(botao);
+    if (dataIso) localStorage.setItem("dataAgendamentoISO", dataIso);
+    localStorage.removeItem("horarioAgendamento");
+    localStorage.removeItem("horaAgendamento");
+    atualizarCabecalhoData(botao);
+    atualizarResumoAgendamento();
+    await renderizarHorarios(dataIso, serviceDuration, reagendarId, serviceInfo);
+    if (!horarioSugerido ||
+        obterDataIso(obterSelecionado(datas, "agendamento-date--active")) !== dataIso) return;
+    // Revalida PIX, bloqueios e regras atuais; nunca seleciona um horário inválido.
+    const opcao = [...document.querySelectorAll(".agendamento-times .agendamento-time")]
+      .find((item) => item.dataset.time === horarioSugerido && !item.disabled);
+    if (opcao) opcao.click();
+  }
   datas.forEach((botao) => {
-    botao.addEventListener("click", () => {
-      selecionarUnico(botao, datas, "agendamento-date--active");
-
-      localStorage.setItem("dataAgendamento", formatarData(botao));
-
-      const dataIso = obterDataIso(botao);
-
-      if (dataIso) {
-        localStorage.setItem("dataAgendamentoISO", dataIso);
-      }
-
-      localStorage.removeItem("horarioAgendamento");
-
-      localStorage.removeItem("horaAgendamento");
-
-      atualizarCabecalhoData(botao);
-      atualizarResumoAgendamento();
-
-      renderizarHorarios(dataIso, serviceDuration, reagendarId, serviceInfo);
-    });
+    botao.addEventListener("click", () => { void selecionarDataAgendamento(botao); });
   });
 
   const horariosContainer = document.querySelector(".agendamento-times");
@@ -1189,6 +1280,10 @@ async function inicializarAgendamento() {
 
       await renderizarHorarios(dataIso, serviceDuration, reagendarId, serviceInfo);
     }
+  }
+
+  if (!reagendarId && !origemAdmin) {
+    void carregarSugestoesHorarios({ datas, serviceDuration, serviceInfo, selecionarDataAgendamento });
   }
 
   let ultimaAtualizacaoVisibilidade = 0;

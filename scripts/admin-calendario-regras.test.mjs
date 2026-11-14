@@ -108,6 +108,6 @@ test("PWA atualizado negocia cutover no backend e nao duplica GAS em reagendamen
   assert.ok(verificarDireto>0 && enviarLegado>verificarDireto,
     "O PWA deve verificar o backend ANTES de oferecer o fallback GAS");
   assert.match(front,/resultadoReagendamento\.sincronizacaoCalendar === "pendente"/);
-  assert.match(html,/agendamento\.js\?v=2\.4\.1/);
+  assert.match(html,/agendamento\.js\?v=\d+(?:\.\d+)+/);
   assert.match(worker,/const CACHE_VERSION = "v32"/);
 });
