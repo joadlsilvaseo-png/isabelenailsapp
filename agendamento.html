@@ -19,7 +19,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
   <link rel="stylesheet" href="base.css?v=1.0.4">
-  <link rel="stylesheet" href="agendamento.css?v=2.2.0">
+  <link rel="stylesheet" href="agendamento.css?v=2.3.0">
   <link rel="stylesheet" href="pixCheckout.css?v=1.0.3">
 </head>
 
@@ -140,6 +140,12 @@
               Selecione uma data
             </span>
           </div>
+        </section>
+
+        <section class="agenda-sugestoes" id="agenda-sugestoes" aria-labelledby="agenda-sugestoes-titulo" hidden>
+          <h3 id="agenda-sugestoes-titulo">Horários sugeridos</h3>
+          <div class="agenda-sugestoes-lista" data-agenda-sugestoes-lista role="group"
+               aria-label="Horários sugeridos para os próximos dias"></div>
         </section>
 
         <div class="agendamento-divider"></div>
@@ -277,7 +283,7 @@
     </main>
   </div>
 
-  <script type="module" src="agendamento.js?v=2.4.1"></script>
+  <script type="module" src="agendamento.js?v=2.5.0"></script>
   <script type="module" src="pixCheckout.js?v=1.0.2"></script>
 
   <script src="app.js?v=2.0.0" defer></script>
