@@ -2,6 +2,7 @@ import { auth, db } from "./firebase-config.js";
 import { obterMesPredominante } from "./agendamentoMes.mjs?v=1.0.0";
 import { definirBloqueioTurnos } from "./agendamentoSugestaoFluxo.mjs?v=1.0.0";
 import { configurarPainelHorarios } from "./agendamentoPainelHorarios.mjs?v=1.0.0";
+import { obterIdConsultaDisponibilidadePix } from "./agendamentoPixConsulta.mjs?v=1.0.0";
 import { consultarDisponibilidadePix, reagendarAgendamentoApi, consultarReagendamentoPixConfigApi, consultarReagendamentoPixPagoApi } from "./agendamentosApi.js";
 import { consultarIntervalosDisponibilidade, intervaloSobrepoeDisponibilidade, } from "./agendamentoDisponibilidade.js?v=2.2.0";
 import { obterJanelaAgendamento, validarDataNaJanela, validarHorarioEspecial, obterExpedienteEspecialDezembro2026, validarServicoDezembro2026, obterJanelasAtendimento, AGENDA_DEZEMBRO_2026_ABERTA } from "./infra/backend/src/agendamentoRegras.mjs?v=2.3.0";
@@ -597,7 +598,7 @@ async function carregarServicoSelecionado(serviceId) {
     return null;
   }
 }
-async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null, servicoInfo = null) {
+async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null, servicoInfo = null, idConsultaPix = reagendarId) {
   const requisicao = (renderizarHorarios.requisicao || 0) + 1;
   renderizarHorarios.requisicao = requisicao;
   const container = document.querySelector(".agendamento-times");
@@ -659,7 +660,7 @@ async function renderizarHorarios(dataIso, servicoDuracao, reagendarId = null, s
         return intervalos;
       },
       consultarReservasPix() {
-        return consultarDisponibilidadePix(auth, String(dataIso).trim(), reagendarId);
+        return consultarDisponibilidadePix(auth, String(dataIso).trim(), idConsultaPix);
       },
     });
     if (requisicao !== renderizarHorarios.requisicao) return;
@@ -986,6 +987,11 @@ async function inicializarAgendamento() {
     }
   }
 
+  // PIX pago: consulta sem exclusão da reserva antiga. A API de leitura
+  // segue protegendo o horário original e não retorna HTTP 409.
+  // Sem PIX pago: mantém a consulta autenticada anterior com agendamentoId.
+  const idConsultaPix = obterIdConsultaDisponibilidadePix(reagendarId, agendamentoOriginal);
+
   if (origemAdmin && agendamentoOriginal) {
     if (nomeClienteInput) {
       nomeClienteInput.value = String(
@@ -1041,7 +1047,7 @@ async function inicializarAgendamento() {
     if (!horarioSugerido && !reagendarId) {
       void carregarSugestoesHorarios({ datas, serviceDuration, serviceInfo, selecionarDataAgendamento, dataReferencia: dataIso });
     }
-    await renderizarHorarios(dataIso, serviceDuration, reagendarId, serviceInfo);
+    await renderizarHorarios(dataIso, serviceDuration, reagendarId, serviceInfo, idConsultaPix);
     if (!horarioSugerido || selecaoAtual !== sequenciaSelecao ||
         obterDataIso(obterSelecionado(datas, "agendamento-date--active")) !== dataIso) return false;
     // A sugestão só avança após consultar PIX e bloqueios pela validação já existente.
@@ -1333,7 +1339,7 @@ async function inicializarAgendamento() {
     if (dataIso) {
       localStorage.setItem("dataAgendamentoISO", dataIso);
 
-      await renderizarHorarios(dataIso, serviceDuration, reagendarId, serviceInfo);
+      await renderizarHorarios(dataIso, serviceDuration, reagendarId, serviceInfo, idConsultaPix);
     }
   }
 
@@ -1352,7 +1358,7 @@ async function inicializarAgendamento() {
       obterSelecionado(datas, "agendamento-date--active") || datas[0],
     );
     if (dataAtiva) {
-      void renderizarHorarios(dataAtiva, serviceDuration, reagendarId, serviceInfo).then(() => {
+      void renderizarHorarios(dataAtiva, serviceDuration, reagendarId, serviceInfo, idConsultaPix).then(() => {
         if (!horarioViaSugestao || horarioViaSugestao.dataIso !== dataAtiva ||
             obterDataIso(obterSelecionado(datas, "agendamento-date--active")) !== dataAtiva) return;
         const ativo = horariosContainer?.querySelector(".agendamento-time--active");

@@ -153,7 +153,8 @@ jobs:
           node --check ../../agendaSugestoes.mjs
           node --check ../../agendamentoSugestaoFluxo.mjs
           node --check ../../agendamentoPainelHorarios.mjs
-          node --test ../../scripts/agenda-sugestoes.test.mjs ../../scripts/agendamento-sugestao-fluxo.test.mjs ../../scripts/agendamento-painel-horarios.test.mjs
+          node --check ../../agendamentoPixConsulta.mjs
+          node --test ../../scripts/agenda-sugestoes.test.mjs ../../scripts/agendamento-sugestao-fluxo.test.mjs ../../scripts/agendamento-painel-horarios.test.mjs ../../scripts/agendamento-pix-consulta.test.mjs
       - name: Testar modal de conclusão (front-end)
         run: node --test ../../scripts/admin-conclusao-modal.test.mjs
       - name: Testar ordenação e filtro PIX de clientes
