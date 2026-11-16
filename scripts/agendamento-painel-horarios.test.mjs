@@ -68,7 +68,7 @@ test("fluxo e acessibilidade integram toggle sem remover carrosséis existentes"
   assert.match(html, /id="horarios-agendamento"/);
   assert.match(js, /configurarPainelHorarios/);
   assert.match(js, /painelHorarios\.recolher\(\)/);
-  assert.match(js, /await renderizarHorarios\(dataIso, serviceDuration, reagendarId, serviceInfo\)/);
+  assert.match(js, /await renderizarHorarios\(dataIso, serviceDuration, reagendarId, serviceInfo, idConsultaPix\)/);
   assert.match(css, /\.agendamento-horarios-painel\[hidden\]/);
   assert.match(css, /agendamento-time-carousel/);
 });

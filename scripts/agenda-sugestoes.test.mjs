@@ -80,7 +80,7 @@ test("integração mantém o calendário e consulta PIX somente ao selecionar", 
   assert.match(page, /!horarioSugerido && !reagendarId/);
   assert.match(page, /if \(!reagendarId\)/);
   assert.doesNotMatch(page, /!reagendarId && !origemAdmin/);
-  assert.match(page, /await renderizarHorarios\(dataIso, serviceDuration, reagendarId, serviceInfo\)/);
+  assert.match(page, /await renderizarHorarios\(dataIso, serviceDuration, reagendarId, serviceInfo, idConsultaPix\)/);
   assert.match(html, /id="agenda-sugestoes"/);
   assert.match(html, /class="agendamento-calendar"/);
 });
