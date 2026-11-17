@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { configurarPainelHorarios } from "../agendamentoPainelHorarios.mjs";
 
-function simularPainel() {
+function simularPainel(opcoes = {}) {
   const eventos = new Map();
   const atributos = {};
   const rotulo = { textContent: "" };
@@ -16,7 +16,7 @@ function simularPainel() {
     addEventListener(tipo, fn) { eventos.set(tipo, fn); },
     setAttribute(chave, valor) { atributos[chave] = valor; },
   };
-  const api = configurarPainelHorarios(botao, painel);
+  const api = configurarPainelHorarios(botao, painel, opcoes);
   return { api, painel, rotulo, atributos, tocar: () => eventos.get("click")() };
 }
 
@@ -71,4 +71,26 @@ test("fluxo e acessibilidade integram toggle sem remover carrosséis existentes"
   assert.match(js, /await renderizarHorarios\(dataIso, serviceDuration, reagendarId, serviceInfo, idConsultaPix\)/);
   assert.match(css, /\.agendamento-horarios-painel\[hidden\]/);
   assert.match(css, /agendamento-time-carousel/);
+});
+
+test("telemetria só registra abertura por clique: iniciar/recolher/expandir não contam", () => {
+  let aberturas = 0;
+  const { api, tocar } = simularPainel({ aoAbrir: () => { aberturas += 1; } });
+  assert.equal(aberturas, 0);
+  api.expandir();
+  assert.equal(aberturas, 0);
+  api.recolher();
+  tocar();
+  assert.equal(aberturas, 1);
+  tocar();
+  assert.equal(aberturas, 1);
+  tocar();
+  assert.equal(aberturas, 2);
+});
+
+test("falha na instrumentação não altera abertura ou acessibilidade", () => {
+  const { api, tocar, atributos } = simularPainel({ aoAbrir() { throw Error("offline"); } });
+  assert.doesNotThrow(tocar);
+  assert.equal(api.estaAberto(), true);
+  assert.equal(atributos["aria-expanded"], "true");
 });
