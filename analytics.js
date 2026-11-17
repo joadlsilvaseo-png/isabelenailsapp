@@ -20,14 +20,22 @@ function urlSemParametros(valor) {
     return "";
   }
 }
+const paginaDeAgendamento = /\/agendamento\.html$/i.test(window.location.pathname);
 const pageLocation = urlSemParametros(window.location.href);
 const pageReferrer = urlSemParametros(document.referrer);
-const paginaDeAgendamento = /\/agendamento\.html$/i.test(window.location.pathname);
+// Outras páginas mantêm sua atribuição de campanhas; referrer vindo de
+// agendamento nunca transporta IDs para page_views subsequentes.
+const referenciadoAgendamento = /\/agendamento\.html$/i.test(
+  (() => {
+    try { return new URL(document.referrer).pathname; } catch { return ""; }
+  })(),
+);
 
 gtag("js", new Date());
 gtag("config", MEASUREMENT_ID, {
-  page_location: pageLocation,
-  page_referrer: pageReferrer,
+  // Preserva UTM/campanhas das telas existentes. Só filtra as rotas sensíveis.
+  ...(paginaDeAgendamento ? { page_location: pageLocation } : {}),
+  ...(paginaDeAgendamento || referenciadoAgendamento ? { page_referrer: pageReferrer } : {}),
   // No agendamento, apenas os eventos controlados; não enviar page_view com IDs.
   ...(paginaDeAgendamento ? { send_page_view: false } : {}),
 });
@@ -44,11 +52,13 @@ document.head.appendChild(script);
  * @param {Object} params - Metadados adicionais do evento.
  */
 export function trackEvent(eventName, params = {}) {
-  gtag("event", eventName, {
-    ...params,
-    page_location: pageLocation,
-    page_referrer: pageReferrer,
-  });
+  // Sobrescreve metadados sensíveis somente quando a URL de agendamento
+  // está envolvida. Não altera a atribuição do restante do site.
+  const contextoSeguro = {
+    ...(paginaDeAgendamento ? { page_location: pageLocation } : {}),
+    ...(paginaDeAgendamento || referenciadoAgendamento ? { page_referrer: pageReferrer } : {}),
+  };
+  gtag("event", eventName, { ...params, ...contextoSeguro });
 }
 
 // Exposição global para scripts que não são módulos (ex: app.js, index.js)
