@@ -249,7 +249,7 @@ test("2B: integração com checkout mede os marcos após validação das respost
   assert.match(agenda, /if \(reagendarId\) rastreamento\.marcoCheckout\("submit"\)/);
   assert.match(agenda, /if \(pixConfirmadoNoBackend\) rastreamento\.marcoCheckout\("reschedule_completed", reagendarId\)/);
   assert.match(agenda, /if \(resultadoReagendamento\.sincronizacaoCalendar !== "confirmada" &&[\s\S]*?rastreamento\.marcoCheckout\("reschedule_completed", reagendarId\)/);
-  assert.match(html, /agendamento\.js\?v=2\.11\.0/);
+  assert.match(html, /agendamento\.js\?v=2\.12\.0/);
   assert.match(html, /pixCheckout\.js\?v=1\.0\.3/);
   assert.match(agenda, /bookingAnalytics\.mjs\?v=1\.1\.0/);
   assert.match(pix, /bookingAnalytics\.mjs\?v=1\.1\.0/);
