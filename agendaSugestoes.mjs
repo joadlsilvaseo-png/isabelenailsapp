@@ -83,7 +83,7 @@ function pontuar(inicio, fim, ocupacoes) {
  */
 export function sugerirHorarios({
   datas, agendamentos, duracao, servico, hoje, inicioPeriodo = hoje, minutoAtual = null,
-  clienteId = null, maxPorDia = 2,
+  clienteId = null, maxPorDia = 2, intervalosPixPorData = null,
 }) {
   const minutosServico = Number(duracao);
   if (!Number.isInteger(minutosServico) || minutosServico <= 0 ||
