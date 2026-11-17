@@ -361,8 +361,12 @@ async function carregarSugestoesHorarios({ datas, serviceDuration, serviceInfo, 
           if (aviso) {
             aviso.textContent = "Esse horário acabou de ficar indisponível. Escolha outra sugestão ou veja todos os horários.";
           }
-          if (!lista.querySelector("[data-agenda-sugestao]")) secao.hidden = true;
+          // A mensagem continua visível mesmo quando a última sugestão sumiu.
         }
+      } catch (erro) {
+        console.warn("[Agenda Sugestões] Falha ao revalidar:", erro?.message || erro);
+        const aviso = document.getElementById("agenda-sugestoes-aviso");
+        if (aviso) aviso.textContent = "Não foi possível verificar esse horário. Tente novamente ou veja todos os horários.";
       } finally {
         botao.disabled = false;
       }
