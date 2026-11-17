@@ -350,10 +350,25 @@ async function carregarSugestoesHorarios({ datas, serviceDuration, serviceInfo, 
             destino.scrollIntoView({ behavior: movimentoReduzido ? "auto" : "smooth", block: "start" });
           }
         }
+        if (!selecionado && atual()) {
+          // A vaga pode ser tomada durante a consulta. Não deixar uma opção falsa.
+          botao.remove();
+          const dia = botaoData.dataset.dateIso;
+          const artigo = [...lista.querySelectorAll(".agenda-sugestoes-dia")]
+            .find((item) => item.querySelector('[data-date-iso="' + dia + '"]'));
+          if (artigo && !artigo.querySelector("[data-agenda-sugestao]")) artigo.remove();
+          const aviso = document.getElementById("agenda-sugestoes-aviso");
+          if (aviso) {
+            aviso.textContent = "Esse horário acabou de ficar indisponível. Escolha outra sugestão ou veja todos os horários.";
+          }
+          if (!lista.querySelector("[data-agenda-sugestao]")) secao.hidden = true;
+        }
       } finally {
         botao.disabled = false;
       }
     };
+    const aviso = document.getElementById("agenda-sugestoes-aviso");
+    if (aviso) aviso.textContent = "";
     secao.hidden = false;
     rastreamento?.sugestoesExibidas();
     atualizarResumoAgendamento();
