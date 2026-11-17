@@ -126,6 +126,10 @@ export async function consultarDisponibilidadePix(req, res, pool, dependencies =
   }
 
   const url = new URL(req.url, "http://localhost");
+  if (url.searchParams.has("datas")) {
+    await consultarDisponibilidadePeriodo(url, res, pool, uid, dependencies);
+    return;
+  }
   const data = url.searchParams.get("data");
   const agendamentoId = url.searchParams.get("agendamentoId");
   if (!dataIsoValida(data)) {
