@@ -2,7 +2,7 @@
  * Controla exclusivamente a apresentação dos horários convencionais.
  * O motor de sugestões, a disponibilidade PIX e a confirmação permanecem intactos.
  */
-export function configurarPainelHorarios(botao, painel) {
+export function configurarPainelHorarios(botao, painel, { aoAbrir } = {}) {
   if (!botao || !painel) {
     return { recolher() {}, expandir() {}, estaAberto: () => false };
   }
@@ -14,7 +14,13 @@ export function configurarPainelHorarios(botao, painel) {
     botao.setAttribute("aria-expanded", String(aberto));
     if (texto) texto.textContent = aberto ? "Recolher horários" : "Ver todos os horários";
   }
-  botao.addEventListener("click", () => aplicar(!aberto));
+  botao.addEventListener("click", () => {
+    const abrir = !aberto;
+    aplicar(abrir);
+    if (abrir) {
+      try { aoAbrir?.(); } catch { /* A telemetria nao interfere na interface. */ }
+    }
+  });
   aplicar(false);
   return {
     recolher() { aplicar(false); },
