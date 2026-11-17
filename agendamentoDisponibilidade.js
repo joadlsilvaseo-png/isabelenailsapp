@@ -19,7 +19,7 @@ export function obterLimitesAtendimentoSemanal(diaSemana) {
   };
 }
 
-function validarIntervalos(intervalos) {
+export function validarIntervalos(intervalos) {
   if (!Array.isArray(intervalos)) {
     throw new Error("A disponibilidade retornou um formato inválido.");
   }
