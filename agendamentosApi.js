@@ -101,6 +101,36 @@ export async function consultarDisponibilidadePix(auth, data, agendamentoId = nu
   return resultado.intervalos;
 }
 
+/**
+ * Projecao somente leitura para sugestoes da semana; uma chamada para ate 7 dias.
+ * Uma resposta parcial, desconhecida ou sem autenticacao nunca libera sugestoes.
+ */
+export async function consultarDisponibilidadePixPeriodo(auth, datas) {
+  const usuario = auth?.currentUser;
+  if (!usuario) throw new Error("Entre na sua conta para consultar os horários.");
+  if (!Array.isArray(datas) || datas.length < 1 || datas.length > 7 ||
+      datas.some((data) => typeof data !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(data)) ||
+      new Set(datas).size !== datas.length) {
+    throw new TypeError("Datas de sugestão inválidas");
+  }
+  const token = await usuario.getIdToken();
+  const parametros = new URLSearchParams({ datas: datas.join(",") });
+  const resposta = await fetch(`/api/pix/disponibilidade?${parametros}`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+    signal: AbortSignal.timeout(10000),
+  });
+  const resultado = await resposta.json().catch(() => ({}));
+  if (!resposta.ok) throw new Error(resultado.erro || "Não foi possível consultar sugestões.");
+  const dados = resultado?.intervalosPorData;
+  if (!dados || typeof dados !== "object" || Array.isArray(dados) ||
+      Object.keys(dados).length !== datas.length ||
+      datas.some((data) => !Object.hasOwn(dados, data) || !Array.isArray(dados[data]))) {
+    throw new Error("Resposta incompleta de disponibilidade.");
+  }
+  return dados;
+}
+
 // Retorna apenas o status de liberação; falhas mantêm a função indisponível.
 export async function consultarLiberacaoAlterarServicoApi(auth) {
   const usuario = auth?.currentUser;

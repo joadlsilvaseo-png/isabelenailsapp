@@ -150,7 +150,10 @@ test("PIX preserva 21h quinta/sexta e exceção exata de sábado", () => {
 test("API de disponibilidade bloqueia datas fora da janela antes de consultar o banco", async () => {
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
   const source = await readFile(path.join(root, "infra/backend/src/pixDisponibilidadeApi.js"), "utf8");
-  const guard = source.indexOf("validarDataNaJanela(data, dependencies.now || new Date())");
-  const query = source.indexOf("pool.query(");
+  // A consulta agrupada tem seu próprio guard e SQL antes da rota diária.
+  // Inspecionar somente o corpo da rota diária para validar a ordem real.
+  const diario = source.slice(source.indexOf("export async function consultarDisponibilidadePix("));
+  const guard = diario.indexOf("validarDataNaJanela(data, dependencies.now || new Date())");
+  const query = diario.indexOf("pool.query(");
   assert.ok(guard >= 0 && guard < query);
 });

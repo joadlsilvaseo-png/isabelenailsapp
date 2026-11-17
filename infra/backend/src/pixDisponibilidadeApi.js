@@ -50,6 +50,67 @@ async function validarAgendamentoParaExclusao(db, agendamentoId, uid) {
   return { ok: false, status: 403 };
 }
 
+
+/**
+ * Consulta agrupada SOMENTE para sugestoes de novas reservas (ate sete dias).
+ * Mantem a mesma semantica da rota diaria, sem alterar estados financeiros.
+ * Se faltar qualquer data ou intervalo for invalido, falha fechada.
+ */
+async function consultarDisponibilidadePeriodo(url, res, pool, uid, dependencies) {
+  const valores = url.searchParams.get("datas")?.split(",") || [];
+  const agora = dependencies.now || new Date();
+  const datasValidas = valores.length >= 1 && valores.length <= 7 &&
+    new Set(valores).size === valores.length &&
+    valores.every((data) => dataIsoValida(data) && validarDataNaJanela(data, agora).valido) &&
+    valores.every((data, indice) => indice === 0 || data > valores[indice - 1]) &&
+    Date.parse(valores.at(-1)) - Date.parse(valores[0]) <= 6 * 86400000;
+  if (!datasValidas || url.searchParams.getAll("datas").length !== 1 ||
+      url.searchParams.has("data") || url.searchParams.has("agendamentoId")) {
+    responder(res, 400, { erro: "Período inválido" });
+    return;
+  }
+
+  try {
+    // Uma unica consulta SQL, incluindo PIX reservado/confirmado e bloqueios.
+    const resultado = await pool.query(`
+      SELECT to_char(data_servico, 'YYYY-MM-DD') AS data,
+             inicio_minuto, fim_minuto, 'reserva'::text AS tipo,
+             (estado = 'confirmada' AND cliente_uid = $2::text
+               AND agendamento_id IS NOT NULL) AS sequencial_mesma_cliente
+      FROM public.pix_reservas
+      WHERE data_servico = ANY($1::date[])
+        AND estado IN ('reservada', 'confirmada')
+      UNION ALL
+      SELECT to_char(data_servico, 'YYYY-MM-DD') AS data,
+             inicio_minuto, fim_minuto, 'bloqueio'::text AS tipo,
+             FALSE AS sequencial_mesma_cliente
+      FROM public.agenda_bloqueios
+      WHERE data_servico = ANY($1::date[])
+      ORDER BY data, inicio_minuto, fim_minuto
+    `, [valores, uid]);
+
+    const intervalosPorData = Object.fromEntries(valores.map((data) => [data, []]));
+    for (const linha of resultado.rows) {
+      const inicioMinuto = Number(linha.inicio_minuto);
+      const fimMinuto = Number(linha.fim_minuto);
+      if (!Object.hasOwn(intervalosPorData, linha.data) ||
+          !Number.isInteger(inicioMinuto) || !Number.isInteger(fimMinuto) ||
+          inicioMinuto < 0 || fimMinuto > 1440 || inicioMinuto >= fimMinuto ||
+          !["reserva", "bloqueio"].includes(linha.tipo)) {
+        throw new Error("Intervalo agrupado inválido");
+      }
+      intervalosPorData[linha.data].push({
+        inicioMinuto, fimMinuto, tipo: linha.tipo,
+        ...(linha.sequencial_mesma_cliente === true ? { sequencialMesmaCliente: true } : {}),
+      });
+    }
+    responder(res, 200, { intervalosPorData });
+  } catch (erro) {
+    console.error("[PIX Disponibilidade] Falha na consulta agrupada:", erro.message);
+    responder(res, 503, { erro: "Não foi possível confirmar a disponibilidade" });
+  }
+}
+
 /**
  * Read-only availability projection. It deliberately includes every reservation
  * whose PostgreSQL state still occupies the interval, even after vence_em, so a
@@ -65,6 +126,10 @@ export async function consultarDisponibilidadePix(req, res, pool, dependencies =
   }
 
   const url = new URL(req.url, "http://localhost");
+  if (url.searchParams.has("datas")) {
+    await consultarDisponibilidadePeriodo(url, res, pool, uid, dependencies);
+    return;
+  }
   const data = url.searchParams.get("data");
   const agendamentoId = url.searchParams.get("agendamentoId");
   if (!dataIsoValida(data)) {

@@ -4,8 +4,8 @@ import { definirBloqueioTurnos } from "./agendamentoSugestaoFluxo.mjs?v=1.0.0";
 import { configurarPainelHorarios } from "./agendamentoPainelHorarios.mjs?v=1.1.0";
 import { obterIdConsultaDisponibilidadePix } from "./agendamentoPixConsulta.mjs?v=1.0.0";
 import { criarRastreamentoAgendamento, vincularRastreamentoCheckout } from "./bookingAnalytics.mjs?v=1.1.0";
-import { consultarDisponibilidadePix, reagendarAgendamentoApi, consultarReagendamentoPixConfigApi, consultarReagendamentoPixPagoApi } from "./agendamentosApi.js";
-import { consultarIntervalosDisponibilidade, intervaloSobrepoeDisponibilidade, } from "./agendamentoDisponibilidade.js?v=2.2.0";
+import { consultarDisponibilidadePix, consultarDisponibilidadePixPeriodo, reagendarAgendamentoApi, consultarReagendamentoPixConfigApi, consultarReagendamentoPixPagoApi } from "./agendamentosApi.js";
+import { consultarIntervalosDisponibilidade, validarIntervalos, intervaloSobrepoeDisponibilidade, } from "./agendamentoDisponibilidade.js?v=2.2.1";
 import { obterJanelaAgendamento, validarDataNaJanela, validarHorarioEspecial, obterExpedienteEspecialDezembro2026, validarServicoDezembro2026, obterJanelasAtendimento, AGENDA_DEZEMBRO_2026_ABERTA } from "./infra/backend/src/agendamentoRegras.mjs?v=2.3.0";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
 import {
@@ -284,9 +284,14 @@ async function carregarSugestoesHorarios({ datas, serviceDuration, serviceInfo, 
       agendamentos = resultados.flatMap((resultado) => resultado.docs.map((doc) => doc.data()));
     }
     if (!atual()) return;
+    // Uma unica consulta agrupada à API do PostgreSQL; não sugerir se falhar.
+    const intervalosPixBrutos = await consultarDisponibilidadePixPeriodo(auth, diasSemana);
+    if (!atual()) return;
+    const intervalosPixPorData = Object.fromEntries(diasSemana.map((data) =>
+      [data, validarIntervalos(intervalosPixBrutos[data])]));
     const sugestoes = sugerirHorarios({
       datas: diasSemana, hoje, inicioPeriodo, minutoAtual: minutoAtualSaoPaulo(),
-      agendamentos,
+      agendamentos, intervalosPixPorData,
       duracao: serviceDuration, servico: serviceInfo, clienteId: auth.currentUser?.uid || null,
     });
     if (!sugestoes.length) {
@@ -345,10 +350,29 @@ async function carregarSugestoesHorarios({ datas, serviceDuration, serviceInfo, 
             destino.scrollIntoView({ behavior: movimentoReduzido ? "auto" : "smooth", block: "start" });
           }
         }
+        if (!selecionado && atual()) {
+          // A vaga pode ser tomada durante a consulta. Não deixar uma opção falsa.
+          botao.remove();
+          const dia = botaoData.dataset.dateIso;
+          const artigo = [...lista.querySelectorAll(".agenda-sugestoes-dia")]
+            .find((item) => item.querySelector('[data-date-iso="' + dia + '"]'));
+          if (artigo && !artigo.querySelector("[data-agenda-sugestao]")) artigo.remove();
+          const aviso = document.getElementById("agenda-sugestoes-aviso");
+          if (aviso) {
+            aviso.textContent = "Esse horário acabou de ficar indisponível. Escolha outra sugestão ou veja todos os horários.";
+          }
+          // A mensagem continua visível mesmo quando a última sugestão sumiu.
+        }
+      } catch (erro) {
+        console.warn("[Agenda Sugestões] Falha ao revalidar:", erro?.message || erro);
+        const aviso = document.getElementById("agenda-sugestoes-aviso");
+        if (aviso) aviso.textContent = "Não foi possível verificar esse horário. Tente novamente ou veja todos os horários.";
       } finally {
         botao.disabled = false;
       }
     };
+    const aviso = document.getElementById("agenda-sugestoes-aviso");
+    if (aviso) aviso.textContent = "";
     secao.hidden = false;
     rastreamento?.sugestoesExibidas();
     atualizarResumoAgendamento();

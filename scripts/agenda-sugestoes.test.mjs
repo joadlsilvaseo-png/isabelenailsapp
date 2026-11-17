@@ -100,3 +100,59 @@ test("não exibe textos explicativos antigos no agendamento", async () => {
   assert.doesNotMatch(html, /Mostramos primeiro apenas os horários livres/);
   assert.match(html, /Horários sugeridos/);
 });
+
+test("PIX pendente impede sugerir o horario que Firestore considera livre", () => {
+  const result = sugerirHorarios({
+    datas: [terca], hoje: terca, servico, duracao: 60, agendamentos: [],
+    intervalosPixPorData: {
+      [terca]: [{ inicioMinuto: 540, fimMinuto: 900, tipo: "reserva" }],
+    },
+  });
+  assert.ok(result.length > 0);
+  assert.ok(result[0].horarios.every((h) => h < "09:00" || h >= "15:15"));
+});
+
+test("bloqueios administrativos e PIX sao tratados como indisponibilidade real", () => {
+  const result = sugerirHorarios({
+    datas: [terca], hoje: terca, servico, duracao: 60, agendamentos: [],
+    maxPorDia: 3,
+    intervalosPixPorData: {
+      [terca]: [
+        { inicioMinuto: 480, fimMinuto: 720, tipo: "bloqueio" },
+        { inicioMinuto: 720, fimMinuto: 1020, tipo: "reserva" },
+      ],
+    },
+  });
+  assert.ok(!result.length || result[0].horarios.every((h) => h >= "17:15"));
+});
+
+test("mesma cliente pode emendar atendimento confirmado sem sobrepor", () => {
+  const r = sugerirHorarios({
+    datas: [terca], hoje: terca, servico, duracao: 60,
+    agendamentos: [], maxPorDia: 3,
+    intervalosPixPorData: {
+      [terca]: [{ inicioMinuto: 840, fimMinuto: 900, tipo: "reserva", sequencialMesmaCliente: true }],
+    },
+  });
+  assert.ok(r[0].horarios.includes("15:00") || r[0].horarios.includes("15:15"));
+});
+
+test("ausencia de dados PIX para uma data impede sugestao dessa data", () => {
+  const r = sugerirHorarios({
+    datas: [terca,quarta], hoje: terca, servico, duracao: 60, agendamentos: [],
+    intervalosPixPorData: { [terca]: [] },
+  });
+  assert.deepEqual(r.map(({dataIso})=>dataIso),[terca]);
+});
+
+test("frontend exige consulta semanal, preserva revalidacao e aviso", async () => {
+  const page=await readFile(new URL("../agendamento.js",import.meta.url),"utf8");
+  const api=await readFile(new URL("../agendamentosApi.js",import.meta.url),"utf8");
+  const html=await readFile(new URL("../agendamento.html",import.meta.url),"utf8");
+  assert.match(page,/await consultarDisponibilidadePixPeriodo\(auth, diasSemana\)/);
+  assert.match(page,/validarIntervalos\(intervalosPixBrutos\[data\]\)/);
+  assert.match(page,/if \(!opcao\) return false/);
+  assert.match(page,/if \(!selecionado && atual\(\)\)/);
+  assert.match(api,/cache: "no-store"/);
+  assert.match(html,/id="agenda-sugestoes-aviso"/);
+});
