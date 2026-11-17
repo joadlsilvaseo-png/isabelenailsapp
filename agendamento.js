@@ -1,8 +1,9 @@
 import { auth, db } from "./firebase-config.js";
 import { obterMesPredominante } from "./agendamentoMes.mjs?v=1.0.0";
 import { definirBloqueioTurnos } from "./agendamentoSugestaoFluxo.mjs?v=1.0.0";
-import { configurarPainelHorarios } from "./agendamentoPainelHorarios.mjs?v=1.0.0";
+import { configurarPainelHorarios } from "./agendamentoPainelHorarios.mjs?v=1.1.0";
 import { obterIdConsultaDisponibilidadePix } from "./agendamentoPixConsulta.mjs?v=1.0.0";
+import { criarRastreamentoAgendamento } from "./bookingAnalytics.mjs?v=1.0.0";
 import { consultarDisponibilidadePix, reagendarAgendamentoApi, consultarReagendamentoPixConfigApi, consultarReagendamentoPixPagoApi } from "./agendamentosApi.js";
 import { consultarIntervalosDisponibilidade, intervaloSobrepoeDisponibilidade, } from "./agendamentoDisponibilidade.js?v=2.2.0";
 import { obterJanelaAgendamento, validarDataNaJanela, validarHorarioEspecial, obterExpedienteEspecialDezembro2026, validarServicoDezembro2026, obterJanelasAtendimento, AGENDA_DEZEMBRO_2026_ABERTA } from "./infra/backend/src/agendamentoRegras.mjs?v=2.3.0";
@@ -252,7 +253,7 @@ function minutoAtualSaoPaulo() {
  * Sugestões não atrasam a agenda: apenas uma consulta Firestore para sete dias.
  * Se ela falhar, o calendário original permanece utilizável.
  */
-async function carregarSugestoesHorarios({ datas, serviceDuration, serviceInfo, selecionarDataAgendamento, dataReferencia = null }) {
+async function carregarSugestoesHorarios({ datas, serviceDuration, serviceInfo, selecionarDataAgendamento, dataReferencia = null, rastreamento = null }) {
   const secao = document.getElementById("agenda-sugestoes");
   const lista = secao?.querySelector("[data-agenda-sugestoes-lista]");
   if (!secao || !lista) return;
@@ -336,6 +337,8 @@ async function carregarSugestoesHorarios({ datas, serviceDuration, serviceInfo, 
       try {
         const selecionado = await selecionarDataAgendamento(botaoData, botao.dataset.time);
         if (selecionado) {
+          rastreamento?.sugestaoSelecionada();
+          rastreamento?.horarioSelecionado("suggestion", botao.dataset.time);
           const destino = document.querySelector(".agendamento-comments");
           if (destino) {
             const movimentoReduzido = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
@@ -347,6 +350,7 @@ async function carregarSugestoesHorarios({ datas, serviceDuration, serviceInfo, 
       }
     };
     secao.hidden = false;
+    rastreamento?.sugestoesExibidas();
     atualizarResumoAgendamento();
   } catch (error) {
     console.warn("[Agenda Sugestões] Indisponível; calendário preservado:", error.code || error.message);
@@ -992,6 +996,47 @@ async function inicializarAgendamento() {
   // Sem PIX pago: mantém a consulta autenticada anterior com agendamentoId.
   const idConsultaPix = obterIdConsultaDisponibilidadePix(reagendarId, agendamentoOriginal);
 
+  // Coleta de interface, isolada das regras de agenda e autorizada pelo perfil.
+  // O Google Analytics só é carregado após confirmação de cliente não-admin.
+  let carregamentoAnalytics;
+  const enviarEventoBooking = (nome, parametros) => {
+    if (!carregamentoAnalytics) {
+      carregamentoAnalytics = import("./analytics.js?v=1.1.0")
+        .then(({ trackEvent }) => trackEvent)
+        .catch(() => null);
+    }
+    void carregamentoAnalytics.then((enviar) => {
+      try { enviar?.(nome, parametros); } catch { /* opcional */ }
+    });
+  };
+  const rastreamento = criarRastreamentoAgendamento({
+    flowType: reagendarId ? "reschedule" : "new",
+    serviceCategory: serviceInfo.categoria,
+    send: enviarEventoBooking,
+  });
+
+  if (origemAdmin) {
+    rastreamento.permitir(false);
+  } else {
+    void aguardarUsuarioFirebase()
+      .then(async (usuario) => {
+        if (!usuario) return false;
+        const perfil = await getDoc(doc(db, "usuarios", usuario.uid));
+        if (perfil.exists()) {
+          return String(perfil.data()?.role || "").trim().toLowerCase() === "cliente" &&
+            perfil.data()?.ativo === true;
+        }
+        // Compatibilidade com clientes anteriores à coleção usuarios.
+        const cliente = await getDoc(doc(db, "clientes", usuario.uid));
+        return cliente.exists() &&
+          String(cliente.data()?.role || "cliente").trim().toLowerCase() === "cliente" &&
+          cliente.data()?.ativo !== false;
+      })
+      .then((permitido) => rastreamento.permitir(permitido))
+      .catch(() => rastreamento.permitir(false));
+  }
+  rastreamento.iniciar();
+
   if (origemAdmin && agendamentoOriginal) {
     if (nomeClienteInput) {
       nomeClienteInput.value = String(
@@ -1026,6 +1071,7 @@ async function inicializarAgendamento() {
   const painelHorarios = configurarPainelHorarios(
     document.getElementById("agendamento-horarios-toggle"),
     document.getElementById("agendamento-horarios-painel"),
+    { aoAbrir: () => rastreamento.gradeAberta() },
   );
 
   function liberarHorariosManuais() {
@@ -1045,7 +1091,7 @@ async function inicializarAgendamento() {
     atualizarCabecalhoData(botao);
     atualizarResumoAgendamento();
     if (!horarioSugerido && !reagendarId) {
-      void carregarSugestoesHorarios({ datas, serviceDuration, serviceInfo, selecionarDataAgendamento, dataReferencia: dataIso });
+      void carregarSugestoesHorarios({ datas, serviceDuration, serviceInfo, selecionarDataAgendamento, dataReferencia: dataIso, rastreamento });
     }
     await renderizarHorarios(dataIso, serviceDuration, reagendarId, serviceInfo, idConsultaPix);
     if (!horarioSugerido || selecaoAtual !== sequenciaSelecao ||
@@ -1063,7 +1109,10 @@ async function inicializarAgendamento() {
     return true;
   }
   datas.forEach((botao) => {
-    botao.addEventListener("click", () => { void selecionarDataAgendamento(botao); });
+    botao.addEventListener("click", (evento) => {
+      if (evento.isTrusted && !botao.disabled && obterDataIso(botao)) rastreamento.dataSelecionada();
+      void selecionarDataAgendamento(botao);
+    });
   });
 
   if (horariosContainer) {
@@ -1091,6 +1140,8 @@ async function inicializarAgendamento() {
       localStorage.setItem("horaAgendamento", horarioSelecionado);
 
       atualizarResumoAgendamento();
+      // A sugestão gera .click() programático; só o clique humano na grade é manual.
+      if (event.isTrusted) rastreamento.horarioSelecionado("full_list", horarioSelecionado);
     });
   }
 
@@ -1345,7 +1396,7 @@ async function inicializarAgendamento() {
 
   if (!reagendarId) {
     const dataInicial = obterDataIso(obterSelecionado(datas, "agendamento-date--active") || datas[0]);
-    void carregarSugestoesHorarios({ datas, serviceDuration, serviceInfo, selecionarDataAgendamento, dataReferencia: dataInicial });
+    void carregarSugestoesHorarios({ datas, serviceDuration, serviceInfo, selecionarDataAgendamento, dataReferencia: dataInicial, rastreamento });
   }
 
   let ultimaAtualizacaoVisibilidade = 0;
