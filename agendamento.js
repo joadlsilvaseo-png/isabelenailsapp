@@ -4,7 +4,7 @@ import { definirBloqueioTurnos } from "./agendamentoSugestaoFluxo.mjs?v=1.0.0";
 import { configurarPainelHorarios } from "./agendamentoPainelHorarios.mjs?v=1.1.0";
 import { obterIdConsultaDisponibilidadePix } from "./agendamentoPixConsulta.mjs?v=1.0.0";
 import { criarRastreamentoAgendamento, vincularRastreamentoCheckout } from "./bookingAnalytics.mjs?v=1.1.0";
-import { consultarDisponibilidadePix, reagendarAgendamentoApi, consultarReagendamentoPixConfigApi, consultarReagendamentoPixPagoApi } from "./agendamentosApi.js";
+import { consultarDisponibilidadePix, consultarDisponibilidadePixPeriodo, reagendarAgendamentoApi, consultarReagendamentoPixConfigApi, consultarReagendamentoPixPagoApi } from "./agendamentosApi.js";
 import { consultarIntervalosDisponibilidade, intervaloSobrepoeDisponibilidade, } from "./agendamentoDisponibilidade.js?v=2.2.0";
 import { obterJanelaAgendamento, validarDataNaJanela, validarHorarioEspecial, obterExpedienteEspecialDezembro2026, validarServicoDezembro2026, obterJanelasAtendimento, AGENDA_DEZEMBRO_2026_ABERTA } from "./infra/backend/src/agendamentoRegras.mjs?v=2.3.0";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js";
