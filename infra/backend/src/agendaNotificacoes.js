@@ -1,6 +1,20 @@
 const texto = (valor) => String(valor ?? "").trim();
 const normalizarStatus = (valor) => texto(valor || "agendado").toLowerCase();
 
+// Mensagens push usam a data local da agenda, sem depender do fuso do servidor.
+function formatarData(data) {
+  const valor = texto(data);
+  const partes = /^(\d{4})-(\d{2})-(\d{2})$/.exec(valor);
+  return partes ? `${partes[3]}/${partes[2]}/${partes[1]}` : valor;
+}
+
+function formatarMomento(data, horario) {
+  const dia = formatarData(data);
+  const hora = texto(horario).slice(0, 5);
+  if (dia && hora) return `${dia} às ${hora}`;
+  return dia || (hora ? `às ${hora}` : "");
+}
+
 export function identificarNotificacoesAgendamento(anterior, atual) {
   const detalhes = [
     atual.servico || "Atendimento",
@@ -60,23 +74,40 @@ export function identificarNotificacoesAgendamento(anterior, atual) {
     texto(anterior.horario) !== atual.horario;
 
   if (atual.status.startsWith("cancelado") && statusMudou) {
-    const cliente = atual.status === "cancelado_cliente";
+    const canceladoPelaCliente = atual.status === "cancelado_cliente";
+    const nomeCliente = texto(atual.nomeCliente) || "Uma cliente";
+    const servico = texto(atual.servico) || "atendimento";
+    const quando = formatarMomento(atual.data, atual.horario);
+    const mensagem = canceladoPelaCliente
+      ? `${nomeCliente} cancelou o agendamento de ${servico}${quando ? `, marcado para ${quando}` : ""}.`
+      : `Seu agendamento de ${servico}${quando ? `, marcado para ${quando},` : ""} foi cancelado pela Isabele.`;
     return [{
-      tipo: cliente ? "cancelamento_cliente" : "cancelamento_profissional",
-      destinatario: cliente ? "admin" : "cliente",
+      tipo: canceladoPelaCliente ? "cancelamento_cliente" : "cancelamento_profissional",
+      destinatario: canceladoPelaCliente ? "admin" : "cliente",
       titulo: "Agendamento cancelado",
-      mensagem: `O agendamento de ${atual.servico || "atendimento"} foi cancelado.`,
-      destino: cliente ? "./admin-agendamentos.html" : "./meu-perfil.html"
+      mensagem,
+      destino: canceladoPelaCliente ? "./admin-agendamentos.html" : "./meu-perfil.html"
     }];
   }
 
   if (atual.status === "reagendado" && (statusMudou || dataMudou)) {
     const feitoPelaCliente = atual.reagendadoPor && atual.reagendadoPor === atual.clienteId;
+    const nomeCliente = texto(atual.nomeCliente) || "Uma cliente";
+    const servico = texto(atual.servico) || "atendimento";
+    const anteriorQuando = formatarMomento(anterior.data_agendamento ?? anterior.data, anterior.horario);
+    const novoQuando = formatarMomento(atual.data, atual.horario);
+    const mudanca = [
+      dataMudou && anteriorQuando ? `Anterior: ${anteriorQuando}.` : "",
+      novoQuando ? `Novo: ${novoQuando}.` : ""
+    ].filter(Boolean).join(" ");
+    const introducao = feitoPelaCliente
+      ? `${nomeCliente} reagendou ${servico}.`
+      : `Seu atendimento de ${servico} foi reagendado pela Isabele.`;
     return [{
       tipo: "reagendamento",
       destinatario: feitoPelaCliente ? "admin" : "cliente",
       titulo: "Agendamento reagendado",
-      mensagem: `Nova data do atendimento: ${detalhes}.`,
+      mensagem: `${introducao}${mudanca ? ` ${mudanca}` : ""}`,
       destino: feitoPelaCliente ? "./admin-agendamentos.html" : "./meu-perfil.html"
     }];
   }
