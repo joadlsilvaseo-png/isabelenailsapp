@@ -1,5 +1,5 @@
 /**
- * Análise Web — Fase 2A. Contrato de eventos da jornada de agendamento.
+ * Análise Web — Fases 2A/2B. Contrato de eventos da jornada de agendamento.
  * Sem dependências de navegador/Firebase; envio depende de autorização da cliente.
  * Somente dimensões enumeradas: nenhuma informação pessoal ou ID de reserva.
  */
@@ -10,7 +10,38 @@ const EVENTOS = new Set([
   "booking_suggestion_selected",
   "booking_all_times_opened",
   "booking_time_selected",
+  "booking_submit_clicked",
+  "booking_quote_viewed",
+  "booking_pix_qr_shown",
+  "booking_pix_confirmed_ui",
+  "booking_exempt_confirmed_ui",
+  "booking_reschedule_completed_ui",
 ]);
+
+// Chaves operacionais usadas SOMENTE para deduplicar na memoria; jamais no GA4.
+const MARCOS = Object.freeze({
+  submit: { nome: "booking_submit_clicked" },
+  quote: { nome: "booking_quote_viewed", payment_path: "pix", fluxo: "new" },
+  qr: { nome: "booking_pix_qr_shown", payment_path: "pix", fluxo: "new", unico: true },
+  pix_confirmed: { nome: "booking_pix_confirmed_ui", payment_path: "pix", fluxo: "new", unico: true },
+  exempt_confirmed: { nome: "booking_exempt_confirmed_ui", payment_path: "exempt", fluxo: "new", unico: true },
+  reschedule_completed: { nome: "booking_reschedule_completed_ui", fluxo: "reschedule", unico: true },
+});
+
+// A agenda e o checkout são módulos independentes da mesma página.
+// O checkout só publica marcos através do rastreamento autorizado pela agenda.
+let rastreamentoCompartilhado = null;
+
+export function vincularRastreamentoCheckout(rastreamento) {
+  rastreamentoCompartilhado = typeof rastreamento?.marcoCheckout === "function"
+    ? rastreamento : null;
+}
+
+export function emitirMarcoCheckout(etapa, chave = null) {
+  try { rastreamentoCompartilhado?.marcoCheckout(etapa, chave); } catch {
+    // Telemetria opcional: nenhuma exceção pode interromper o PIX.
+  }
+}
 const CATEGORIAS = new Map([
   ["manicure", "manicure"],
   ["pedicure", "pedicure"],
@@ -45,6 +76,7 @@ export function criarRastreamentoAgendamento({ flowType, serviceCategory, send }
   let permitido = null;
   let iniciou = false;
   let exibiuSugestoes = false;
+  const marcosUnicos = new Set();
   const pendentes = [];
 
   function entregar(evento) {
@@ -89,6 +121,16 @@ export function criarRastreamentoAgendamento({ flowType, serviceCategory, send }
     },
     gradeAberta() {
       emitir("booking_all_times_opened");
+    },
+    marcoCheckout(etapa, chave = null) {
+      const marco = Object.hasOwn(MARCOS, etapa) ? MARCOS[etapa] : null;
+      if (!marco || (marco.fluxo && marco.fluxo !== contexto.flow_type)) return;
+      if (marco.unico) {
+        const local = typeof chave === "string" ? chave.trim() : "";
+        if (!local || marcosUnicos.has(etapa + ":" + local)) return;
+        marcosUnicos.add(etapa + ":" + local);
+      }
+      emitir(marco.nome, marco.payment_path ? { payment_path: marco.payment_path } : {});
     },
     horarioSelecionado(origem, horario) {
       if (origem !== "suggestion" && origem !== "full_list") return;

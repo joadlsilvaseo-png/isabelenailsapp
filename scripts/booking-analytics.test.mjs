@@ -112,7 +112,7 @@ test("ligação de UI usa validação de sugestão e clique manual confiável", 
   assert.match(js, /rastreamento\?\.sugestoesExibidas\(\)/);
   assert.match(js, /if \(origemAdmin\) \{\s*rastreamento\.permitir\(false\)/);
   assert.match(js, /perfil\.data\(\)\?\.ativo === true/);
-  assert.match(js, /bookingAnalytics\.mjs\?v=1\.0\.0/);
+  assert.match(js, /bookingAnalytics\.mjs\?v=1\.1\.0/);
 });
 
 test("GA4 recebe apenas pathname e não carrega page_view automática de agendamento", async () => {
@@ -127,7 +127,7 @@ test("GA4 recebe apenas pathname e não carrega page_view automática de agendam
 test("o caminho de agendamento não altera checkout PIX nem o backend", async () => {
   const html = await ler("agendamento.html");
   const js = await ler("agendamento.js");
-  assert.match(html, /agendamento\.js\?v=2\.10\.0/);
+  assert.match(html, /agendamento\.js\?v=2\.11\.0/);
   assert.match(js, /consultarDisponibilidadePix\(auth, String\(dataIso\)\.trim\(\), idConsultaPix\)/);
   assert.match(js, /reagendarAgendamentoApi\(auth, \{/);
   assert.match(js, /definirBloqueioTurnos\(horariosContainer, true, alternarIndisponiveis\)/);

@@ -3,7 +3,7 @@ import { obterMesPredominante } from "./agendamentoMes.mjs?v=1.0.0";
 import { definirBloqueioTurnos } from "./agendamentoSugestaoFluxo.mjs?v=1.0.0";
 import { configurarPainelHorarios } from "./agendamentoPainelHorarios.mjs?v=1.1.0";
 import { obterIdConsultaDisponibilidadePix } from "./agendamentoPixConsulta.mjs?v=1.0.0";
-import { criarRastreamentoAgendamento } from "./bookingAnalytics.mjs?v=1.0.0";
+import { criarRastreamentoAgendamento, vincularRastreamentoCheckout } from "./bookingAnalytics.mjs?v=1.1.0";
 import { consultarDisponibilidadePix, reagendarAgendamentoApi, consultarReagendamentoPixConfigApi, consultarReagendamentoPixPagoApi } from "./agendamentosApi.js";
 import { consultarIntervalosDisponibilidade, intervaloSobrepoeDisponibilidade, } from "./agendamentoDisponibilidade.js?v=2.2.0";
 import { obterJanelaAgendamento, validarDataNaJanela, validarHorarioEspecial, obterExpedienteEspecialDezembro2026, validarServicoDezembro2026, obterJanelasAtendimento, AGENDA_DEZEMBRO_2026_ABERTA } from "./infra/backend/src/agendamentoRegras.mjs?v=2.3.0";
@@ -1014,6 +1014,7 @@ async function inicializarAgendamento() {
     serviceCategory: serviceInfo.categoria,
     send: enviarEventoBooking,
   });
+  vincularRastreamentoCheckout(rastreamento);
 
   if (origemAdmin) {
     rastreamento.permitir(false);
@@ -1216,6 +1217,9 @@ async function inicializarAgendamento() {
         return;
       }
 
+      // Novo agendamento é interceptado pelo checkout PIX; aqui só reagendamento.
+      if (reagendarId) rastreamento.marcoCheckout("submit");
+
       let idEvento = "evt_" + Math.random().toString(36).substr(2, 9);
       let origemPixPaga = false;
 
@@ -1282,6 +1286,10 @@ async function inicializarAgendamento() {
           });
           idEvento = resultadoReagendamento.calendarEventId || idEvento;
           payloadWebhook.eventId = idEvento;
+          // A API pode retornar conclusão imediata ou exigir confirmação do worker.
+          let pixConfirmadoNoBackend = resultadoReagendamento.estado === "concluida" ||
+            resultadoReagendamento.sincronizacaoCalendar === "confirmada" ||
+            resultadoReagendamento.sincronizacaoCalendar === "sem_alteracao";
 
           if (origemPixPaga && resultadoReagendamento.operationId) {
             // O worker é o ÚNICO responsável por atualizar o Calendar PIX.
@@ -1298,10 +1306,12 @@ async function inicializarAgendamento() {
               botaoAgendar.disabled = true;
               return;
             }
+            pixConfirmadoNoBackend = true;
             sessionStorage.removeItem(operacaoKey);
           }
           if (origemPixPaga) {
-            // O backend só conclui após Calendar, Firestore e PostgreSQL.
+            // Não inferir sucesso apenas do redirecionamento: exigir confirmação backend/worker.
+            if (pixConfirmadoNoBackend) rastreamento.marcoCheckout("reschedule_completed", reagendarId);
             localStorage.setItem("dataAgendamento", data);
             localStorage.setItem("horaAgendamento", horario);
             localStorage.setItem("nomeCliente", payloadWebhook.nomeCliente);
@@ -1325,6 +1335,7 @@ async function inicializarAgendamento() {
               throw new Error("Sincronização pendente de confirmação. Não tente criar outra reserva.");
             }
             sessionStorage.removeItem(operacaoKey);
+            rastreamento.marcoCheckout("reschedule_completed", reagendarId);
             localStorage.setItem("dataAgendamento", data);
             localStorage.setItem("horaAgendamento", horario);
             localStorage.setItem("nomeCliente", payloadWebhook.nomeCliente);

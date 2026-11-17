@@ -1,4 +1,5 @@
 import { auth } from "./firebase-config.js";
+import { emitirMarcoCheckout } from "./bookingAnalytics.mjs?v=1.1.0";
 
 // Checkout PIX de testes - Isabele Mariana Nails.
 // Intercepta somente um NOVO agendamento de cliente.
@@ -289,6 +290,7 @@ function apresentarCotacao(cotacao, dados) {
   btnProsseguirPix.textContent = "Prosseguir para pagamento PIX";
   caixaCotacao.hidden = false;
   mensagem("Confira os valores antes de iniciar o pagamento.");
+  emitirMarcoCheckout("quote");
   if (modal.open) btnProsseguirPix.focus();
 }
 
@@ -322,6 +324,8 @@ function mostrarPedido(pedido) {
   modal.querySelector("#im-pix-titulo").textContent = "Pagamento do sinal";
   caixaPix.hidden = false;
   mensagem("PIX gerado! Aguardando confirmação do pagamento de teste...");
+  // QR/copia-e-cola exibido não equivale a pagamento recebido.
+  emitirMarcoCheckout("qr", reservaAtual?.reservaId);
 }
 
 async function emitirAteObterPedido() {
@@ -349,6 +353,8 @@ function concluirAgendamento() {
   if (concluido) return;
   concluido = true;
   pararConsulta();
+  // Só chega aqui após /pix/status informar agendamentoConfirmado === true.
+  emitirMarcoCheckout("pix_confirmed", reservaAtual?.reservaId);
   localStorage.removeItem("isabeleAgendamentoSemPix");
   localStorage.removeItem("isabeleAgendamentoSemPixId");
   mensagem("Pagamento identificado! Seu horário foi confirmado.");
@@ -412,7 +418,7 @@ async function conferirPagamento() {
   }
 }
 
-async function iniciarCheckout({ prosseguirPagamento = false } = {}) {
+async function iniciarCheckout({ prosseguirPagamento = false, cliqueConfirmar = false } = {}) {
   configurarModal();
   if (executando) return;
   if (!modal.open) modal.showModal();
@@ -443,6 +449,8 @@ async function iniciarCheckout({ prosseguirPagamento = false } = {}) {
   try {
     mensagem("Verificando a autorização para o agendamento...");
     const dados = selecionarDados();
+    // Apenas clique válido no botão principal, nunca prosseguir, retry ou polling.
+    if (cliqueConfirmar) emitirMarcoCheckout("submit");
 
     // O backend revalida a permissão ao confirmar; esta consulta só escolhe
     // qual caminho apresentar. O fluxo PIX continua sendo o padrão.
@@ -467,6 +475,8 @@ async function iniciarCheckout({ prosseguirPagamento = false } = {}) {
         localStorage.setItem("isabeleAgendamentoSemPix", "true");
         localStorage.setItem("isabeleAgendamentoSemPixId", agendamento.agendamentoId);
         sessionStorage.removeItem(STORAGE_CHAVE_ISENTO);
+        // Só contabilizar sucesso visual após retorno da API que confirmou no Firestore.
+        emitirMarcoCheckout("exempt_confirmed", agendamento.agendamentoId);
 
         // A sincronizacao Calendar e executada de forma duravel pelo backend.
         // Evita dupla criacao de eventos por requisicao do navegador.
@@ -545,7 +555,7 @@ if (novoAgendamentoCliente) {
       if (!botao || botao.disabled) return;
       evento.preventDefault();
       evento.stopImmediatePropagation();
-      void iniciarCheckout();
+      void iniciarCheckout({ cliqueConfirmar: true });
     },
     true,
   );

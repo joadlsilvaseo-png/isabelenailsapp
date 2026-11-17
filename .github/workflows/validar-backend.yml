@@ -9,6 +9,7 @@ on:
       - "scripts/**"
       - "agendamento.js"
       - "agendamento.html"
+      - "pixCheckout.js"
       - "bookingAnalytics.mjs"
       - "analytics.js"
       - "agendamentoPainelHorarios.mjs"
