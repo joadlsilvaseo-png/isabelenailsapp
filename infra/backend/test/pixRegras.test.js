@@ -1300,5 +1300,5 @@ test("checkout consulta sinal antes de criar reserva PIX", async () => {
   assert.match(trechoCheckout, /caixaCotacao\.hidden = true;[\s\S]*?postApi\("\/pix\/reservar"/);
   assert.match(checkout, /getApi\("\/agendamentos\/isencao"\)/);
   assert.match(checkout, /postApi\("\/agendamentos\/sem-pix"/);
-  assert.match(html, /pixCheckout\.js\?v=1\.0\.2/);
+  assert.match(html, /pixCheckout\.js\?v=1\.0\.3/);
 });
