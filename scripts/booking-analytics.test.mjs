@@ -5,6 +5,8 @@ import {
   criarRastreamentoAgendamento,
   categoriaAgendamentoSegura,
   faixaHorarioAgendamento,
+  vincularRastreamentoCheckout,
+  emitirMarcoCheckout,
 } from "../bookingAnalytics.mjs";
 
 const ler = (nome) => readFile(new URL("../" + nome, import.meta.url), "utf8");
@@ -112,7 +114,7 @@ test("ligação de UI usa validação de sugestão e clique manual confiável", 
   assert.match(js, /rastreamento\?\.sugestoesExibidas\(\)/);
   assert.match(js, /if \(origemAdmin\) \{\s*rastreamento\.permitir\(false\)/);
   assert.match(js, /perfil\.data\(\)\?\.ativo === true/);
-  assert.match(js, /bookingAnalytics\.mjs\?v=1\.0\.0/);
+  assert.match(js, /bookingAnalytics\.mjs\?v=1\.1\.0/);
 });
 
 test("GA4 recebe apenas pathname e não carrega page_view automática de agendamento", async () => {
@@ -127,8 +129,147 @@ test("GA4 recebe apenas pathname e não carrega page_view automática de agendam
 test("o caminho de agendamento não altera checkout PIX nem o backend", async () => {
   const html = await ler("agendamento.html");
   const js = await ler("agendamento.js");
-  assert.match(html, /agendamento\.js\?v=2\.10\.0/);
+  assert.match(html, /agendamento\.js\?v=2\.11\.0/);
   assert.match(js, /consultarDisponibilidadePix\(auth, String\(dataIso\)\.trim\(\), idConsultaPix\)/);
   assert.match(js, /reagendarAgendamentoApi\(auth, \{/);
   assert.match(js, /definirBloqueioTurnos\(horariosContainer, true, alternarIndisponiveis\)/);
+});
+
+test("2B: distingue clique, cotação, QR e confirmação, sem marcar pagamento prematuro", () => {
+  const { eventos, monitor } = coletor();
+  monitor.permitir(true);
+  monitor.marcoCheckout("submit");
+  monitor.marcoCheckout("quote");
+  monitor.marcoCheckout("qr", "reserva-confidencial-A");
+  assert.deepEqual(eventos.map((e) => e.nome), [
+    "booking_submit_clicked", "booking_quote_viewed", "booking_pix_qr_shown",
+  ]);
+  assert.equal(eventos.every((e) => e.nome !== "booking_pix_confirmed_ui"), true);
+  monitor.marcoCheckout("pix_confirmed", "reserva-confidencial-A");
+  assert.equal(eventos.at(-1).nome, "booking_pix_confirmed_ui");
+  assert.equal(eventos.at(-1).dados.payment_path, "pix");
+});
+
+test("2B: confirmação PIX, QR e isenção idempotentes por operação, sem vazar referências", () => {
+  const { eventos, monitor } = coletor();
+  monitor.permitir(true);
+  monitor.marcoCheckout("qr", "ref-privada-a");
+  monitor.marcoCheckout("qr", "ref-privada-a");
+  monitor.marcoCheckout("qr", "ref-privada-b");
+  monitor.marcoCheckout("pix_confirmed", "ref-privada-a");
+  monitor.marcoCheckout("pix_confirmed", "ref-privada-a");
+  monitor.marcoCheckout("exempt_confirmed", "doc-secreto-x");
+  monitor.marcoCheckout("exempt_confirmed", "doc-secreto-x");
+  assert.deepEqual(eventos.map((e) => e.nome), [
+    "booking_pix_qr_shown", "booking_pix_qr_shown",
+    "booking_pix_confirmed_ui", "booking_exempt_confirmed_ui",
+  ]);
+  assert.equal(eventos.at(-1).dados.payment_path, "exempt");
+  assert.doesNotMatch(JSON.stringify(eventos), /ref-privada|doc-secreto|agendamentoId|clienteId/);
+});
+
+test("2B: fluxo novo não contabiliza reagendamento e vice-versa", () => {
+  const novo = coletor();
+  novo.monitor.permitir(true);
+  novo.monitor.marcoCheckout("reschedule_completed", "id-privado");
+  assert.deepEqual(novo.eventos, []);
+
+  const antigo = coletor({ flowType: "reschedule" });
+  antigo.monitor.permitir(true);
+  antigo.monitor.marcoCheckout("submit");
+  antigo.monitor.marcoCheckout("quote");
+  antigo.monitor.marcoCheckout("qr", "ref-a");
+  antigo.monitor.marcoCheckout("pix_confirmed", "ref-a");
+  antigo.monitor.marcoCheckout("exempt_confirmed", "ref-b");
+  antigo.monitor.marcoCheckout("reschedule_completed", "id-privado");
+  antigo.monitor.marcoCheckout("reschedule_completed", "id-privado");
+  assert.deepEqual(antigo.eventos.map((e) => e.nome), [
+    "booking_submit_clicked", "booking_reschedule_completed_ui",
+  ]);
+});
+
+test("2B: marcos só são enviados após autorização; admin não polui checkout", () => {
+  const { eventos, monitor } = coletor();
+  vincularRastreamentoCheckout(monitor);
+  try {
+    emitirMarcoCheckout("submit");
+    emitirMarcoCheckout("quote");
+    emitirMarcoCheckout("qr", "id-local");
+    assert.equal(eventos.length, 0);
+    monitor.permitir(false);
+    emitirMarcoCheckout("pix_confirmed", "id-local");
+    assert.equal(eventos.length, 0);
+  } finally {
+    vincularRastreamentoCheckout(null);
+  }
+});
+
+test("2B: módulos compartilham instância autorizada sem segunda tag GA4", () => {
+  const { eventos, monitor } = coletor();
+  vincularRastreamentoCheckout(monitor);
+  try {
+    monitor.permitir(true);
+    emitirMarcoCheckout("quote");
+    emitirMarcoCheckout("pix_confirmed", "referencia-privada");
+    emitirMarcoCheckout("pix_confirmed", "referencia-privada");
+    emitirMarcoCheckout("desconhecido", "abc");
+    assert.deepEqual(eventos.map((e) => e.nome), [
+      "booking_quote_viewed", "booking_pix_confirmed_ui",
+    ]);
+  } finally {
+    vincularRastreamentoCheckout(null);
+  }
+  emitirMarcoCheckout("submit");
+  assert.equal(eventos.length, 2);
+});
+
+test("2B: keys vazias não criam sucesso nem eventos de QR", () => {
+  const { eventos, monitor } = coletor();
+  monitor.permitir(true);
+  monitor.marcoCheckout("qr", "");
+  monitor.marcoCheckout("pix_confirmed");
+  monitor.marcoCheckout("exempt_confirmed", null);
+  monitor.marcoCheckout("reschedule_completed", "id-qualquer");
+  assert.deepEqual(eventos, []);
+});
+
+test("2B: integração com checkout mede os marcos após validação das respostas", async () => {
+  const pix = await ler("pixCheckout.js");
+  const agenda = await ler("agendamento.js");
+  const html = await ler("agendamento.html");
+  assert.match(pix, /const dados = selecionarDados\(\);\s*\/\/ Apenas clique válido[\s\S]*?if \(cliqueConfirmar\) emitirMarcoCheckout\("submit"\)/);
+  assert.match(pix, /const cotacao = await postApi\("\/pix\/cotacao"/);
+  assert.match(pix, /apresentarCotacao\(cotacao, dados\)/);
+  assert.match(pix, /emitirMarcoCheckout\("quote"\)/);
+  assert.match(pix, /caixaPix\.hidden = false;[\s\S]{0,220}emitirMarcoCheckout\("qr", reservaAtual\?\.reservaId\)/);
+  assert.match(pix, /if \(retorno\.agendamentoConfirmado === true\) \{\s*concluirAgendamento\(\)/);
+  assert.match(pix, /function concluirAgendamento\(\) \{[\s\S]*?emitirMarcoCheckout\("pix_confirmed", reservaAtual\?\.reservaId\)/);
+  assert.match(pix, /const agendamento = await postApi\("\/agendamentos\/sem-pix"/);
+  assert.match(pix, /emitirMarcoCheckout\("exempt_confirmed", agendamento\.agendamentoId\)/);
+  assert.match(agenda, /if \(reagendarId\) rastreamento\.marcoCheckout\("submit"\)/);
+  assert.match(agenda, /if \(pixConfirmadoNoBackend\) rastreamento\.marcoCheckout\("reschedule_completed", reagendarId\)/);
+  assert.match(agenda, /if \(resultadoReagendamento\.sincronizacaoCalendar !== "confirmada" &&[\s\S]*?rastreamento\.marcoCheckout\("reschedule_completed", reagendarId\)/);
+  assert.match(html, /agendamento\.js\?v=2\.11\.0/);
+  assert.match(html, /pixCheckout\.js\?v=1\.0\.3/);
+  assert.match(agenda, /bookingAnalytics\.mjs\?v=1\.1\.0/);
+  assert.match(pix, /bookingAnalytics\.mjs\?v=1\.1\.0/);
+});
+
+test("2B: exceção de Analytics não modifica caminho operacional", () => {
+  const monitor = criarRastreamentoAgendamento({
+    send() { throw new Error("GA4 bloqueado"); },
+  });
+  monitor.permitir(true);
+  vincularRastreamentoCheckout(monitor);
+  try {
+    assert.doesNotThrow(() => {
+      emitirMarcoCheckout("submit");
+      emitirMarcoCheckout("quote");
+      emitirMarcoCheckout("qr", "reserva");
+      emitirMarcoCheckout("pix_confirmed", "reserva");
+      emitirMarcoCheckout("exempt_confirmed", "doc");
+    });
+  } finally {
+    vincularRastreamentoCheckout(null);
+  }
 });
