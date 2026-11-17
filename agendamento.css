@@ -1099,6 +1099,11 @@ button {
 .agenda-sugestoes-hora:focus-visible {
   background: #fce4ed; border-color: var(--booking-primary); outline-offset: 2px;
 }
+.agenda-sugestoes-aviso {
+  margin: 8px 0 0; font-size: 12px; line-height: 1.5;
+  color: var(--booking-text-muted);
+}
+.agenda-sugestoes-aviso:empty { display: none; }
 .agenda-sugestoes-hora--ativa {
   background: var(--booking-primary); color: #fff; border-color: var(--booking-primary);
 }
