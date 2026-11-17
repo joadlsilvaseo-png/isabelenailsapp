@@ -79,7 +79,7 @@ Instrumentar a jornada do app para responder a perguntas concretas: quais catego
 
 **Fonte definitiva de sucesso de novos atendimentos:** coleção de agendamentos e dados operacionais consolidados no backend, sob controle de acesso. O quadro do GA4 permanece comportamental.
 
-**Não enviar um evento **purchase** por criar QR PIX ou pagar um sinal** sem antes definir modelagem de transação, valor e deduplicação compatível com a operação real.
+**Não emitir purchase ao criar um QR PIX ou pagar um sinal** sem antes definir modelagem de transação, valor e deduplicação compatível com a operação real.
 
 ## 5. Fórmulas e definições do painel
 
