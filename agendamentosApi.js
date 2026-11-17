@@ -109,7 +109,7 @@ export async function consultarDisponibilidadePixPeriodo(auth, datas) {
   const usuario = auth?.currentUser;
   if (!usuario) throw new Error("Entre na sua conta para consultar os horários.");
   if (!Array.isArray(datas) || datas.length < 1 || datas.length > 7 ||
-      datas.some((data) => typeof data !== "string" || !/^\\d{4}-\\d{2}-\\d{2}$/.test(data)) ||
+      datas.some((data) => typeof data !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(data)) ||
       new Set(datas).size !== datas.length) {
     throw new TypeError("Datas de sugestão inválidas");
   }
