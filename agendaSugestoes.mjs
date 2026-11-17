@@ -95,6 +95,13 @@ export function sugerirHorarios({
     const janelas = obterJanelasAtendimento(dataIso);
     if (!janelas.length) continue;
     const ocupacoes = ocupacoesDia(agendamentos, dataIso, clienteId);
+    // Se a projeção PIX foi solicitada, todas as datas precisam estar presentes.
+    // A grade usa exatamente a mesma proteção de conflitos e sequenciamento.
+    if (intervalosPixPorData !== null) {
+      if (!Object.hasOwn(intervalosPixPorData, dataIso) ||
+          !Array.isArray(intervalosPixPorData[dataIso])) continue;
+      ocupacoes.push(...intervalosPixPorData[dataIso]);
+    }
     const opcoes = [];
     for (const { inicioMinuto, encerramentoMinuto } of janelas) {
       for (let minuto = inicioMinuto; minuto <= encerramentoMinuto - 15; minuto += 15) {
