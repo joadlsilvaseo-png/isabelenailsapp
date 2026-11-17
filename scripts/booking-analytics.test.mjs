@@ -129,7 +129,7 @@ test("GA4 recebe apenas pathname e não carrega page_view automática de agendam
 test("o caminho de agendamento não altera checkout PIX nem o backend", async () => {
   const html = await ler("agendamento.html");
   const js = await ler("agendamento.js");
-  assert.match(html, /agendamento\.js\?v=2\.11\.0/);
+  assert.match(html, /agendamento\.js\?v=2\.12\.0/);
   assert.match(js, /consultarDisponibilidadePix\(auth, String\(dataIso\)\.trim\(\), idConsultaPix\)/);
   assert.match(js, /reagendarAgendamentoApi\(auth, \{/);
   assert.match(js, /definirBloqueioTurnos\(horariosContainer, true, alternarIndisponiveis\)/);
