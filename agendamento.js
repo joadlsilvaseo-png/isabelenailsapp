@@ -284,9 +284,14 @@ async function carregarSugestoesHorarios({ datas, serviceDuration, serviceInfo, 
       agendamentos = resultados.flatMap((resultado) => resultado.docs.map((doc) => doc.data()));
     }
     if (!atual()) return;
+    // Uma unica consulta agrupada à API do PostgreSQL; não sugerir se falhar.
+    const intervalosPixBrutos = await consultarDisponibilidadePixPeriodo(auth, diasSemana);
+    if (!atual()) return;
+    const intervalosPixPorData = Object.fromEntries(diasSemana.map((data) =>
+      [data, validarIntervalos(intervalosPixBrutos[data])]));
     const sugestoes = sugerirHorarios({
       datas: diasSemana, hoje, inicioPeriodo, minutoAtual: minutoAtualSaoPaulo(),
-      agendamentos,
+      agendamentos, intervalosPixPorData,
       duracao: serviceDuration, servico: serviceInfo, clienteId: auth.currentUser?.uid || null,
     });
     if (!sugestoes.length) {
