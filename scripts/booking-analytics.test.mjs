@@ -129,7 +129,7 @@ test("GA4 recebe apenas pathname e não carrega page_view automática de agendam
 test("o caminho de agendamento não altera checkout PIX nem o backend", async () => {
   const html = await ler("agendamento.html");
   const js = await ler("agendamento.js");
-  assert.match(html, /agendamento\.js\?v=2\.12\.0/);
+  assert.match(html, /agendamento\.js\?v=2\.12\.1/);
   assert.match(js, /consultarDisponibilidadePix\(auth, String\(dataIso\)\.trim\(\), idConsultaPix\)/);
   assert.match(js, /reagendarAgendamentoApi\(auth, \{/);
   assert.match(js, /definirBloqueioTurnos\(horariosContainer, true, alternarIndisponiveis\)/);
@@ -249,7 +249,7 @@ test("2B: integração com checkout mede os marcos após validação das respost
   assert.match(agenda, /if \(reagendarId\) rastreamento\.marcoCheckout\("submit"\)/);
   assert.match(agenda, /if \(pixConfirmadoNoBackend\) rastreamento\.marcoCheckout\("reschedule_completed", reagendarId\)/);
   assert.match(agenda, /if \(resultadoReagendamento\.sincronizacaoCalendar !== "confirmada" &&[\s\S]*?rastreamento\.marcoCheckout\("reschedule_completed", reagendarId\)/);
-  assert.match(html, /agendamento\.js\?v=2\.12\.0/);
+  assert.match(html, /agendamento\.js\?v=2\.12\.1/);
   assert.match(html, /pixCheckout\.js\?v=1\.0\.3/);
   assert.match(agenda, /bookingAnalytics\.mjs\?v=1\.1\.0/);
   assert.match(pix, /bookingAnalytics\.mjs\?v=1\.1\.0/);
