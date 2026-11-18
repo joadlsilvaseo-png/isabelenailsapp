@@ -67,7 +67,8 @@ export function obterRegraVisualDoIntervalo(dataIso, inicioMinuto) {
   // No sábado, as exceções começam às 15h. No fim do expediente,
   // o início pode aceitar somente atendimentos mais curtos.
   const restricaoDeServico = /^2026-12-(17|18|19|20|21|22|23|24)$/.test(dataIso);
-  const inicioCondicionado = restricaoDeServico || (!especial && (diaSemana === 2 || diaSemana === 3
+  const inicioCondicionado = restricaoDeServico || (dataIso === "2026-12-16" && inicioMinuto < 720)
+    || (!especial && (diaSemana === 2 || diaSemana === 3
     || (diaSemana === 6 && inicioMinuto >= 900))) || maximo < 120;
 
   if (inicioCondicionado) {

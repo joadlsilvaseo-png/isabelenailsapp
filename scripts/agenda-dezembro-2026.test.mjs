@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import {
   obterExpedienteEspecialDezembro2026,
+  obterJanelasAtendimento,
   AGENDA_DEZEMBRO_2026_ABERTA,
   validarDataNaJanela,
   validarHorarioEspecial,
@@ -70,7 +71,7 @@ test("quinta e sexta comuns terminam às 21h, mas exceções 17 e 18/12 continua
 
 test("14 e 16 a 24 e 28 a 30 seguem abertura/encerramento excepcionais exatos", () => {
   const faixas = new Map([
-    [14, [540, 1200]], [16, [780, 1200]], [17, [540, 1200]],
+    [14, [540, 1200]], [16, [540, 1200]], [17, [540, 1200]],
     [18, [540, 1200]], [19, [420, 1320]], [20, [420, 1320]],
     [21, [420, 1320]], [22, [420, 1320]], [23, [420, 1320]],
     [24, [420, 960]], [28, [540, 1200]], [29, [540, 1200]],
@@ -78,9 +79,12 @@ test("14 e 16 a 24 e 28 a 30 seguem abertura/encerramento excepcionais exatos", 
   ]);
   for (const [dia, [abertura, fechamento]] of faixas) {
     const data = dataDia(dia);
-    assert.deepEqual(obterExpedienteEspecialDezembro2026(data), {
-      aberto: true, inicioMinuto: abertura, encerramentoMinuto: fechamento,
-    }, data);
+    const esperado = { aberto: true, inicioMinuto: abertura, encerramentoMinuto: fechamento };
+    if (dia === 16) esperado.janelas = [
+      { inicioMinuto: 540, encerramentoMinuto: 720 },
+      { inicioMinuto: 780, encerramentoMinuto: 1200 },
+    ];
+    assert.deepEqual(obterExpedienteEspecialDezembro2026(data), esperado, data);
     const slots = listarSlotsGerenciaveis(data, AGORA);
     assert.equal(slots[0], abertura, data);
     assert.equal(slots.at(-1), fechamento - 15, data);
@@ -90,6 +94,54 @@ test("14 e 16 a 24 e 28 a 30 seguem abertura/encerramento excepcionais exatos", 
     assert.equal(validarHorarioEspecial(data, hora(fechamento - 30), 60), false, data);
     assert.equal(validarHorarioEspecial(data, hora(fechamento - 30), 30), true, data);
   }
+});
+
+test("16/12 abre só os inícios 09h, 10h e 11h, sem alterar a tarde 13h–20h", () => {
+  const data = "2026-12-16";
+  assert.deepEqual(obterJanelasAtendimento(data), [
+    { inicioMinuto: 540, encerramentoMinuto: 720 },
+    { inicioMinuto: 780, encerramentoMinuto: 1200 },
+  ]);
+
+  for (const [inicio, duracaoMaxima] of [["09:00", 180], ["10:00", 120], ["11:00", 60]]) {
+    assert.equal(validarHorarioEspecial(data, inicio, duracaoMaxima), true, inicio);
+    assert.equal(validarHorarioPix(data, inicio, duracaoMaxima, AGORA).valido, true, inicio);
+    assert.equal(validarHorarioEspecial(data, inicio, duracaoMaxima + 1), false, inicio);
+    assert.equal(validarHorarioPix(data, inicio, duracaoMaxima + 1, AGORA).valido, false, inicio);
+    assert.equal(obterRegraVisualDoIntervalo(data,
+      Number(inicio.slice(0, 2)) * 60).tipo, "inicio-limitado", inicio);
+  }
+
+  for (const inicio of ["08:45", "09:15", "09:30", "09:45", "10:15", "10:30",
+    "10:45", "11:15", "11:30", "11:45", "12:00", "12:30", "12:45"]) {
+    assert.equal(validarHorarioEspecial(data, inicio, 15), false, inicio);
+    assert.equal(validarHorarioPix(data, inicio, 15, AGORA).valido, false, inicio);
+  }
+
+  // A grade administrativa pode bloquear partes de serviços, mas nunca o intervalo 12h–13h.
+  const slots = listarSlotsGerenciaveis(data, AGORA);
+  for (const minuto of [540, 555, 660, 705, 780, 1185]) {
+    assert.ok(slots.includes(minuto), String(minuto));
+  }
+  for (const minuto of [720, 735, 750, 765]) {
+    assert.ok(!slots.includes(minuto), String(minuto));
+  }
+  assert.equal(obterRegraVisualDoIntervalo(data, 555).tipo, "sem-inicio");
+  assert.equal(obterRegraVisualDoIntervalo(data, 750).tipo, "sem-inicio");
+
+  // Nenhum horário de 13h–20h é modificado.
+  for (const [inicio, duracao] of [
+    ["13:00", 60], ["13:15", 90], ["16:30", 90], ["19:30", 30],
+  ]) {
+    assert.equal(validarHorarioEspecial(data, inicio, duracao), true, inicio);
+    assert.equal(validarHorarioPix(data, inicio, duracao, AGORA).valido, true, inicio);
+  }
+  for (const [inicio, duracao] of [["19:30", 60], ["20:00", 15]]) {
+    assert.equal(validarHorarioEspecial(data, inicio, duracao), false, inicio);
+    assert.equal(validarHorarioPix(data, inicio, duracao, AGORA).valido, false, inicio);
+  }
+  assert.equal(validarHorarioEspecial("2026-11-18", "09:15", 60), true);
+  assert.equal(validarHorarioEspecial("2026-12-17", "09:15", 60), true);
 });
 
 test("domingo 20, segunda 14/21/28 e quarta 16 são exceções reais", () => {

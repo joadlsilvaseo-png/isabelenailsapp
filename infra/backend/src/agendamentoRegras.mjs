@@ -111,7 +111,14 @@ export function obterExpedienteEspecialDezembro2026(dataIso) {
     aberto: true, inicioMinuto, encerramentoMinuto,
   });
   if (dia === 14) return expediente(540, 1200);        // Segunda: 09h–20h.
-  if (dia === 16) return expediente(780, 1200);        // Quarta: 13h–20h.
+  if (dia === 16) return {
+    ...expediente(540, 1200),
+    // Manhã adicional: preserva integralmente a tarde já aberta das 13h às 20h.
+    janelas: [
+      { inicioMinuto: 540, encerramentoMinuto: 720 },  // 09h–12h.
+      { inicioMinuto: 780, encerramentoMinuto: 1200 }, // 13h–20h.
+    ],
+  };
   if (dia === 17 || dia === 18) return expediente(540, 1200);
   if (dia >= 19 && dia <= 23) return expediente(420, 1320); // Inclusive domingo e segunda.
   if (dia === 24) return expediente(420, 960);         // Véspera: 07h–16h.
@@ -183,7 +190,7 @@ export function obterJanelasAtendimento(dataIso) {
   if (!partes) return [];
   const especial = obterExpedienteEspecialDezembro2026(dataIso);
   if (especial) return especial.aberto
-    ? [{ inicioMinuto: especial.inicioMinuto, encerramentoMinuto: especial.encerramentoMinuto }]
+    ? (especial.janelas ?? [{ inicioMinuto: especial.inicioMinuto, encerramentoMinuto: especial.encerramentoMinuto }])
     : [];
   return obterJanelasAtendimentoSemanal(partes.data.getUTCDay());
 }
@@ -208,9 +215,16 @@ export function validarHorarioEspecial(dataIso, horario, duracao, opcoes = {}) {
       || inicioMinuto % RESOLUCAO_GRADE_MINUTOS !== 0) return false;
   const especial = obterExpedienteEspecialDezembro2026(dataIso);
   if (especial) {
-    return especial.aberto
-      && inicioMinuto >= especial.inicioMinuto
-      && inicioMinuto + duracaoMinutos <= especial.encerramentoMinuto;
+    if (!especial.aberto) return false;
+    // Apenas em 16/12, liberar inícios de manhã às 09h, 10h e 11h.
+    // A duração deve terminar até 12h; não unir manhã e tarde.
+    if (dataIso === "2026-12-16" && inicioMinuto < 720 && inicioMinuto % 60 !== 0) {
+      return false;
+    }
+    return obterJanelasAtendimento(dataIso).some(
+      ({ inicioMinuto: abre, encerramentoMinuto: fecha }) =>
+        inicioMinuto >= abre && inicioMinuto + duracaoMinutos <= fecha
+    );
   }
   return validarHorarioEspecialSemanal(partes.data.getUTCDay(), inicioMinuto, duracaoMinutos);
 }
@@ -234,7 +248,10 @@ export function listarSlotsGerenciaveis(dataIso, agora = new Date()) {
     6: [[540, 1110]],                  // Sábado: grade de bloqueios cobre a exceção até 18h30.
   };
   const slots = [];
-  const periodos = especial ? [[especial.inicioMinuto, especial.encerramentoMinuto]] : (limites[dia] || []);
+  const periodos = especial
+    ? obterJanelasAtendimento(dataIso).map(({ inicioMinuto, encerramentoMinuto }) =>
+      [inicioMinuto, encerramentoMinuto])
+    : (limites[dia] || []);
   for (const [inicio, fim] of periodos) {
     for (let minuto = inicio; minuto + 15 <= fim; minuto += 15) {
       // A administradora pode fechar qualquer intervalo dentro da
