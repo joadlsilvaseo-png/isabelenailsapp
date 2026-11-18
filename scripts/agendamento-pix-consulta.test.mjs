@@ -76,7 +76,7 @@ test("três caminhos de atualização da agenda usam o mesmo ID de leitura", asy
   assert.equal((js.match(/renderizarHorarios\(dataIso, serviceDuration, reagendarId, serviceInfo, idConsultaPix\)/g) || []).length, 2);
   assert.match(js, /renderizarHorarios\(dataAtiva, serviceDuration, reagendarId, serviceInfo, idConsultaPix\)/);
   assert.match(js, /reagendarAgendamentoApi\(auth, \{/);
-  assert.match(html, /agendamento\.js\?v=2\.12\.0/);
+  assert.match(html, /agendamento\.js\?v=2\.12\.1/);
   assert.match(api, /if \(dados\.pixCobrancaId \|\| dados\.pixPagamentoId\) return \{ ok: false, status: 409 \};/,
     "proteção do backend não deve ser removida");
 });
