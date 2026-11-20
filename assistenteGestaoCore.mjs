@@ -3,7 +3,7 @@
  * Somente cálculos de leitura. Não cria, altera ou bloqueia agendamentos.
  * Nenhum dado pessoal é persistido em cache local.
  */
-import { DIAS_SUGESTAO_MANUTENCAO, ehAplicacaoDeGel } from "./perfilManutencao.mjs";
+import { encontrarManutencaoSugerida, ehRemocaoDeGel } from "./perfilManutencao.mjs";
 
 const ATIVOS = new Set(["agendado", "confirmado", "reagendado"]);
 const CONCLUIDOS = new Set(["concluido", "realizado"]);
@@ -166,21 +166,37 @@ function montarRadar(agendamentos, clientes, hoje) {
     if (futuros.has(uid)) continue;
     lista.sort((a, b) => b.data.localeCompare(a.data) || b.horario.localeCompare(a.horario));
     const ultimo = lista[0];
-    let intervalo = null;
+    // Mesma origem do Meu Perfil: aplicação ou manutenção concluída reinicia
+    // 21 dias. Outros serviços não interrompem o ciclo; remoção encerra.
+    const cicloGel = encontrarManutencaoSugerida(lista.map((a) => ({
+      nomeServico: a.servico, categoria: a.categoria, data: a.data,
+      status: "concluido",
+    })));
+    let referencia = ultimo;
+    let dataSugerida = null;
     let criterio = "";
-    if (ehAplicacaoDeGel({ nome: ultimo.servico, categoria: ultimo.categoria })) {
-      intervalo = DIAS_SUGESTAO_MANUTENCAO;
-      criterio = "Manutenção sugerida após aplicação de gel";
+    if (cicloGel) {
+      referencia = {
+        ...ultimo,
+        data: cicloGel.dataUltimoAtendimentoISO,
+        servico: cicloGel.servico,
+      };
+      dataSugerida = cicloGel.dataSugeridaISO;
+      criterio = cicloGel.tipoProcedimento === "manutencao"
+        ? "Manutenção sugerida após manutenção de gel"
+        : "Manutenção sugerida após aplicação de gel";
+    } else if (ehRemocaoDeGel({ nome: ultimo.servico, categoria: ultimo.categoria })) {
+      // A remoção não deve ser tratada como um novo ciclo de manutenção.
+      continue;
     } else if (lista.length > 1) {
-      // Periodicidade só é inferida com ao menos duas visitas concluídas.
+      // Outros serviços seguem a inferência histórica de 14 a 90 dias.
       const gap = diferencaDiasISO(lista[1].data, ultimo.data);
       if (gap !== null && gap >= 14 && gap <= 90) {
-        intervalo = gap;
+        dataSugerida = adicionarDiasISO(ultimo.data, gap);
         criterio = "Intervalo observado entre as duas últimas visitas";
       }
     }
-    if (intervalo === null) continue;
-    const dataSugerida = adicionarDiasISO(ultimo.data, intervalo);
+    if (!dataSugerida) continue;
     const diasParaRetorno = diferencaDiasISO(hoje, dataSugerida);
     // Não classificar histórico muito antigo como oportunidade atual.
     if (diasParaRetorno < -60 || diasParaRetorno > 7) continue;
@@ -189,8 +205,8 @@ function montarRadar(agendamentos, clientes, hoje) {
       uid,
       nome: cliente?.nome || ultimo.nomeCliente,
       telefone: cliente?.telefone || "",
-      servico: ultimo.servico,
-      ultimaVisita: ultimo.data,
+      servico: referencia.servico,
+      ultimaVisita: referencia.data,
       dataSugerida,
       diasParaRetorno,
       criterio,
@@ -303,7 +319,7 @@ export function formatarDataBR(iso) {
 
 export function mensagemRetorno(cliente) {
   const primeiroNome = texto(cliente?.nome).split(/\s+/)[0] || "menina";
-  const assunto = cliente?.criterio === "Manutenção sugerida após aplicação de gel"
+  const assunto = cliente?.criterio?.startsWith("Manutenção sugerida após ")
     ? "sua próxima manutenção" : "seu próximo atendimento";
   return "Olá, " + primeiroNome + "! Tudo bem? 💗 Aqui é a Isabele Mariana Nails. "
     + "Passando para saber se você gostaria de agendar " + assunto

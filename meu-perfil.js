@@ -2,7 +2,7 @@ import { executarAcaoAgendamento } from "./agendamentosApi.js";
 import { auth, db } from "./firebase-config.js";
 import { webhookUrl } from "./config.js";
 import { consultarFotoPerfil } from "./foto-perfil-api.js";
-import { ehAplicacaoDeGel, encontrarManutencaoSugerida, formatarDataSugestao } from "./perfilManutencao.mjs?v=1.0.0";
+import { ehProcedimentoCicloGel, ehRemocaoDeGel, encontrarManutencaoSugerida, formatarDataSugestao } from "./perfilManutencao.mjs?v=1.1.0";
 import {
   onAuthStateChanged,
   signOut,
@@ -184,15 +184,17 @@ function renderizarSugestaoManutencao(sugestao) {
     return;
   }
 
-  const dataAplicacao = formatarDataSugestao(sugestao.dataAplicacaoISO);
+  const dataAtendimento = formatarDataSugestao(sugestao.dataUltimoAtendimentoISO);
   const dataSugerida = formatarDataSugestao(sugestao.dataSugeridaISO);
-  if (!dataAplicacao || !dataSugerida) {
+  if (!dataAtendimento || !dataSugerida) {
     card.hidden = true;
     return;
   }
 
   document.getElementById("perfil-manutencao-servico").textContent = sugestao.servico;
-  document.getElementById("perfil-manutencao-aplicacao").textContent = dataAplicacao;
+  document.getElementById("perfil-manutencao-tipo").textContent =
+    sugestao.tipoProcedimento === "manutencao" ? "sua manutenção de" : "sua aplicação de";
+  document.getElementById("perfil-manutencao-ultimo").textContent = dataAtendimento;
   document.getElementById("perfil-manutencao-data").textContent = dataSugerida;
   card.hidden = false;
 }
@@ -200,15 +202,18 @@ function renderizarSugestaoManutencao(sugestao) {
 /**
  * Dados históricos já são carregados pelo perfil. Consulta apenas a ficha de
  * serviços concluídos cujos nomes não permitem identificar a categoria.
- * Assim "Aplicação de Alongamento" da categoria "Unhas em Gel" é elegível,
- * mas manicure, esmaltação e manutenção não são confundidas com aplicações.
+ * Assim "Aplicação de Alongamento" e "Manutenção" da categoria
+ * "Unhas em Gel" podem reiniciar o ciclo, sem confundir manicure ou esmaltação. 
  */
 async function descobrirSugestaoManutencao(concluidos) {
   const enriquecidos = concluidos.map((item) => ({ ...item }));
   const cacheServicos = new Map();
 
   for (const atendimento of enriquecidos) {
-    if (ehAplicacaoDeGel({
+    if (ehProcedimentoCicloGel({
+      nome: atendimento.nomeServico,
+      categoria: atendimento.categoria,
+    }) || ehRemocaoDeGel({
       nome: atendimento.nomeServico,
       categoria: atendimento.categoria,
     }) || !atendimento.idServico) continue;

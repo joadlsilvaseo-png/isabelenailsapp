@@ -1,6 +1,6 @@
 /**
  * Sugestão visual de manutenção: não muda agendas, preços, datas persistidas
- * ou notificações. Utiliza somente aplicações concluídas.
+ * ou notificações. Utiliza aplicações e manutenções de gel concluídas.
  */
 export const DIAS_SUGESTAO_MANUTENCAO = 21;
 
@@ -53,38 +53,75 @@ export function ehAplicacaoDeGel({ nome = "", categoria = "" } = {}) {
 }
 
 /**
- * A data relevante é a data do serviço, não a data do registro ou conclusão.
- * Retorna null se a cliente não tiver uma aplicação válida concluída.
- * Recebe nomes/categorias já resolvidos pelo frontend a partir do catálogo.
+ * Manutenção de unhas em gel/fibra reinicia o mesmo ciclo de 21 dias.
+ * Evita classificar cílios, esmaltação, manicure ou pedicure como manutenção de gel.
+ */
+function contextoGel(nome, categoria) {
+  const descricao = nome + " " + categoria;
+  if (/\b(cilios|cilio|lash|sobrancelha|cabelo|capilar)\b/.test(descricao)) return false;
+  const gelOuFibra = /\b(gel|fibra|acrigel)\b/.test(nome);
+  const categoriaUnhas = /\b(unhas? em gel|unhas? gel|alongamento|fibra|gel)\b/.test(categoria);
+  const alongamentoSemCategoria = !categoria && /\balongamento\b/.test(nome);
+  return gelOuFibra || categoriaUnhas || alongamentoSemCategoria;
+}
+
+export function ehManutencaoDeGel({ nome = "", categoria = "" } = {}) {
+  const n = normalizar(nome);
+  const c = normalizar(categoria).replace(/-/g, " ");
+  if (!n || /\b(remocao|retirada|retirar|esmalta(?:cao|r)|manicure|pedicure|reparo|conserto)\b/.test(n)) return false;
+  return /\b(manutencao|retoque)\b/.test(n) && contextoGel(n, c);
+}
+
+export function ehRemocaoDeGel({ nome = "", categoria = "" } = {}) {
+  const n = normalizar(nome);
+  const c = normalizar(categoria).replace(/-/g, " ");
+  return /\b(remocao|retirada|retirar)\b/.test(n) && contextoGel(n, c);
+}
+
+export function ehProcedimentoCicloGel(servico) {
+  return ehAplicacaoDeGel(servico) || ehManutencaoDeGel(servico);
+}
+
+/**
+ * Reinicia o prazo de 21 dias a partir da última aplicação OU manutenção concluída.
+ * Remoção posterior encerra o ciclo; serviços não relacionados não reiniciam o prazo.
+ * A data usada é a do atendimento, não a da criação do registro.
  */
 export function encontrarManutencaoSugerida(atendimentos) {
   if (!Array.isArray(atendimentos)) return null;
 
-  let ultimaAplicacao = null;
+  let ultimoEventoGel = null;
   for (const atendimento of atendimentos) {
     const status = normalizar(atendimento?.status);
     if (status !== "concluido" && status !== "realizado") continue;
-    if (!ehAplicacaoDeGel({
-      nome: atendimento.nomeServico || atendimento.servico || "",
-      categoria: atendimento.categoria || "",
-    })) continue;
+
+    const nome = atendimento.nomeServico || atendimento.servico || "";
+    const categoria = atendimento.categoria || "";
+    const servico = { nome, categoria };
+    const tipo = ehRemocaoDeGel(servico) ? "remocao"
+      : ehManutencaoDeGel(servico) ? "manutencao"
+        : ehAplicacaoDeGel(servico) ? "aplicacao" : null;
+    if (!tipo) continue;
 
     const data = interpretarDataISO(atendimento.data);
     if (!data) continue;
-
     const dataISO = formatarDataISO(data);
-    if (!ultimaAplicacao || dataISO > ultimaAplicacao.dataAplicacaoISO) {
-      data.setUTCDate(data.getUTCDate() + DIAS_SUGESTAO_MANUTENCAO);
-      ultimaAplicacao = {
-        dataAplicacaoISO: dataISO,
-        dataSugeridaISO: formatarDataISO(data),
-        servico: atendimento.nomeServico || atendimento.servico,
-        dias: DIAS_SUGESTAO_MANUTENCAO,
-      };
-    }
+    // Na mesma data, dar preferência à remoção para evitar sugestão indevida.
+    if (ultimoEventoGel && (dataISO < ultimoEventoGel.dataISO ||
+      (dataISO === ultimoEventoGel.dataISO && ultimoEventoGel.tipo === "remocao"))) continue;
+    ultimoEventoGel = { dataISO, data, tipo, nome };
   }
 
-  return ultimaAplicacao;
+  if (!ultimoEventoGel || ultimoEventoGel.tipo === "remocao") return null;
+  const dataSugerida = new Date(ultimoEventoGel.data);
+  dataSugerida.setUTCDate(dataSugerida.getUTCDate() + DIAS_SUGESTAO_MANUTENCAO);
+  return {
+    dataUltimoAtendimentoISO: ultimoEventoGel.dataISO,
+    dataSugeridaISO: formatarDataISO(dataSugerida),
+    servico: ultimoEventoGel.nome,
+    tipoProcedimento: ultimoEventoGel.tipo,
+    dias: DIAS_SUGESTAO_MANUTENCAO,
+  };
 }
 
 /** Apenas para a data da nova sugestão; não reformata datas existentes. */
