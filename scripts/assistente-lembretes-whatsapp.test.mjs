@@ -19,7 +19,7 @@ test("home exibe sinalizacao admin e abre modal sem nova tela", () => {
   assert.match(html, /id="ig-lembretes-dialog"/);
   assert.match(html, /data-ig-lembretes-sinal/);
   assert.match(html, /data-ig-lembretes-lista/);
-  assert.match(html, /assistenteGestao\.css\?v=4/);
+  assert.match(html, /assistenteGestao\.css\?v=5/);
   assert.match(assistente, /import\("\.\/assistenteLembretesWhatsappUI\.js\?v=3"\)/);
 });
 

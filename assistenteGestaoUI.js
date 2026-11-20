@@ -40,13 +40,53 @@ function destino(item, contexto) {
   }
   return item.link === "./admin-agendamentos.html" ? item.link : "./admin-assistente.html";
 }
+function criarResumoSemanalVisual(semana) {
+  const atual = semana.atual.concluidos;
+  const anterior = semana.anterior.concluidos;
+  const diferenca = atual - anterior;
+  const tendencia = anterior === 0 && atual > 0 ? "sem-base"
+    : diferenca > 0 ? "alta" : diferenca < 0 ? "queda" : "estavel";
+  const variacao = diferenca === 0 ? "0%"
+    : anterior === 0 ? "—"
+      : (diferenca > 0 ? "+" : "−")
+        + new Intl.NumberFormat("pt-BR", {
+          minimumFractionDigits: 1, maximumFractionDigits: 1,
+        }).format(Math.abs(diferenca / anterior * 100)) + "%";
+
+  const quantidade = Math.abs(diferenca);
+  const unidade = quantidade === 1 ? "atendimento" : "atendimentos";
+  const leitura = anterior === 0
+    ? (atual === 0 ? "Nenhum atendimento concluído nos dois períodos."
+      : "Não havia atendimentos concluídos nos 7 dias anteriores.")
+    : diferenca === 0 ? "Mesmo número de atendimentos do período anterior."
+      : quantidade + " " + unidade + (diferenca > 0 ? " a mais" : " a menos")
+        + " que nos 7 dias anteriores.";
+  return { atual, anterior, variacao, tendencia, leitura };
+}
+
+function mostrarResumoSemanalHome(root, semana) {
+  const resumo = criarResumoSemanalVisual(semana);
+  set(root, "[data-ig-resumo-atual]", resumo.atual);
+  set(root, "[data-ig-resumo-anterior]", resumo.anterior);
+  set(root, "[data-ig-resumo-variacao]", resumo.variacao);
+  set(root, "[data-ig-resumo-leitura]", resumo.leitura);
+  const tendencia = $(root, "[data-ig-resumo-tendencia]");
+  if (tendencia) tendencia.setAttribute("data-ig-tendencia", resumo.tendencia);
+}
 function recomendacoes(root, itens, contexto) {
   let indice = 0;
   const proxima = $(root, "[data-ig-proxima]");
   function exibir() {
     const item = itens[indice];
-    set(root, "[data-ig-recomendacao-titulo]", item.titulo);
-    set(root, "[data-ig-recomendacao-texto]", item.descricao);
+    // A comparação numérica já aparece no resumo visual da home.
+    // A recomendação semanal explica a próxima ação, sem repetir números.
+    const semanalHome = contexto === "home" && item.tipo === "semanal";
+    set(root, "[data-ig-recomendacao-titulo]",
+      semanalHome ? "Entenda o desempenho da semana" : item.titulo);
+    set(root, "[data-ig-recomendacao-texto]",
+      semanalHome
+        ? "Veja os atendimentos, cancelamentos e serviços em destaque na análise completa."
+        : item.descricao);
     const link = $(root, "[data-ig-recomendacao-link]");
     if (link) { link.href = destino(item, contexto); link.textContent = item.acao; }
   }
@@ -136,6 +176,13 @@ function exibir(root, visao, contexto) {
     ? "Próximo atendimento às " + visao.resumo.proximo.horario
     : "Nenhum próximo atendimento registrado para hoje.");
   recomendacoes(root, visao.recomendacoes, contexto);
+  if (contexto === "home") {
+    mostrarResumoSemanalHome(root, visao.semana);
+    // A explicação de indisponibilidade permanece visível; a nota
+    // repetitiva de disponibilidade confirmada não ocupa a expansão.
+    const notaLivre = $(root, "[data-ig-livre-nota]");
+    if (notaLivre) notaLivre.hidden = visao.resumo.tempoLivreRestante !== null;
+  }
   if (contexto === "detalhe") {
     radarClientes(root, visao.radar);
     semanaDados(root, visao.semana);
@@ -145,8 +192,8 @@ function exibir(root, visao, contexto) {
   $(root, "[data-ig-dados]").hidden = false;
 }
 /**
- * O card da principal inicia recolhido. Indicadores e recomendação ficam fora
- * do painel recolhível; apenas o conteúdo complementar é expandido.
+ * O card da principal inicia recolhido. Indicadores diários e resumo
+ * semanal ficam visíveis; recomendações e ações aparecem na expansão.
  */
 function prepararExpansaoHome(root) {
   const botao = $(root, "[data-ig-toggle]");

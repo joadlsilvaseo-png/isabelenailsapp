@@ -114,11 +114,30 @@
   border: 1px solid #efd8e1;
 }
 .ig-superficie--home .ig-legenda { color: #a34d6d; font-size: 10.5px; }
-.ig-previa-titulo {
-  color: #591c31;
-  font-size: 13.5px;
-  font-weight: 700;
-  line-height: 1.45;
+/* Comparação de dois períodos móveis de sete dias, sem gráfico duplicado. */
+.ig-resumo-topo { display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap; }
+.ig-resumo-periodo { color:#765160;font-size:11.5px;font-weight:600; }
+.ig-resumo-grid { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-top:9px; }
+.ig-resumo-dado {
+  min-width:0;padding:9px 7px;border:1px solid #edd8e1;border-radius:11px;
+  background:#fff;text-align:center;
+}
+.ig-resumo-dado span { display:block;color:#805567;font-size:11.5px;line-height:1.4; }
+.ig-resumo-dado strong {
+  display:block;margin-top:5px;color:#591c31;font-size:21px;font-weight:700;
+  line-height:1.25;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;
+}
+.ig-resumo-dado--variacao[data-ig-tendencia="queda"] strong { color:#a23e5e; }
+.ig-resumo-dado--variacao[data-ig-tendencia="alta"] strong { color:#287450; }
+.ig-resumo-leitura { margin:9px 0 0;color:#735060;font-size:12px;line-height:1.5; }
+.ig-acao-sugerida { margin-top:11px;padding:11px 12px;border:1px solid #edd8e1;border-radius:12px;background:#fff6f9; }
+.ig-acao-sugerida h3 { margin:5px 0;color:#591c31;font-size:15px;line-height:1.35; }
+.ig-acao-sugerida .ig-recomendacao-detalhe { margin:5px 0 0;font-size:12.5px;line-height:1.55; }
+@media(max-width:365px) {
+  .ig-resumo-grid { gap:5px; }
+  .ig-resumo-dado { padding:8px 4px; }
+  .ig-resumo-dado span { font-size:10.5px; }
+  .ig-resumo-dado strong { font-size:18px; }
 }
 .ig-expansivel {
   margin-top: 12px;

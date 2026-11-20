@@ -830,7 +830,7 @@ async function handleAuthenticatedUser(user, elements) {
     if (accessProfile.role === "admin") {
       configureAdminInterface(user, accessProfile, elements);
       marcarEtapaPrincipal("assistant-module-start");
-      void import("./assistenteGestaoUI.js?v=4")
+      void import("./assistenteGestaoUI.js?v=5")
         .then(({ iniciarAssistenteGestao }) => {
           marcarEtapaPrincipal("assistant-module-ready");
           medirEtapaPrincipal(
