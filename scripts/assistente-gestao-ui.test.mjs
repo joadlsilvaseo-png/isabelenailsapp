@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { runInNewContext } from "node:vm";
 const read = (nome) => readFile(new URL("../" + nome, import.meta.url), "utf8");
 
 test("Assistente aparece abaixo do perfil e antes da gestão profissional", async () => {
@@ -42,12 +43,16 @@ test("Card compacto mostra indicadores e recomendação sem precisar expandir", 
   const trecho = h.slice(inicio, fim);
   const expansivel = trecho.indexOf('id="ig-home-expansivel"');
   assert.ok(expansivel > 0);
-  for (const dado of ["data-ig-atendimentos", "data-ig-livre", "data-ig-recomendacao-titulo"]) {
+  for (const dado of ["data-ig-atendimentos", "data-ig-livre", "data-ig-resumo-atual",
+    "data-ig-resumo-anterior", "data-ig-resumo-variacao", "data-ig-resumo-leitura"]) {
     assert.ok(trecho.indexOf(dado) < expansivel, dado + " visível sem expandir");
   }
-  for (const dado of ["data-ig-recomendacao-texto", "data-ig-recomendacao-link", "data-ig-proxima"]) {
+  for (const dado of ["data-ig-recomendacao-titulo", "data-ig-recomendacao-texto",
+    "data-ig-recomendacao-link", "data-ig-proxima", "data-ig-proximo"]) {
     assert.ok(trecho.indexOf(dado) > expansivel, dado + " somente expandido");
   }
+  assert.doesNotMatch(trecho, /Recomendação do momento/);
+  assert.match(trecho, /Resumo inteligente/);
   assert.match(trecho, /aria-controls="ig-home-expansivel" aria-expanded="false"/);
   assert.match(trecho, /data-ig-expansivel hidden/);
   assert.match(css, /\.ig-superficie--home \.ig-cartao\s*\{/);
@@ -66,14 +71,38 @@ test("Expandir/Recolher preserva acessibilidade e não altera os dados", async (
 test("Card da Gestão usa identidade visual clara, mantendo os indicadores e a expansão", async () => {
   const h = await read("principal.html");
   const css = await read("assistenteGestao.css");
-  assert.match(h, /assistenteGestao\.css\?v=4/);
+  assert.match(h, /assistenteGestao\.css\?v=5/);
   assert.match(css, /\.ig-superficie--home \.ig-cartao\s*\{[^}]*background: #fffafb;/s);
   assert.match(css, /\.ig-superficie--home \.ig-metrica\s*\{[^}]*background: #fff;/s);
   assert.match(css, /\.ig-superficie--home \.ig-metrica strong\s*\{[^}]*color: #591c31;/s);
   assert.match(css, /\.ig-previa\s*\{[^}]*background: #fbeaf1;/s);
-  assert.match(css, /\.ig-previa-titulo\s*\{[^}]*color: #591c31;/s);
+  assert.match(css, /\.ig-resumo-dado strong\s*\{[^}]*color:#591c31;/s);
+  assert.match(css, /\.ig-acao-sugerida\s*\{/);
+  assert.match(css, /\.ig-resumo-dado--variacao\[data-ig-tendencia="queda"\]/);
   assert.match(css, /\.ig-expandir\s*\{[^}]*color: #591c31;/s);
   assert.match(h, /data-ig-toggle/);
   assert.match(h, /data-ig-atendimentos/);
   assert.match(h, /data-ig-recomendacao-titulo/);
+});
+
+test("Resumo semanal usa dados reais e evita divisão por zero", async () => {
+  const js = await read("assistenteGestaoUI.js");
+  const inicio = js.indexOf("function criarResumoSemanalVisual(");
+  const fim = js.indexOf("function mostrarResumoSemanalHome(", inicio);
+  assert.ok(inicio >= 0 && fim > inicio);
+  const calcular = runInNewContext(js.slice(inicio, fim) + "\ncriarResumoSemanalVisual", { Intl });
+  const dados = (atual, anterior) =>
+    calcular({ atual: { concluidos: atual }, anterior: { concluidos: anterior } });
+  const queda = dados(11, 13);
+  assert.equal(queda.variacao, "−15,4%");
+  assert.equal(queda.tendencia, "queda");
+  assert.equal(queda.leitura, "2 atendimentos a menos que nos 7 dias anteriores.");
+  assert.equal(dados(15, 10).variacao, "+50,0%");
+  assert.equal(dados(15, 10).tendencia, "alta");
+  assert.equal(dados(5, 5).variacao, "0%");
+  assert.equal(dados(3, 0).variacao, "—");
+  assert.equal(dados(3, 0).tendencia, "sem-base");
+  assert.equal(dados(0, 0).variacao, "0%");
+  assert.match(js, /mostrarResumoSemanalHome\(root, visao\.semana\)/);
+  assert.match(js, /contexto === "home" && item\.tipo === "semanal"/);
 });

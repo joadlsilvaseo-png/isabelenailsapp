@@ -38,7 +38,7 @@
 
   <link rel="stylesheet" href="principal.css?v=1.1.3">
   <link rel="stylesheet" href="admin-bottom-nav.css?v=1">
-  <link rel="stylesheet" href="./assistenteGestao.css?v=4">
+  <link rel="stylesheet" href="./assistenteGestao.css?v=5">
 </head>
 
 <body data-page="principal" data-user-role="loading">
@@ -191,7 +191,7 @@
             </p>
 
             <div data-ig-dados hidden>
-              <!-- Indicadores e recomendação principal continuam visíveis quando recolhido. -->
+              <!-- Resumo diário e comparação semanal visíveis mesmo com a expansão recolhida. -->
               <div class="ig-metricas" aria-label="Resumo do dia">
                 <div class="ig-metrica">
                   <span>Atendimentos hoje</span>
@@ -217,16 +217,38 @@
                 </span>
               </button>
 
-              <div class="ig-previa">
-                <span class="ig-legenda">Recomendação do momento</span>
-                <strong class="ig-previa-titulo" data-ig-recomendacao-titulo></strong>
+              <div class="ig-previa" role="group"
+                   aria-label="Comparação semanal dos atendimentos concluídos">
+                <div class="ig-resumo-topo">
+                  <span class="ig-legenda">Resumo inteligente</span>
+                  <span class="ig-resumo-periodo">Últimos 7 dias</span>
+                </div>
+                <div class="ig-resumo-grid">
+                  <div class="ig-resumo-dado">
+                    <span>Concluídos</span>
+                    <strong data-ig-resumo-atual>—</strong>
+                  </div>
+                  <div class="ig-resumo-dado">
+                    <span>Anterior</span>
+                    <strong data-ig-resumo-anterior>—</strong>
+                  </div>
+                  <div class="ig-resumo-dado ig-resumo-dado--variacao"
+                       data-ig-resumo-tendencia data-ig-tendencia="estavel">
+                    <span>Variação</span>
+                    <strong data-ig-resumo-variacao>—</strong>
+                  </div>
+                </div>
+                <p class="ig-resumo-leitura" data-ig-resumo-leitura></p>
               </div>
 
               <div id="ig-home-expansivel" class="ig-expansivel" data-ig-expansivel hidden>
-                <p class="ig-descricao">Uma visão rápida do seu dia e das oportunidades do negócio.</p>
-                <p class="ig-livre-nota" data-ig-livre-nota></p>
+                <p class="ig-livre-nota" data-ig-livre-nota hidden></p>
                 <p class="ig-proximo" data-ig-proximo></p>
-                <p class="ig-recomendacao-detalhe" data-ig-recomendacao-texto></p>
+                <div class="ig-acao-sugerida">
+                  <span class="ig-legenda">Próximo passo</span>
+                  <h3 data-ig-recomendacao-titulo></h3>
+                  <p class="ig-recomendacao-detalhe" data-ig-recomendacao-texto></p>
+                </div>
                 <div class="ig-acoes">
                   <a class="ig-botao ig-botao--primario" data-ig-recomendacao-link
                      href="./admin-assistente.html">Ver recomendação</a>
@@ -804,7 +826,7 @@
 
   <script type="module" src="vitrine.js?v=1.0.1" defer></script>
 
-  <script type="module" src="principal.js?v=1.3.2"></script>
+  <script type="module" src="principal.js?v=1.3.3"></script>
 
   <script src="app.js?v=2.0.0" defer></script>
   <script src="admin-bottom-nav.js?v=1" defer></script>
