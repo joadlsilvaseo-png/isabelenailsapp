@@ -2,7 +2,7 @@
 import { auth, db } from "./firebase-config.js";
 import { getDocs, collection } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
 import { obterHojeSaoPaulo, obterJanelasAtendimento } from "./infra/backend/src/agendamentoRegras.mjs?v=2.1.0";
-import { montarVisaoGestao, formatarDuracao, formatarDataBR, mensagemRetorno, linkWhatsApp } from "./assistenteGestaoCore.mjs";
+import { montarVisaoGestao, formatarDuracao, formatarDataBR, mensagemRetorno, linkWhatsApp } from "./assistenteGestaoCore.mjs?v=2";
 
 const $ = (root, seletor) => root.querySelector(seletor);
 const set = (root, seletor, valor) => { const el = $(root, seletor); if (el) el.textContent = String(valor); };

@@ -3,6 +3,9 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import {
   ehAplicacaoDeGel,
+  ehManutencaoDeGel,
+  ehRemocaoDeGel,
+  ehProcedimentoCicloGel,
   encontrarManutencaoSugerida,
   formatarDataSugestao,
 } from "../perfilManutencao.mjs";
@@ -28,7 +31,35 @@ test("reconhece apenas aplicações de gel, inclusive alongamento e fibra da cat
   for (const item of ignorados) assert.equal(ehAplicacaoDeGel(item), false, item.nome);
 });
 
-test("usa a última aplicação concluída; ignora manutenção, cancelado e agendado", () => {
+test("reconhece manutenção em gel/fibra e exclui serviços que não reiniciam o ciclo", () => {
+  const elegiveis = [
+    { nome: "Manutenção Banho de Gel", categoria: "Unhas em Gel" },
+    { nome: "Manutenção de Banho de Gel", categoria: "Unhas em Gel" },
+    { nome: "Manutenção Alongamento em Fibra", categoria: "Unhas em Gel" },
+    { nome: "Manutenção em Gel", categoria: "Unhas em Gel" },
+    { nome: "MANUTENÇÃO DE ALONGAMENTO", categoria: "Unhas em Gel" },
+    { nome: "Manutenção", categoria: "unhas-em-gel" },
+    { nome: "Retoque de Fibra de Vidro" },
+  ];
+  for (const item of elegiveis) {
+    assert.equal(ehManutencaoDeGel(item), true, item.nome);
+    assert.equal(ehProcedimentoCicloGel(item), true, item.nome);
+    assert.equal(ehAplicacaoDeGel(item), false, item.nome);
+  }
+  for (const item of [
+    { nome: "Manutenção de cílios", categoria: "Cílios" },
+    { nome: "Manutenção de alongamento de cílios", categoria: "Cílios" },
+    { nome: "Manutenção de cabelo", categoria: "Cabeleireiro" },
+    { nome: "Manutenção pedicure em gel", categoria: "Pedicure" },
+    { nome: "Manicure em gel", categoria: "Manicure" },
+    { nome: "Esmaltação em gel", categoria: "Unhas em Gel" },
+    { nome: "Remoção de Alongamento", categoria: "Unhas em Gel" },
+    { nome: "Manutenção e Remoção de Alongamento", categoria: "Unhas em Gel" },
+  ]) assert.equal(ehProcedimentoCicloGel(item), false, item.nome);
+  assert.equal(ehRemocaoDeGel({ nome: "Remoção de Alongamento", categoria: "Unhas em Gel" }), true);
+});
+
+test("usa o último procedimento concluído, aplicação ou manutenção", () => {
   const resultado = encontrarManutencaoSugerida([
     { nomeServico: "Banho de Gel", data: "2026-11-04", status: "concluido" },
     { nomeServico: "Manutenção Banho de Gel", data: "2026-11-19", status: "concluido" },
@@ -37,12 +68,13 @@ test("usa a última aplicação concluída; ignora manutenção, cancelado e age
     { nomeServico: "Aplicação de Gel", data: "2026-11-12", status: "cancelado_cliente" },
   ]);
   assert.deepEqual(resultado, {
-    dataAplicacaoISO: "2026-11-04",
-    dataSugeridaISO: "2026-11-25",
-    servico: "Banho de Gel",
+    dataUltimoAtendimentoISO: "2026-11-19",
+    dataSugeridaISO: "2026-12-10",
+    servico: "Manutenção Banho de Gel",
+    tipoProcedimento: "manutencao",
     dias: 21,
   });
-  assert.equal(formatarDataSugestao(resultado.dataSugeridaISO), "25/11/2026");
+  assert.equal(formatarDataSugestao(resultado.dataSugeridaISO), "10/12/2026");
 });
 
 test("somar 21 dias funciona na virada de mês e ano, incluindo ano bissexto", () => {
@@ -63,8 +95,29 @@ test("não recomenda manutenção sem procedimento elegível e data válida", ()
   assert.equal(encontrarManutencaoSugerida([]), null);
   assert.equal(encontrarManutencaoSugerida([
     { nomeServico: "Banho de Gel", data: "2026-02-30", status: "concluido" },
-    { nomeServico: "Manutenção Banho de Gel", data: "2026-11-04", status: "concluido" },
+    { nomeServico: "Manicure em Gel", data: "2026-11-04", status: "concluido" },
   ]), null);
+});
+
+test("manutenção consecutiva reinicia 21 dias; remoção concluída encerra o ciclo", () => {
+  const base = [
+    { nomeServico: "Aplicação de Gel", categoria: "Unhas em Gel", data: "2026-10-01", status: "concluido" },
+    { nomeServico: "Manutenção de Banho de Gel", categoria: "Unhas em Gel", data: "2026-10-22", status: "realizado" },
+    { nomeServico: "Manutenção de Alongamento", categoria: "Unhas em Gel", data: "2026-11-12", status: "concluido" },
+  ];
+  const sugestao = encontrarManutencaoSugerida([...base,
+    { nomeServico: "Manicure Simples", data: "2026-11-14", status: "realizado" },
+    { nomeServico: "Manutenção de Fibra", data: "2026-11-20", status: "confirmado" },
+  ]);
+  assert.equal(sugestao.dataUltimoAtendimentoISO, "2026-11-12");
+  assert.equal(sugestao.dataSugeridaISO, "2026-12-03");
+  assert.equal(sugestao.tipoProcedimento, "manutencao");
+  assert.equal(encontrarManutencaoSugerida([...base,
+    { nomeServico: "Remoção de Alongamento", categoria: "Unhas em Gel", data: "2026-11-16", status: "concluido" },
+  ]), null);
+  assert.equal(encontrarManutencaoSugerida([
+    { nomeServico: "Manutenção em Gel", data: "2026-11-20", status: "concluido" },
+  ])?.dataSugeridaISO, "2026-12-11");
 });
 
 test("integra o card no perfil sem alterar o formato das datas existentes", async () => {
@@ -78,6 +131,9 @@ test("integra o card no perfil sem alterar o formato das datas existentes", asyn
   assert.ok(summaryPos >= 0 && maintenancePos > summaryPos && attendancesPos > maintenancePos);
   assert.match(html, /href="principal\.html#services-title"[^>]+class="perfil-novo-agendamento"/);
   assert.match(html, /id="perfil-manutencao-data"/);
+  assert.match(html, /id="perfil-manutencao-ultimo"/);
+  assert.match(html, /id="perfil-manutencao-tipo"/);
+  assert.match(js, /ehProcedimentoCicloGel/);
   assert.match(html, /Agendar manutenção/);
   assert.match(js, /encontrarManutencaoSugerida\(/);
   assert.match(js, /renderizarSugestaoManutencao\(/);

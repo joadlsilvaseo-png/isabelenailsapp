@@ -28,7 +28,7 @@ test("tempo livre não duplica bloqueios PIX, e falha de API não inventa horár
   assert.equal(minutosLivresRestantes({ ...p, agoraMinuto: 720 }), 60);
 });
 
-test("radar usa 21 dias somente para aplicação de gel concluída e sem agenda futura", () => {
+test("radar usa 21 dias para aplicação de gel concluída e sem agenda futura", () => {
   const visitas = [
     ag("a", "gel", "2026-10-17", "10:00", 60, "concluido", "Alongamento de unhas em gel"),
     ag("b", "outro", "2026-10-17", "11:00", 60, "concluido", "Alongamento de unhas em gel"),
@@ -76,4 +76,27 @@ test("mensagem WhatsApp requer revisão e só gera link para número válido", (
   assert.match(msg, /manutenção/);
   assert.ok(linkWhatsApp("(11) 99999-9999", msg)?.startsWith("https://wa.me/5511999999999?text="));
   assert.equal(linkWhatsApp("sem telefone", msg), null);
+});
+
+test("radar reinicia 21 dias após manutenções e mantém o bloqueio por agendamento futuro", () => {
+  const visitas = [
+    ag("g1", "gel", "2026-10-17", "10:00", 90, "concluido", "Alongamento em gel"),
+    ag("g2", "gel", "2026-11-04", "10:00", 90, "realizado", "Manutenção em Gel"),
+    ag("g3", "gel", "2026-11-08", "10:00", 45, "realizado", "Manicure Simples"),
+    ag("s1", "somente", "2026-11-04", "14:00", 60, "concluido", "Manutenção de Fibra"),
+    ag("a1", "agendada", "2026-11-04", "10:00", 60, "concluido", "Manutenção em Gel"),
+    ag("a2", "agendada", "2026-11-25", "10:00", 60, "confirmado", "Manutenção em Gel"),
+    ag("r1", "remocao", "2026-11-04", "10:00", 60, "concluido", "Aplicação de Gel"),
+    ag("r2", "remocao", "2026-11-18", "10:00", 45, "concluido", "Remoção de Alongamento", { categoria: "Unhas em Gel" }),
+  ];
+  const d = montarVisaoGestao({ ...base, hoje: "2026-11-20", agendamentos: visitas, clientes: [] });
+  assert.equal(d.radar.length, 2);
+  const gel = d.radar.find((x) => x.uid === "gel");
+  assert.equal(gel.dataSugerida, "2026-11-25");
+  assert.equal(gel.ultimaVisita, "2026-11-04");
+  assert.equal(gel.criterio, "Manutenção sugerida após manutenção de gel");
+  assert.ok(d.radar.some((x) => x.uid === "somente"));
+  assert.ok(!d.radar.some((x) => x.uid === "agendada"));
+  assert.ok(!d.radar.some((x) => x.uid === "remocao"));
+  assert.match(mensagemRetorno(gel), /sua próxima manutenção/);
 });
