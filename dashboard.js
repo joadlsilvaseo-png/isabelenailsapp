@@ -1212,7 +1212,6 @@ function criarDistribuicaoStatus(
 ) {
   const contadores = {
     agendados: 0,
-    confirmados: 0,
     concluidos: 0,
     cancelados: 0,
   };
@@ -1224,10 +1223,17 @@ function criarDistribuicaoStatus(
           agendamento.status,
         );
 
+      // Status técnico "confirmado"/"reagendado" aparece como
+      // "Agendados" no dashboard, sem alterar os dados do Firestore.
+      const grupoVisual =
+        grupo === "confirmados"
+          ? "agendados"
+          : grupo;
+
       if (
-        grupo in contadores
+        grupoVisual in contadores
       ) {
-        contadores[grupo] += 1;
+        contadores[grupoVisual] += 1;
       }
     },
   );
@@ -1883,7 +1889,6 @@ function renderizarGraficoStatus(
 
   const valores = [
     contadores.agendados,
-    contadores.confirmados,
     contadores.concluidos,
     contadores.cancelados,
   ];
@@ -1902,7 +1907,6 @@ function renderizarGraficoStatus(
         labels: possuiDados
           ? [
               "Agendados",
-              "Confirmados",
               "Concluídos",
               "Cancelados",
             ]
@@ -1917,7 +1921,6 @@ function renderizarGraficoStatus(
             backgroundColor:
               possuiDados
                 ? [
-                    "#f0c1d1",
                     "#934761",
                     "#2f855a",
                     "#b53f60",
