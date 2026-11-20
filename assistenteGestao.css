@@ -114,7 +114,7 @@
   border: 1px solid #efd8e1;
 }
 .ig-superficie--home .ig-legenda { color: #a34d6d; font-size: 10.5px; }
-/* Comparação de dois períodos móveis de sete dias, sem gráfico duplicado. */
+/* Meta da semana: dias concluídos desde terça vs semana passada completa. */
 .ig-resumo-topo { display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap; }
 .ig-resumo-periodo { color:#765160;font-size:11.5px;font-weight:600; }
 .ig-resumo-grid { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-top:9px; }
@@ -122,14 +122,29 @@
   min-width:0;padding:9px 7px;border:1px solid #edd8e1;border-radius:11px;
   background:#fff;text-align:center;
 }
-.ig-resumo-dado span { display:block;color:#805567;font-size:11.5px;line-height:1.4; }
+.ig-resumo-dado span { display:block;color:#805567;font-size:11.5px;line-height:1.4;min-height:2.8em; }
 .ig-resumo-dado strong {
   display:block;margin-top:5px;color:#591c31;font-size:21px;font-weight:700;
   line-height:1.25;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;
 }
 .ig-resumo-dado--variacao[data-ig-tendencia="queda"] strong { color:#a23e5e; }
 .ig-resumo-dado--variacao[data-ig-tendencia="alta"] strong { color:#287450; }
+.ig-resumo-progresso-topo {
+  display:flex;align-items:center;justify-content:space-between;
+  gap:8px;margin-top:12px;color:#735060;font-size:11.5px;line-height:1.4;
+}
+.ig-resumo-progresso-topo strong { color:#591c31;font-size:12px;font-weight:700;text-align:right; }
+.ig-resumo-trilha {
+  width:100%;height:9px;margin-top:6px;border-radius:999px;
+  background:#e4ccd6;overflow:hidden;
+}
+.ig-resumo-barra {
+  display:block;width:0%;height:100%;background:#934761;border-radius:999px;
+  transition:width 180ms ease;
+}
+.ig-resumo-barra[data-ig-tendencia="alta"] { background:#2f855a; }
 .ig-resumo-leitura { margin:9px 0 0;color:#735060;font-size:12px;line-height:1.5; }
+@media(prefers-reduced-motion:reduce) { .ig-resumo-barra { transition:none; } }
 .ig-acao-sugerida { margin-top:11px;padding:11px 12px;border:1px solid #edd8e1;border-radius:12px;background:#fff6f9; }
 .ig-acao-sugerida h3 { margin:5px 0;color:#591c31;font-size:15px;line-height:1.35; }
 .ig-acao-sugerida .ig-recomendacao-detalhe { margin:5px 0 0;font-size:12.5px;line-height:1.55; }

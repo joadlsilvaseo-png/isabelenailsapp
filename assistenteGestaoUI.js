@@ -2,7 +2,7 @@
 import { auth, db } from "./firebase-config.js";
 import { getDocs, collection } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
 import { obterHojeSaoPaulo, obterJanelasAtendimento } from "./infra/backend/src/agendamentoRegras.mjs?v=2.1.0";
-import { montarVisaoGestao, formatarDuracao, formatarDataBR, mensagemRetorno, linkWhatsApp } from "./assistenteGestaoCore.mjs?v=2";
+import { montarVisaoGestao, formatarDuracao, formatarDataBR, mensagemRetorno, linkWhatsApp } from "./assistenteGestaoCore.mjs?v=3";
 
 const $ = (root, seletor) => root.querySelector(seletor);
 const set = (root, seletor, valor) => { const el = $(root, seletor); if (el) el.textContent = String(valor); };
@@ -44,24 +44,34 @@ function criarResumoSemanalVisual(semana) {
   const atual = semana.atual.concluidos;
   const anterior = semana.anterior.concluidos;
   const diferenca = atual - anterior;
-  const tendencia = anterior === 0 && atual > 0 ? "sem-base"
-    : diferenca > 0 ? "alta" : diferenca < 0 ? "queda" : "estavel";
-  const variacao = diferenca === 0 ? "0%"
-    : anterior === 0 ? "—"
-      : (diferenca > 0 ? "+" : "−")
-        + new Intl.NumberFormat("pt-BR", {
-          minimumFractionDigits: 1, maximumFractionDigits: 1,
-        }).format(Math.abs(diferenca / anterior * 100)) + "%";
+  const formatarPercentual = (valor) => new Intl.NumberFormat("pt-BR", {
+    minimumFractionDigits: 1, maximumFractionDigits: 1,
+  }).format(valor) + "%";
 
-  const quantidade = Math.abs(diferenca);
-  const unidade = quantidade === 1 ? "atendimento" : "atendimentos";
-  const leitura = anterior === 0
-    ? (atual === 0 ? "Nenhum atendimento concluído nos dois períodos."
-      : "Não havia atendimentos concluídos nos 7 dias anteriores.")
-    : diferenca === 0 ? "Mesmo número de atendimentos do período anterior."
-      : quantidade + " " + unidade + (diferenca > 0 ? " a mais" : " a menos")
-        + " que nos 7 dias anteriores.";
-  return { atual, anterior, variacao, tendencia, leitura };
+  // Não calcular porcentagem com referência zero: não existe base comparável.
+  const semBase = anterior === 0;
+  const tendencia = semBase ? "sem-base"
+    : diferenca > 0 ? "alta" : diferenca < 0 ? "queda" : "estavel";
+  const variacao = semBase ? "—" : diferenca === 0 ? "0%"
+    : (diferenca > 0 ? "+" : "−")
+      + formatarPercentual(Math.abs(diferenca / anterior * 100));
+  const progressoPercentual = semBase ? 0 : atual / anterior * 100;
+  const percentualBarra = Math.min(100, Math.max(0, progressoPercentual));
+  const progressoTexto = semBase
+    ? "Sem referência anterior"
+    : formatarPercentual(progressoPercentual) + " da referência";
+  const diferencaAbsoluta = Math.abs(diferenca);
+  const unidade = diferencaAbsoluta === 1 ? "atendimento" : "atendimentos";
+  const leitura = semBase
+    ? (atual === 0 ? "Sem atendimentos concluídos nas duas semanas."
+      : "Semana passada sem atendimentos. Cada conclusão desta semana conta!")
+    : diferenca < 0
+      ? "Faltam " + diferencaAbsoluta + " " + unidade + " para igualar a semana passada."
+      : diferenca === 0
+        ? "Semana passada igualada! Mais 1 atendimento para superar."
+        : "Você superou a semana passada em " + diferencaAbsoluta + " " + unidade + "!";
+  return { atual, anterior, variacao, tendencia, leitura,
+    progressoTexto, percentualBarra };
 }
 
 function mostrarResumoSemanalHome(root, semana) {
@@ -69,9 +79,20 @@ function mostrarResumoSemanalHome(root, semana) {
   set(root, "[data-ig-resumo-atual]", resumo.atual);
   set(root, "[data-ig-resumo-anterior]", resumo.anterior);
   set(root, "[data-ig-resumo-variacao]", resumo.variacao);
+  set(root, "[data-ig-resumo-meta]", resumo.progressoTexto);
   set(root, "[data-ig-resumo-leitura]", resumo.leitura);
   const tendencia = $(root, "[data-ig-resumo-tendencia]");
   if (tendencia) tendencia.setAttribute("data-ig-tendencia", resumo.tendencia);
+  const barra = $(root, "[data-ig-resumo-barra]");
+  if (barra) {
+    barra.style.width = resumo.percentualBarra + "%";
+    barra.setAttribute("data-ig-tendencia", resumo.tendencia);
+  }
+  const trilha = $(root, "[data-ig-resumo-trilha]");
+  if (trilha) {
+    trilha.setAttribute("aria-valuenow", String(Math.round(resumo.percentualBarra)));
+    trilha.setAttribute("aria-valuetext", resumo.progressoTexto);
+  }
 }
 function recomendacoes(root, itens, contexto) {
   let indice = 0;
@@ -154,10 +175,10 @@ function semanaDados(root, semana) {
   set(root, "[data-ig-semana-anterior]", semana.anterior.concluidos);
   set(root, "[data-ig-semana-cancelamentos]", semana.atual.cancelados);
   set(root, "[data-ig-semana-servico]", semana.atual.maisFrequente || "Nenhum neste período");
-  const comparativo = semana.atual.concluidos > semana.anterior.concluidos ? "aumentou"
-    : semana.atual.concluidos < semana.anterior.concluidos ? "diminuiu" : "permaneceu estável";
-  set(root, "[data-ig-semana-leitura]", "O número de atendimentos concluídos " + comparativo
-    + " em relação aos sete dias anteriores.");
+  const resumo = criarResumoSemanalVisual(semana);
+  set(root, "[data-ig-semana-leitura]", resumo.leitura
+    + " A referência é a semana passada completa (terça a sábado); "
+    + "a semana atual acumula apenas atendimentos concluídos.");
   const valor = semana.atual.receitaEstimada;
   set(root, "[data-ig-semana-valor]", valor === null
     ? "Valor não disponível: alguns atendimentos não possuem preço registrado."
