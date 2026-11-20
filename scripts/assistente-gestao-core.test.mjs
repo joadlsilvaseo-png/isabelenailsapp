@@ -56,15 +56,19 @@ test("radar infere recorrência de duas visitas e ignora cancelamento ou histór
   assert.equal(diferencaDiasISO("2026-10-17", hoje), 21);
 });
 
-test("análise semanal compara intervalos de sete dias equivalentes, sem chamar receita recebida", () => {
+test("análise semanal compara terça a sábado com semana anterior completa, sem chamar receita recebida", () => {
   const d = montarVisaoGestao({ ...base, clientes: [], agendamentos: [
     ag("a", "1", "2026-11-05", "10:00", 45, "realizado", "Manicure", { precoSnapshot: 70 }),
     ag("b", "2", "2026-10-31", "10:00", 45, "realizado", "Manicure", { precoSnapshot: 70 }),
     ag("c", "3", "2026-10-30", "10:00", 45, "realizado", "Manicure", { precoSnapshot: 60 }),
-    ag("d", "4", "2026-11-01", "11:00", 45, "cancelado_cliente", "Manicure"),
+    ag("d", "4", "2026-10-31", "11:00", 45, "cancelado_cliente", "Manicure"),
   ]});
   assert.equal(d.semana.atual.concluidos, 1);
   assert.equal(d.semana.anterior.concluidos, 2);
+  assert.equal(d.semana.atualInicio, "2026-11-03");
+  assert.equal(d.semana.atualFim, "2026-11-07");
+  assert.equal(d.semana.anteriorInicio, "2026-10-27");
+  assert.equal(d.semana.anteriorFim, "2026-10-31");
   assert.equal(d.semana.atual.receitaEstimada, 70);
   assert.equal(d.semana.atual.maisFrequente, "Manicure");
   assert.equal(d.recomendacoes[0].tipo, "semanal");
@@ -99,4 +103,60 @@ test("radar reinicia 21 dias após manutenções e mantém o bloqueio por agenda
   assert.ok(!d.radar.some((x) => x.uid === "agendada"));
   assert.ok(!d.radar.some((x) => x.uid === "remocao"));
   assert.match(mensagemRetorno(gel), /sua próxima manutenção/);
+});
+
+test("meta semanal compara 7 concluídos até quinta com 15 da semana passada completa", () => {
+  const previa = ["2026-11-10", "2026-11-11", "2026-11-12", "2026-11-13", "2026-11-14"];
+  const corrente = ["2026-11-17", "2026-11-18", "2026-11-19"];
+  const agendamentos = [
+    ...Array.from({ length: 15 }, (_, i) =>
+      ag("p" + i, "p" + i, previa[i % previa.length], "09:00", 45, "concluido")),
+    ...Array.from({ length: 7 }, (_, i) =>
+      ag("a" + i, "a" + i, corrente[i % corrente.length], "09:00", 45, "realizado")),
+    ag("domingo", "d", "2026-11-15", "09:00", 45, "realizado"),
+    ag("segunda", "s", "2026-11-16", "09:00", 45, "concluido"),
+    ag("futuro", "f", "2026-11-20", "09:00", 45, "concluido"),
+    ag("marcado", "m", "2026-11-19", "10:00", 45, "confirmado"),
+    ag("cancelado", "c", "2026-11-19", "10:00", 45, "cancelado_cliente"),
+  ];
+  const d = montarVisaoGestao({
+    ...base, hoje: "2026-11-19", clientes: [], agendamentos,
+  });
+  assert.equal(d.semana.atual.concluidos, 7);
+  assert.equal(d.semana.anterior.concluidos, 15);
+  assert.equal(d.semana.atualInicio, "2026-11-17");
+  assert.equal(d.semana.atualFim, "2026-11-19");
+  assert.equal(d.semana.anteriorInicio, "2026-11-10");
+  assert.equal(d.semana.anteriorFim, "2026-11-14");
+  assert.equal(d.semana.atual.cancelados, 1);
+  assert.equal(d.recomendacoes.find((x) => x.tipo === "semanal")?.descricao.includes("Faltam 8"), true);
+});
+
+test("domingo e segunda preservam semana terça-sábado; terça reinicia a meta", () => {
+  const agendamentos = [
+    ag("a", "1", "2026-11-17", "09:00", 45, "concluido"),
+    ag("b", "2", "2026-11-21", "09:00", 45, "concluido"),
+    ag("c", "3", "2026-11-22", "09:00", 45, "concluido"),
+    ag("d", "4", "2026-11-23", "09:00", 45, "concluido"),
+    ag("e", "5", "2026-11-24", "09:00", 45, "concluido"),
+  ];
+  for (const hojeTeste of ["2026-11-22", "2026-11-23"]) {
+    const d = montarVisaoGestao({ ...base, hoje: hojeTeste, clientes: [], agendamentos });
+    assert.equal(d.semana.atualInicio, "2026-11-17");
+    assert.equal(d.semana.atualFim, "2026-11-21");
+    assert.equal(d.semana.atual.concluidos, 2);
+  }
+  const terca = montarVisaoGestao({ ...base, hoje: "2026-11-24", clientes: [], agendamentos });
+  assert.equal(terca.semana.atualInicio, "2026-11-24");
+  assert.equal(terca.semana.atualFim, "2026-11-24");
+  assert.equal(terca.semana.anterior.concluidos, 2);
+  assert.equal(terca.semana.atual.concluidos, 1);
+});
+
+test("limites de semana atravessam o ano sem perder a terça-feira", () => {
+  const d = montarVisaoGestao({ ...base, hoje: "2027-01-01", clientes: [], agendamentos: [] });
+  assert.equal(d.semana.atualInicio, "2026-12-29");
+  assert.equal(d.semana.atualFim, "2027-01-01");
+  assert.equal(d.semana.anteriorInicio, "2026-12-22");
+  assert.equal(d.semana.anteriorFim, "2026-12-26");
 });

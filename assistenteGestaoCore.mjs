@@ -217,9 +217,16 @@ function montarRadar(agendamentos, clientes, hoje) {
 }
 
 function montarSemana(agendamentos, hoje) {
-  const atualInicio = adicionarDiasISO(hoje, -6);
-  const anteriorInicio = adicionarDiasISO(hoje, -13);
-  const anteriorFim = adicionarDiasISO(hoje, -7);
+  // Meta da semana de trabalho: terça-feira a sábado. Domingo e segunda
+  // preservam o balanço da última semana encerrada até a próxima terça.
+  // "hoje" já vem de obterHojeSaoPaulo, evitando mudanças por fuso do navegador.
+  const diaSemana = new Date(hoje + "T12:00:00Z").getUTCDay();
+  const diasDesdeTerca = (diaSemana + 5) % 7;
+  const atualInicio = adicionarDiasISO(hoje, -diasDesdeTerca);
+  const sabadoAtual = adicionarDiasISO(atualInicio, 4);
+  const atualFim = hoje < sabadoAtual ? hoje : sabadoAtual;
+  const anteriorInicio = adicionarDiasISO(atualInicio, -7);
+  const anteriorFim = adicionarDiasISO(anteriorInicio, 4);
   const calcular = (inicio, fim) => {
     const doPeriodo = agendamentos.filter((a) => a.data >= inicio && a.data <= fim);
     const concluidos = doPeriodo.filter((a) => a.status === "concluido");
@@ -235,11 +242,10 @@ function montarSemana(agendamentos, hoje) {
     return { concluidos: concluidos.length, cancelados: cancelados.length, receitaEstimada: receita, maisFrequente };
   };
   return {
-    atual: calcular(atualInicio, hoje),
+    atual: calcular(atualInicio, atualFim),
     anterior: calcular(anteriorInicio, anteriorFim),
-    atualInicio, anteriorInicio, anteriorFim, hoje,
-    // Intervalos móveis equivalentes de sete dias; não confundir com semana civil.
-    periodo: "últimos 7 dias",
+    atualInicio, atualFim, anteriorInicio, anteriorFim, hoje,
+    periodo: "semana de trabalho (terça a sábado)",
   };
 }
 
@@ -258,10 +264,10 @@ function recomendar({ resumo, radar, semana }) {
 
   if (semana.anterior.concluidos >= 2 && semana.atual.concluidos < semana.anterior.concluidos) itens.push({
     tipo: "semanal", prioridade: 78,
-    titulo: "Movimento da semana",
-    descricao: "Nos últimos 7 dias, foram " + semana.atual.concluidos
-      + " atendimentos concluídos, contra " + semana.anterior.concluidos
-      + " nos 7 dias anteriores. Confira os indicadores.",
+    titulo: "Meta semanal em andamento",
+    descricao: "Faltam " + (semana.anterior.concluidos - semana.atual.concluidos)
+      + " atendimento(s) concluído(s) para igualar a semana passada. "
+      + "Acompanhe o progresso até sábado.",
     link: "#ig-semana", acao: "Analisar semana",
   });
   if (!vencidas.length && radar.length) itens.push({
@@ -285,8 +291,8 @@ function recomendar({ resumo, radar, semana }) {
   });
   if (semana.atual.concluidos > semana.anterior.concluidos) itens.push({
     tipo: "semanal", prioridade: 40,
-    titulo: "Boa evolução na semana",
-    descricao: "O número de atendimentos concluídos cresceu em relação aos sete dias anteriores.",
+    titulo: "Semana passada superada",
+    descricao: "Os atendimentos concluídos desta semana já ultrapassaram o total da semana passada.",
     link: "#ig-semana", acao: "Ver análise semanal",
   });
   if (!itens.length) itens.push({

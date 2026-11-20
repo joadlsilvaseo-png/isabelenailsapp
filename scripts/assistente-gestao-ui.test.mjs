@@ -44,7 +44,8 @@ test("Card compacto mostra indicadores e recomendação sem precisar expandir", 
   const expansivel = trecho.indexOf('id="ig-home-expansivel"');
   assert.ok(expansivel > 0);
   for (const dado of ["data-ig-atendimentos", "data-ig-livre", "data-ig-resumo-atual",
-    "data-ig-resumo-anterior", "data-ig-resumo-variacao", "data-ig-resumo-leitura"]) {
+    "data-ig-resumo-anterior", "data-ig-resumo-variacao", "data-ig-resumo-meta",
+    "data-ig-resumo-barra", "data-ig-resumo-trilha", "data-ig-resumo-leitura"]) {
     assert.ok(trecho.indexOf(dado) < expansivel, dado + " visível sem expandir");
   }
   for (const dado of ["data-ig-recomendacao-titulo", "data-ig-recomendacao-texto",
@@ -53,6 +54,9 @@ test("Card compacto mostra indicadores e recomendação sem precisar expandir", 
   }
   assert.doesNotMatch(trecho, /Recomendação do momento/);
   assert.match(trecho, /Resumo inteligente/);
+  assert.match(trecho, /Terça a sábado/);
+  assert.match(trecho, /Semana passada/);
+  assert.match(trecho, /role="progressbar"/);
   assert.match(trecho, /aria-controls="ig-home-expansivel" aria-expanded="false"/);
   assert.match(trecho, /data-ig-expansivel hidden/);
   assert.match(css, /\.ig-superficie--home \.ig-cartao\s*\{/);
@@ -71,7 +75,7 @@ test("Expandir/Recolher preserva acessibilidade e não altera os dados", async (
 test("Card da Gestão usa identidade visual clara, mantendo os indicadores e a expansão", async () => {
   const h = await read("principal.html");
   const css = await read("assistenteGestao.css");
-  assert.match(h, /assistenteGestao\.css\?v=5/);
+  assert.match(h, /assistenteGestao\.css\?v=6/);
   assert.match(css, /\.ig-superficie--home \.ig-cartao\s*\{[^}]*background: #fffafb;/s);
   assert.match(css, /\.ig-superficie--home \.ig-metrica\s*\{[^}]*background: #fff;/s);
   assert.match(css, /\.ig-superficie--home \.ig-metrica strong\s*\{[^}]*color: #591c31;/s);
@@ -79,6 +83,8 @@ test("Card da Gestão usa identidade visual clara, mantendo os indicadores e a e
   assert.match(css, /\.ig-resumo-dado strong\s*\{[^}]*color:#591c31;/s);
   assert.match(css, /\.ig-acao-sugerida\s*\{/);
   assert.match(css, /\.ig-resumo-dado--variacao\[data-ig-tendencia="queda"\]/);
+  assert.match(css, /\.ig-resumo-trilha\s*\{/);
+  assert.match(css, /\.ig-resumo-barra\s*\{/);
   assert.match(css, /\.ig-expandir\s*\{[^}]*color: #591c31;/s);
   assert.match(h, /data-ig-toggle/);
   assert.match(h, /data-ig-atendimentos/);
@@ -96,13 +102,21 @@ test("Resumo semanal usa dados reais e evita divisão por zero", async () => {
   const queda = dados(11, 13);
   assert.equal(queda.variacao, "−15,4%");
   assert.equal(queda.tendencia, "queda");
-  assert.equal(queda.leitura, "2 atendimentos a menos que nos 7 dias anteriores.");
+  assert.equal(queda.leitura, "Faltam 2 atendimentos para igualar a semana passada.");
   assert.equal(dados(15, 10).variacao, "+50,0%");
   assert.equal(dados(15, 10).tendencia, "alta");
   assert.equal(dados(5, 5).variacao, "0%");
+  assert.match(dados(5, 5).leitura, /Mais 1 atendimento para superar/);
+  assert.equal(dados(15, 10).percentualBarra, 100);
+  assert.equal(dados(7, 15).progressoTexto, "46,7% da referência");
+  assert.equal(dados(7, 15).percentualBarra.toFixed(1), "46.7");
+  assert.equal(dados(7, 15).variacao, "−53,3%");
   assert.equal(dados(3, 0).variacao, "—");
   assert.equal(dados(3, 0).tendencia, "sem-base");
-  assert.equal(dados(0, 0).variacao, "0%");
+  assert.equal(dados(3, 0).percentualBarra, 0);
+  assert.equal(dados(3, 0).progressoTexto, "Sem referência anterior");
+  assert.equal(dados(0, 0).variacao, "—");
+  assert.equal(dados(0, 0).variacao, "—");
   assert.match(js, /mostrarResumoSemanalHome\(root, visao\.semana\)/);
   assert.match(js, /contexto === "home" && item\.tipo === "semanal"/);
 });
