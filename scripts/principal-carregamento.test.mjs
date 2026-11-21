@@ -126,14 +126,13 @@ test("cliente só recebe convite Google após atendimento concluído", async () 
   const galeria = html.indexOf('class="principal-gallery"', inicio);
   assert.ok(inicio >= 0 && services > inicio && card > services && galeria > card);
   const trecho = html.slice(card, galeria);
-  assert.match(trecho, /id="principal-avaliacao-google"/);
-  assert.match(trecho, /<section[^>]*hidden/);
+  assert.match(html, /id="principal-avaliacao-google" class="avaliacao-google"[^>]*hidden>/);
   assert.match(principal, /carregarConviteAvaliacaoGoogle\(user\.uid\)/);
   assert.match(principal, /clienteTemAtendimentoConcluido\(documentos, uid\)/);
   assert.match(trecho, /href="https:\/\/g\.page\/r\/CVxYoLzta8eSECE\/review"/);
   assert.match(trecho, /target="_blank" rel="noopener noreferrer"/);
   assert.match(trecho, /Avaliar no Google/);
-  assert.match(trecho, /<section[^>]*hidden/);
+  assert.match(html, /id="principal-avaliacao-google" class="avaliacao-google"[^>]*hidden>/);
   assert.match(html, /avaliacoes-google\.css\?v=1/);
   assert.match(css, /\.avaliacao-google-botao:focus-visible/);
   assert.doesNotMatch(principal, /CVxYoLzta8eSECE/);
