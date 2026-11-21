@@ -1,0 +1,128 @@
+/* ============================================================
+   GOOGLE AVALIAÇÕES — Convite opcional e sempre disponível
+   Compartilhado entre a página principal e Meu Perfil.
+   Não interfere na jornada de agendamento nem exige cadastro de avaliação.
+   ============================================================ */
+
+.avaliacao-google {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 17px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  border-radius: 20px;
+  background: linear-gradient(135deg, #fffafb, #fff0f5);
+  box-shadow: 0 10px 24px rgba(66, 18, 35, 0.12);
+}
+
+.avaliacao-google-icone {
+  flex: 0 0 43px;
+  width: 43px;
+  height: 43px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  color: #9b631b;
+  background: #fff0c7;
+}
+
+.avaliacao-google-icone svg {
+  width: 24px;
+  height: 24px;
+}
+
+.avaliacao-google-conteudo {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.avaliacao-google-etiqueta {
+  display: block;
+  margin-bottom: 4px;
+  color: #934761;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1.5;
+  text-transform: uppercase;
+}
+
+.avaliacao-google h3 {
+  margin: 0;
+  color: #591c31;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.avaliacao-google p {
+  margin: 7px 0 12px;
+  color: #735060;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.avaliacao-google-botao {
+  width: 100%;
+  min-height: 44px;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 13px;
+  border-radius: 12px;
+  color: #fff;
+  background: #7c334c;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+  text-align: center;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 160ms ease, transform 160ms ease;
+}
+
+.avaliacao-google-botao svg {
+  width: 17px;
+  height: 17px;
+  flex-shrink: 0;
+}
+
+.avaliacao-google-botao:hover,
+.avaliacao-google-botao:focus-visible {
+  color: #fff;
+  background: #591c31;
+}
+
+.avaliacao-google-botao:focus-visible {
+  outline: 3px solid #d999b1;
+  outline-offset: 3px;
+}
+
+.avaliacao-google-botao:active {
+  transform: scale(0.98);
+}
+
+@media (max-width: 375px) {
+  .avaliacao-google {
+    padding: 14px 13px;
+    gap: 10px;
+  }
+
+  .avaliacao-google-icone {
+    flex-basis: 37px;
+    width: 37px;
+    height: 37px;
+  }
+
+  .avaliacao-google h3 {
+    font-size: 15px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .avaliacao-google-botao { transition: none; }
+}

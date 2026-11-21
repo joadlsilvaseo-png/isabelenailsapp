@@ -117,3 +117,20 @@ test("botão Editar foto só habilita após a importação instalar seus handler
   assert.match(fluxo, /botaoEditarFoto\.setAttribute\("aria-disabled", "true"\)/);
   assert.match(fluxo, /botaoEditarFoto\.setAttribute\("aria-disabled", "false"\)/);
 });
+
+test("cliente tem avaliação Google disponível na home sem depender de atendimento concluído", async () => {
+  const css = await readFile(new URL("avaliacoes-google.css", root), "utf8");
+  const inicio = html.indexOf('id="cliente-principal-content"');
+  const services = html.indexOf('class="principal-services"', inicio);
+  const card = html.indexOf('class="avaliacao-google"', inicio);
+  const galeria = html.indexOf('class="principal-gallery"', inicio);
+  assert.ok(inicio >= 0 && services > inicio && card > services && galeria > card);
+  const trecho = html.slice(card, galeria);
+  assert.match(trecho, /href="https:\/\/g\.page\/r\/CVxYoLzta8eSECE\/review"/);
+  assert.match(trecho, /target="_blank" rel="noopener noreferrer"/);
+  assert.match(trecho, /Avaliar no Google/);
+  assert.doesNotMatch(trecho, /<section[^>]*hidden/);
+  assert.match(html, /avaliacoes-google\.css\?v=1/);
+  assert.match(css, /\.avaliacao-google-botao:focus-visible/);
+  assert.doesNotMatch(principal, /avaliacao-google|CVxYoLzta8eSECE/);
+});

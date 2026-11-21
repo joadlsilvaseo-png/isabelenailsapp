@@ -4,7 +4,7 @@
 // ======================================================
 
 const CACHE_PREFIX = "im-nails";
-const CACHE_VERSION = "v36";
+const CACHE_VERSION = "v37";
 const STATIC_CACHE = `${CACHE_PREFIX}-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `${CACHE_PREFIX}-runtime-${CACHE_VERSION}`;
 
@@ -35,6 +35,7 @@ const APP_SHELL = [
   "./galeria.css",
   "./principal.css",
   "./meu-perfil.css",
+  "./avaliacoes-google.css",
   "./admin-servicos.css",
   "./admin-clientes.css",
   "./admin-clientes-live.css",
