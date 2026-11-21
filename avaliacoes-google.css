@@ -4,6 +4,10 @@
    Não interfere na jornada de agendamento nem exige cadastro de avaliação.
    ============================================================ */
 
+.avaliacao-google[hidden] {
+  display: none !important;
+}
+
 .avaliacao-google {
   width: 100%;
   min-width: 0;

@@ -231,8 +231,9 @@
         </p>
       </section>
 
-      <!-- Convite permanente e opcional: visível a todas as clientes, sem depender do status do atendimento. -->
-          <section class="avaliacao-google" aria-labelledby="perfil-avaliacao-titulo">
+      <!-- O convite só aparece quando há atendimento concluído no histórico da cliente. -->
+      <section id="perfil-avaliacao-google" class="avaliacao-google"
+               aria-labelledby="perfil-avaliacao-titulo" hidden>
             <span class="avaliacao-google-icone" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none">
                 <path d="m12 2.8 2.75 5.57 6.15.89-4.45 4.34 1.05 6.13L12 16.83l-5.5 2.9 1.05-6.13L3.1 9.26l6.15-.89L12 2.8Z"
@@ -416,7 +417,7 @@
 
   </dialog>
 
-  <script type="module" src="meu-perfil.js?v=2.0.4"></script>
+  <script type="module" src="meu-perfil.js?v=2.0.5"></script>
   <script type="module" src="foto-perfil-preview.js?v=2"></script>
 
   <script src="app.js?v=1.0.4" defer></script>

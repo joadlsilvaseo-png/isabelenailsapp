@@ -1,5 +1,6 @@
 import { auth, db } from "./firebase-config.js";
 import { montarPerfilClienteAuth, podeRecuperarPerfilCliente } from "./clientePerfilIntegridade.js";
+import { clienteTemAtendimentoConcluido } from "./avaliacoesGoogle.mjs?v=1";
 
 import {
   onAuthStateChanged,
@@ -11,6 +12,8 @@ import {
   doc,
   getDoc,
   getDocs,
+  query,
+  where,
   runTransaction,
 } from "https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js";
 
@@ -399,6 +402,28 @@ async function loadUserAccessProfile(user) {
 /* ============================================================
    INTERFACE DA CLIENTE
    ============================================================ */
+
+/**
+ * O card inicia oculto. Confere registros concluídos reais de clienteId e
+ * idCliente (legado) sem bloquear a tela principal.
+ */
+async function carregarConviteAvaliacaoGoogle(uid) {
+  const convite = document.getElementById("principal-avaliacao-google");
+  if (!convite) return;
+  convite.hidden = true;
+  try {
+    const ref = collection(db, "agendamentos");
+    const [porClienteId, porIdCliente] = await Promise.all([
+      getDocs(query(ref, where("clienteId", "==", uid))),
+      getDocs(query(ref, where("idCliente", "==", uid))),
+    ]);
+    if (auth.currentUser?.uid !== uid || document.body.dataset.userRole !== "cliente") return;
+    const documentos = [...porClienteId.docs, ...porIdCliente.docs];
+    convite.hidden = !clienteTemAtendimentoConcluido(documentos, uid);
+  } catch (error) {
+    console.warn("Não foi possível verificar elegibilidade para avaliação no Google.", error);
+  }
+}
 
 function configureClientInterface(user, accessProfile, elements) {
   const userData = accessProfile.usuarioData || {};
@@ -845,6 +870,7 @@ async function handleAuthenticatedUser(user, elements) {
         });
     } else {
       configureClientInterface(user, accessProfile, elements);
+      void carregarConviteAvaliacaoGoogle(user.uid);
     }
     // Carrega a foto personalizada sem bloquear a tela.
     void carregarFotoPersonalizada(user, elements.photo);
