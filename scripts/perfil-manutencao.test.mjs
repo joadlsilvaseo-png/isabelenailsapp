@@ -150,12 +150,11 @@ test("Meu Perfil só apresenta o convite Google com histórico concluído", asyn
   assert.ok(inicio >= 0 && avaliacao > inicio && rodape > avaliacao);
   const trecho = html.slice(avaliacao, rodape);
   const js = await readFile(new URL("../meu-perfil.js", import.meta.url), "utf8");
-  assert.match(trecho, /id="perfil-avaliacao-google"/);
-  assert.match(trecho, /<section[^>]*hidden/);
+  assert.match(html, /id="perfil-avaliacao-google" class="avaliacao-google"[^>]*hidden>/);
   assert.match(js, /clienteTemAtendimentoConcluido\(mergedDocs, uidBusca\)/);
   assert.match(trecho, /href="https:\/\/g\.page\/r\/CVxYoLzta8eSECE\/review"/);
   assert.match(trecho, /target="_blank" rel="noopener noreferrer"/);
   assert.match(trecho, /Avaliar no Google/);
-  assert.match(trecho, /<section[^>]*hidden/);
+  assert.match(html, /id="perfil-avaliacao-google" class="avaliacao-google"[^>]*hidden>/);
   assert.match(html, /avaliacoes-google\.css\?v=1/);
 });
