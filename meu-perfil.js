@@ -3,6 +3,7 @@ import { auth, db } from "./firebase-config.js";
 import { webhookUrl } from "./config.js";
 import { consultarFotoPerfil } from "./foto-perfil-api.js";
 import { ehProcedimentoCicloGel, ehRemocaoDeGel, encontrarManutencaoSugerida, formatarDataSugestao } from "./perfilManutencao.mjs?v=1.1.0";
+import { clienteTemAtendimentoConcluido } from "./avaliacoesGoogle.mjs?v=1";
 import {
   onAuthStateChanged,
   signOut,
@@ -701,6 +702,8 @@ function criarCardVazio(mensagem, historico = false) {
 async function carregarAgendamentos(uid) {
   if (!containerAtendimentos) return;
 
+  const conviteAvaliacao = document.getElementById("perfil-avaliacao-google");
+  if (conviteAvaliacao) conviteAvaliacao.hidden = true;
   limparContainers();
   renderizarSugestaoManutencao(null);
 
@@ -736,6 +739,9 @@ async function carregarAgendamentos(uid) {
       });
     }
     const mergedDocs = Array.from(documentosProprios.values());
+    if (conviteAvaliacao && auth.currentUser?.uid === uidBusca) {
+      conviteAvaliacao.hidden = !clienteTemAtendimentoConcluido(mergedDocs, uidBusca);
+    }
 
     if (mergedDocs.length === 0) {
       atualizarContadoresAtendimentos();

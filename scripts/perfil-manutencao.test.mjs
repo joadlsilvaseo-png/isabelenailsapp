@@ -142,16 +142,20 @@ test("integra o card no perfil sem alterar o formato das datas existentes", asyn
   assert.match(css, /\.perfil-novo-agendamento/);
 });
 
-test("Meu Perfil também oferece avaliação no Google, visível sem atendimento concluído", async () => {
+test("Meu Perfil só apresenta o convite Google com histórico concluído", async () => {
   const html = await readFile(new URL("../meu-perfil.html", import.meta.url), "utf8");
   const inicio = html.indexOf('id="meus-agendamentos"');
   const avaliacao = html.indexOf('class="avaliacao-google"', inicio);
   const rodape = html.indexOf('class="perfil-footer"', inicio);
   assert.ok(inicio >= 0 && avaliacao > inicio && rodape > avaliacao);
   const trecho = html.slice(avaliacao, rodape);
+  const js = await readFile(new URL("../meu-perfil.js", import.meta.url), "utf8");
+  assert.match(trecho, /id="perfil-avaliacao-google"/);
+  assert.match(trecho, /<section[^>]*hidden/);
+  assert.match(js, /clienteTemAtendimentoConcluido\(mergedDocs, uidBusca\)/);
   assert.match(trecho, /href="https:\/\/g\.page\/r\/CVxYoLzta8eSECE\/review"/);
   assert.match(trecho, /target="_blank" rel="noopener noreferrer"/);
   assert.match(trecho, /Avaliar no Google/);
-  assert.doesNotMatch(trecho, /<section[^>]*hidden/);
+  assert.match(trecho, /<section[^>]*hidden/);
   assert.match(html, /avaliacoes-google\.css\?v=1/);
 });
