@@ -1,4 +1,5 @@
 import { auth, db } from "./firebase-config.js";
+import { servicoCatalogoDaUrl, loginComServico, agendamentoComServico } from "./catalogoEntrada.mjs";
 import { montarPerfilClienteAuth, podeRecuperarPerfilCliente } from "./clientePerfilIntegridade.js";
 import { clienteTemAtendimentoConcluido } from "./avaliacoesGoogle.mjs?v=1";
 
@@ -823,6 +824,14 @@ async function handleAuthenticatedUser(user, elements) {
       return;
     }
 
+    /* Só clientes com perfil validado seguem para o serviço previamente escolhido.
+       Admin, conta inativa e acessos normais mantêm o fluxo original. */
+    const servicoSolicitado = servicoCatalogoDaUrl(window.location.search);
+    if (accessProfile.role === "cliente" && servicoSolicitado && auth.currentUser?.uid === user.uid) {
+      window.location.replace(agendamentoComServico(servicoSolicitado));
+      return;
+    }
+
     // O editor só é necessário após a autorização. Mantenha seu botão desabilitado
     // até que o módulo tenha registrado os handlers, para que o primeiro clique útil funcione.
     const botaoEditarFoto = document.getElementById("editar-foto-perfil");
@@ -920,7 +929,7 @@ function initPrincipalPage() {
     marcarEtapaPrincipal("auth-callback");
     medirEtapaPrincipal("auth-session-resolution", "auth-wait-start", "auth-callback");
     if (!user) {
-      window.location.replace("login.html");
+      window.location.replace(loginComServico(servicoCatalogoDaUrl(window.location.search)));
 
       return;
     }

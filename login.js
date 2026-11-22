@@ -1,4 +1,5 @@
 import { trackEvent } from "./analytics.js";
+import { servicoCatalogoDaUrl, registroComServico, principalComServico } from "./catalogoEntrada.mjs";
 import { auth, googleProvider, db } from "./firebase-config.js";
 import {
   doc,
@@ -56,6 +57,12 @@ async function initializeLogin() {
 
     await redirectByRole(user);
   });
+
+  const servicoSolicitado = servicoCatalogoDaUrl(window.location.search);
+  const linkCriarConta = document.querySelector('.login-footer a[href^="registro.html"]');
+  if (linkCriarConta && servicoSolicitado) {
+    linkCriarConta.href = registroComServico(servicoSolicitado);
+  }
 
   setupFormValidation();
   setupGoogleLogin();
@@ -352,7 +359,7 @@ async function redirectByRole(user) {
       window.location.replace("dashboard.html");
       return;
     }
-    window.location.replace("principal.html");
+    window.location.replace(principalComServico(servicoCatalogoDaUrl(window.location.search)));
   } catch (error) {
     console.error("[Login] Erro ao verificar ou completar perfil:", error);
     if (entrouComGoogle) {
@@ -365,7 +372,7 @@ async function redirectByRole(user) {
       );
     } else {
       // Mantém o comportamento anterior dos acessos por email e senha.
-      window.location.replace("principal.html");
+      window.location.replace(principalComServico(servicoCatalogoDaUrl(window.location.search)));
     }
   } finally {
     redirecionamentoEmAndamento = false;

@@ -1,4 +1,5 @@
 import { trackEvent } from "./analytics.js";
+import { servicoCatalogoDaUrl, loginComServico, principalComServico } from "./catalogoEntrada.mjs";
 import { auth, db, googleProvider } from "./firebase-config.js";
 
 import {
@@ -25,6 +26,11 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 
 function initializeSignup() {
+  const servicoSolicitado = servicoCatalogoDaUrl(window.location.search);
+  const linkEntrar = document.querySelector('.signup-footer a[href^="login.html"]');
+  if (linkEntrar && servicoSolicitado) {
+    linkEntrar.href = loginComServico(servicoSolicitado);
+  }
   setupFormValidation();
   setupGoogleSignup();
   setupFieldListeners();
@@ -388,7 +394,7 @@ async function performSignup(name, email, phone, password) {
     document.getElementById("signupForm").reset();
 
     // Redirect to principal page after success
-    window.location.href = "principal.html";
+    window.location.href = principalComServico(servicoCatalogoDaUrl(window.location.search));
   } catch (error) {
     console.error("Signup error:", error);
 
@@ -509,7 +515,7 @@ function setupGoogleSignup() {
       console.log("[GOOGLE SIGNUP] pendingPhone removido do sessionStorage");
 
       logEvent("signup_success", { method: "google", user_id: user.uid });
-      window.location.href = "principal.html";
+      window.location.href = principalComServico(servicoCatalogoDaUrl(window.location.search));
     } catch (error) {
       console.error("[GOOGLE SIGNUP] Erro:", error);
       console.error("[GOOGLE SIGNUP] Erro code:", error.code);
