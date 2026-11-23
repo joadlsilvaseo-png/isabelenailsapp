@@ -19,7 +19,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
   <link rel="stylesheet" href="base.css?v=1.0.4">
-  <link rel="stylesheet" href="meu-perfil.css?v=2.0.2">
+  <link rel="stylesheet" href="meu-perfil.css?v=2.0.3">
   <link rel="stylesheet" href="avaliacoes-google.css?v=1">
 </head>
 
@@ -150,24 +150,31 @@
           </span>
           <div>
             <span class="perfil-manutencao-etiqueta">Cuidado com suas unhas</span>
-            <h2 id="perfil-manutencao-titulo">Sua próxima manutenção</h2>
+            <h2 id="perfil-manutencao-titulo">Sugestão de manutenção</h2>
           </div>
         </div>
         <p class="perfil-manutencao-descricao">
           Após <span id="perfil-manutencao-tipo">sua aplicação de</span>
           <strong id="perfil-manutencao-servico">gel</strong>
-          em <span id="perfil-manutencao-ultimo"></span>, sugerimos a manutenção em:
+          em <span id="perfil-manutencao-ultimo"></span>, esta é uma data sugerida para sua próxima manutenção:
         </p>
         <div class="perfil-manutencao-data-bloco">
+          <span class="perfil-manutencao-data-legenda">Data sugerida · não é agendamento</span>
           <strong id="perfil-manutencao-data" class="perfil-manutencao-data"></strong>
           <span class="perfil-manutencao-prazo">21 dias após o último procedimento</span>
         </div>
-        <p class="perfil-manutencao-nota">É uma sugestão de cuidado. O intervalo ideal pode variar conforme suas unhas e a avaliação da profissional.</p>
+        <p class="perfil-manutencao-nota">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/>
+            <path d="M12 11V16M12 8H12.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+          <span>Essa data não é um atendimento marcado. Você pode escolher outra data conforme sua disponibilidade e a orientação da profissional.</span>
+        </p>
         <a href="principal.html#services-title" class="perfil-manutencao-acao">
           <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
           </svg>
-          Agendar manutenção
+          Escolher data da manutenção
         </a>
       </section>
 

@@ -134,7 +134,11 @@ test("integra o card no perfil sem alterar o formato das datas existentes", asyn
   assert.match(html, /id="perfil-manutencao-ultimo"/);
   assert.match(html, /id="perfil-manutencao-tipo"/);
   assert.match(js, /ehProcedimentoCicloGel/);
-  assert.match(html, /Agendar manutenção/);
+  assert.match(html, /Sugestão de manutenção/);
+  assert.match(html, /Data sugerida · não é agendamento/);
+  assert.match(html, /Escolher data da manutenção/);
+  assert.match(html, /Essa data não é um atendimento marcado/);
+  assert.match(css, /\.perfil-manutencao-data-legenda/);
   assert.match(js, /encontrarManutencaoSugerida\(/);
   assert.match(js, /renderizarSugestaoManutencao\(/);
   assert.match(js, /dados\.data \|\| "--\/--"/);

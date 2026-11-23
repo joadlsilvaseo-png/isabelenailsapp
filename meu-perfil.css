@@ -1652,7 +1652,7 @@ button {
 .perfil-manutencao-descricao {
   margin: 0;
   color: var(--perfil-text-muted);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.7;
 }
 
@@ -1671,6 +1671,16 @@ button {
   background: rgba(255, 255, 255, 0.83);
 }
 
+.perfil-manutencao-data-legenda {
+  color: var(--perfil-dark);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.4;
+  letter-spacing: 0.015em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
 .perfil-manutencao-data {
   color: var(--perfil-dark);
   font-size: clamp(22px, 6vw, 28px);
@@ -1682,15 +1692,26 @@ button {
 
 .perfil-manutencao-prazo {
   color: var(--perfil-secondary);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
 }
 
 .perfil-manutencao-nota {
-  margin: -3px 0 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
   color: var(--perfil-text-muted);
-  font-size: 10px;
-  line-height: 1.6;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.perfil-manutencao-nota svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: var(--perfil-secondary);
 }
 
 .perfil-manutencao-acao {
@@ -1712,10 +1733,10 @@ button {
   }
 
   .perfil-manutencao-topo h2 {
-    font-size: 16px;
+    font-size: 17px;
   }
 
   .perfil-manutencao-descricao {
-    font-size: 11px;
+    font-size: 12px;
   }
 }
